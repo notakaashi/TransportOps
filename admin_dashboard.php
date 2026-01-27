@@ -1,0 +1,546 @@
+<?php
+/**
+ * Admin Dashboard
+ * Displays fleet overview, statistics, and management tools
+ * Restricted to Admin role only
+ */
+
+session_start();
+require_once 'db.php';
+
+// Check if user is logged in and is an Admin
+if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'Admin') {
+    header('Location: login.php');
+    exit;
+}
+
+// Fetch statistics from database
+$active_puvs = 0;
+$total_reports = 0;
+$active_delays = 0;
+$total_users = 0;
+$total_routes = 0;
+$recent_reports = [];
+$users_data = [];
+$fleet_data = [];
+$delay_trends = [];
+$peak_hours = [];
+$vehicle_types = [];
+$crowd_status_dist = [];
+
+try {
+    $pdo = getDBConnection();
+    
+    // Get active vehicles count
+    $stmt = $pdo->query("SELECT COUNT(*) as count FROM puv_units");
+    $result = $stmt->fetch(PDO::FETCH_ASSOC);
+    $active_puvs = isset($result['count']) ? (int)$result['count'] : 0;
+    
+    // Get total reports count
+    $stmt = $pdo->query("SELECT COUNT(*) as count FROM reports");
+    $result = $stmt->fetch(PDO::FETCH_ASSOC);
+    $total_reports = isset($result['count']) ? (int)$result['count'] : 0;
+    
+    // Get active delays count (reports with delay_reason)
+    $stmt = $pdo->query("SELECT COUNT(*) as count FROM reports WHERE delay_reason IS NOT NULL AND delay_reason != ''");
+    $result = $stmt->fetch(PDO::FETCH_ASSOC);
+    $active_delays = isset($result['count']) ? (int)$result['count'] : 0;
+    
+    // Get total users count
+    $stmt = $pdo->query("SELECT COUNT(*) as count FROM users");
+    $result = $stmt->fetch(PDO::FETCH_ASSOC);
+    $total_users = isset($result['count']) ? (int)$result['count'] : 0;
+    
+    // Get unique routes count
+    $stmt = $pdo->query("SELECT COUNT(DISTINCT current_route) as count FROM puv_units WHERE current_route IS NOT NULL AND current_route != ''");
+    $result = $stmt->fetch(PDO::FETCH_ASSOC);
+    $total_routes = isset($result['count']) ? (int)$result['count'] : 0;
+    
+    // Get vehicle type distribution
+    $stmt = $pdo->query("SELECT vehicle_type, COUNT(*) as count FROM puv_units GROUP BY vehicle_type");
+    $vehicle_types = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    
+    // Get crowd status distribution
+    $stmt = $pdo->query("SELECT crowd_status, COUNT(*) as count FROM puv_units GROUP BY crowd_status");
+    $crowd_status_dist = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    
+    // Get recent reports (last 10)
+    $stmt = $pdo->query("
+        SELECT r.id, r.crowd_level, r.delay_reason, r.timestamp, r.latitude, r.longitude,
+               u.name as user_name, u.role as user_role,
+               p.plate_number, p.vehicle_type, p.current_route
+        FROM reports r
+        LEFT JOIN users u ON r.user_id = u.id
+        LEFT JOIN puv_units p ON r.puv_id = p.id
+        ORDER BY r.timestamp DESC
+        LIMIT 10
+    ");
+    $recent_reports = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    
+    // Get all users for management
+    $stmt = $pdo->query("SELECT id, name, email, role, created_at FROM users ORDER BY created_at DESC");
+    $users_data = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    
+    // Get fleet overview data
+    $stmt = $pdo->query("SELECT id, plate_number, vehicle_type, current_route, crowd_status FROM puv_units ORDER BY plate_number");
+    $fleet_data = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    
+    // Delay trend analysis - get delay reasons count for last 7 days
+    $stmt = $pdo->query("
+        SELECT delay_reason, COUNT(*) as count
+        FROM reports
+        WHERE delay_reason IS NOT NULL AND delay_reason != ''
+        AND timestamp >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+        GROUP BY delay_reason
+        ORDER BY count DESC
+        LIMIT 5
+    ");
+    $delay_trends = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    
+    // Peak hour analysis - crowding by hour
+    $stmt = $pdo->query("
+        SELECT HOUR(timestamp) as hour, 
+               SUM(CASE WHEN crowd_level = 'Heavy' THEN 1 ELSE 0 END) as heavy_count,
+               COUNT(*) as total_reports
+        FROM reports
+        WHERE timestamp >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+        GROUP BY HOUR(timestamp)
+        ORDER BY hour
+    ");
+    $peak_hours = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    
+} catch (PDOException $e) {
+    error_log("Dashboard error: " . $e->getMessage());
+    // Variables already initialized above with default values
+}
+
+/**
+ * Get status badge color based on crowd status
+ */
+function getStatusBadge($status) {
+    switch ($status) {
+        case 'Light':
+            return 'bg-green-100 text-green-800 border-green-300';
+        case 'Moderate':
+            return 'bg-yellow-100 text-yellow-800 border-yellow-300';
+        case 'Heavy':
+            return 'bg-red-100 text-red-800 border-red-300';
+        default:
+            return 'bg-gray-100 text-gray-800 border-gray-300';
+    }
+}
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard - Transport Operations System</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gradient-to-br from-gray-50 to-blue-50">
+    <div class="flex h-screen overflow-hidden">
+        <!-- Sidebar -->
+        <aside class="w-64 bg-gradient-to-b from-gray-800 to-gray-900 text-white flex flex-col shadow-2xl">
+            <div class="p-6 flex-shrink-0">
+                <div class="flex items-center mb-8">
+                    <div class="bg-blue-600 p-2 rounded-lg mr-3">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path>
+                        </svg>
+                    </div>
+                    <h1 class="text-2xl font-bold">Transport Ops</h1>
+                </div>
+                <nav class="space-y-2">
+                    <a href="admin_dashboard.php" 
+                       class="flex items-center px-4 py-3 bg-blue-600 rounded-lg hover:bg-blue-700 transition duration-150 shadow-lg">
+                        <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                        </svg>
+                        Fleet Overview
+                    </a>
+                    <a href="tracking.php" 
+                       class="flex items-center px-4 py-3 hover:bg-gray-700 rounded-lg transition duration-150 group">
+                        <svg class="w-5 h-5 mr-3 group-hover:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                        </svg>
+                        Real-Time Tracking
+                    </a>
+                    <a href="route_status.php" 
+                       class="flex items-center px-4 py-3 hover:bg-gray-700 rounded-lg transition duration-150 group">
+                        <svg class="w-5 h-5 mr-3 group-hover:text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"></path>
+                        </svg>
+                        Route Status
+                    </a>
+                    <a href="heatmap.php" 
+                       class="flex items-center px-4 py-3 hover:bg-gray-700 rounded-lg transition duration-150 group">
+                        <svg class="w-5 h-5 mr-3 group-hover:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                        </svg>
+                        Crowdsourcing Heatmap
+                    </a>
+                    <a href="user_management.php" 
+                       class="flex items-center px-4 py-3 hover:bg-gray-700 rounded-lg transition duration-150 group">
+                        <svg class="w-5 h-5 mr-3 group-hover:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path>
+                        </svg>
+                        User Management
+                    </a>
+                    <a href="add_puv.php" 
+                       class="flex items-center px-4 py-3 hover:bg-gray-700 rounded-lg transition duration-150 group">
+                        <svg class="w-5 h-5 mr-3 group-hover:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                        </svg>
+                        Add Vehicle
+                    </a>
+                </nav>
+            </div>
+            <div class="mt-auto p-6 border-t border-gray-700">
+                <div class="bg-gray-700 rounded-lg p-4 mb-4">
+                    <p class="text-xs text-gray-400 mb-1">Logged in as</p>
+                    <p class="text-sm font-semibold"><?php echo htmlspecialchars($_SESSION['user_name']); ?></p>
+                    <p class="text-xs text-blue-400 mt-1"><?php echo htmlspecialchars($_SESSION['role']); ?></p>
+                </div>
+                <a href="logout.php" 
+                   class="block w-full text-center bg-gradient-to-r from-red-600 to-red-700 text-white py-2 px-4 rounded-md hover:from-red-700 hover:to-red-800 transition duration-150 font-medium shadow-lg">
+                    Logout
+                </a>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="flex-1 overflow-y-auto">
+            <div class="p-8">
+                <!-- Page Header -->
+                <div class="mb-8">
+                    <h2 class="text-3xl font-bold text-gray-800">Fleet Overview</h2>
+                    <p class="text-gray-600 mt-2">Monitor and manage your transportation fleet</p>
+                </div>
+
+                <!-- Stats Cards -->
+                <div class="grid grid-cols-1 md:grid-cols-5 gap-6 mb-8">
+                    <!-- Active Vehicles Card -->
+                    <div class="bg-white rounded-lg shadow-md p-6 border-l-4 border-blue-500">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-gray-600 text-sm font-medium">Active Vehicles</p>
+                                <p class="text-3xl font-bold text-gray-800 mt-2"><?php echo number_format($active_puvs); ?></p>
+                            </div>
+                            <div class="bg-blue-100 p-3 rounded-full">
+                                <svg class="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path>
+                                </svg>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Total Reports Card -->
+                    <div class="bg-white rounded-lg shadow-md p-6 border-l-4 border-green-500">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-gray-600 text-sm font-medium">Total Reports</p>
+                                <p class="text-3xl font-bold text-gray-800 mt-2"><?php echo number_format($total_reports); ?></p>
+                            </div>
+                            <div class="bg-green-100 p-3 rounded-full">
+                                <svg class="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                                </svg>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Active Delays Card -->
+                    <div class="bg-white rounded-lg shadow-md p-6 border-l-4 border-red-500">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-gray-600 text-sm font-medium">Active Delays</p>
+                                <p class="text-3xl font-bold text-gray-800 mt-2"><?php echo number_format($active_delays); ?></p>
+                            </div>
+                            <div class="bg-red-100 p-3 rounded-full">
+                                <svg class="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                </svg>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Total Users Card -->
+                    <div class="bg-white rounded-lg shadow-md p-6 border-l-4 border-purple-500">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-gray-600 text-sm font-medium">Total Users</p>
+                                <p class="text-3xl font-bold text-gray-800 mt-2"><?php echo number_format($total_users); ?></p>
+                            </div>
+                            <div class="bg-purple-100 p-3 rounded-full">
+                                <svg class="w-8 h-8 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path>
+                                </svg>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Total Routes Card -->
+                    <div class="bg-white rounded-lg shadow-md p-6 border-l-4 border-indigo-500">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-gray-600 text-sm font-medium">Active Routes</p>
+                                <p class="text-3xl font-bold text-gray-800 mt-2"><?php echo number_format($total_routes); ?></p>
+                            </div>
+                            <div class="bg-indigo-100 p-3 rounded-full">
+                                <svg class="w-8 h-8 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"></path>
+                                </svg>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Fleet Overview Table -->
+                <div class="bg-white rounded-lg shadow-md overflow-hidden mb-8">
+                    <div class="px-6 py-4 border-b border-gray-200">
+                        <h3 class="text-xl font-semibold text-gray-800">Fleet Overview</h3>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Plate Number</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Vehicle Type</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Route</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-200">
+                                <?php if (empty($fleet_data)): ?>
+                                    <tr>
+                                        <td colspan="4" class="px-6 py-4 text-center text-gray-500">
+                                            No vehicles found. <a href="add_puv.php" class="text-blue-600 hover:text-blue-800">Add vehicles</a> to see them here.
+                                        </td>
+                                    </tr>
+                                <?php else: ?>
+                                    <?php foreach ($fleet_data as $puv): ?>
+                                        <tr class="hover:bg-gray-50">
+                                            <td class="px-6 py-4 whitespace-nowrap">
+                                                <div class="text-sm font-medium text-gray-900">
+                                                    <?php echo htmlspecialchars($puv['plate_number']); ?>
+                                                </div>
+                                            </td>
+                                            <td class="px-6 py-4 whitespace-nowrap">
+                                                <div class="text-sm text-gray-600">
+                                                    <?php echo htmlspecialchars($puv['vehicle_type'] ?? 'Bus'); ?>
+                                                </div>
+                                            </td>
+                                            <td class="px-6 py-4 whitespace-nowrap">
+                                                <div class="text-sm text-gray-600">
+                                                    <?php echo htmlspecialchars($puv['current_route']); ?>
+                                                </div>
+                                            </td>
+                                            <td class="px-6 py-4 whitespace-nowrap">
+                                                <span class="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full border <?php echo getStatusBadge($puv['crowd_status']); ?>">
+                                                    <?php echo htmlspecialchars($puv['crowd_status']); ?>
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                <?php endif; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Recent Reports Table -->
+                <div class="bg-white rounded-lg shadow-md overflow-hidden mb-8">
+                    <div class="px-6 py-4 border-b border-gray-200">
+                        <h3 class="text-xl font-semibold text-gray-800">Recent Reports</h3>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Timestamp</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Vehicle</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Crowd Level</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Delay Reason</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-200">
+                                <?php if (empty($recent_reports)): ?>
+                                    <tr>
+                                        <td colspan="5" class="px-6 py-4 text-center text-gray-500">
+                                            No reports found.
+                                        </td>
+                                    </tr>
+                                <?php else: ?>
+                                    <?php foreach ($recent_reports as $report): ?>
+                                        <tr class="hover:bg-gray-50">
+                                            <td class="px-6 py-4 whitespace-nowrap">
+                                                <div class="text-sm text-gray-900">
+                                                    <?php echo date('M d, Y H:i', strtotime($report['timestamp'])); ?>
+                                                </div>
+                                            </td>
+                                            <td class="px-6 py-4 whitespace-nowrap">
+                                                <div class="text-sm text-gray-900">
+                                                    <?php echo htmlspecialchars($report['user_name'] ?? 'N/A'); ?>
+                                                </div>
+                                                <div class="text-xs text-gray-500">
+                                                    <?php echo htmlspecialchars($report['user_role'] ?? ''); ?>
+                                                </div>
+                                            </td>
+                                            <td class="px-6 py-4 whitespace-nowrap">
+                                                <div class="text-sm font-medium text-gray-900">
+                                                    <?php echo htmlspecialchars($report['plate_number'] ?? 'N/A'); ?>
+                                                </div>
+                                                <div class="text-xs text-gray-500">
+                                                    <?php echo htmlspecialchars(($report['vehicle_type'] ?? 'Bus') . ' - ' . ($report['current_route'] ?? '')); ?>
+                                                </div>
+                                            </td>
+                                            <td class="px-6 py-4 whitespace-nowrap">
+                                                <span class="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full border <?php echo getStatusBadge($report['crowd_level']); ?>">
+                                                    <?php echo htmlspecialchars($report['crowd_level']); ?>
+                                                </span>
+                                            </td>
+                                            <td class="px-6 py-4">
+                                                <div class="text-sm text-gray-600">
+                                                    <?php if ($report['delay_reason']): ?>
+                                                        <?php echo htmlspecialchars(substr($report['delay_reason'], 0, 50)); ?>
+                                                        <?php if (strlen($report['delay_reason']) > 50): ?>...<?php endif; ?>
+                                                    <?php else: ?>
+                                                        <span class="text-gray-400">None</span>
+                                                    <?php endif; ?>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                <?php endif; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Analytics Section -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+                    <!-- Delay Trend Analysis -->
+                    <div class="bg-white rounded-lg shadow-md overflow-hidden">
+                        <div class="px-6 py-4 border-b border-gray-200">
+                            <h3 class="text-xl font-semibold text-gray-800">Delay Trend Analysis (Last 7 Days)</h3>
+                        </div>
+                        <div class="p-6">
+                            <?php if (empty($delay_trends)): ?>
+                                <p class="text-gray-500 text-center py-4">No delay data available.</p>
+                            <?php else: ?>
+                                <div class="space-y-4">
+                                    <?php foreach ($delay_trends as $trend): ?>
+                                        <div>
+                                            <div class="flex justify-between items-center mb-1">
+                                                <span class="text-sm font-medium text-gray-700"><?php echo htmlspecialchars($trend['delay_reason']); ?></span>
+                                                <span class="text-sm font-semibold text-gray-900"><?php echo $trend['count']; ?> occurrences</span>
+                                            </div>
+                                            <div class="w-full bg-gray-200 rounded-full h-2">
+                                                <div class="bg-red-600 h-2 rounded-full" style="width: <?php echo min(100, ($trend['count'] / max(array_column($delay_trends, 'count'))) * 100); ?>%"></div>
+                                            </div>
+                                        </div>
+                                    <?php endforeach; ?>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+
+                    <!-- Peak Hour Analytics -->
+                    <div class="bg-white rounded-lg shadow-md overflow-hidden">
+                        <div class="px-6 py-4 border-b border-gray-200">
+                            <h3 class="text-xl font-semibold text-gray-800">Peak Hour Crowding Analysis</h3>
+                        </div>
+                        <div class="p-6">
+                            <?php if (empty($peak_hours)): ?>
+                                <p class="text-gray-500 text-center py-4">No peak hour data available.</p>
+                            <?php else: ?>
+                                <div class="space-y-3">
+                                    <?php foreach ($peak_hours as $hour): ?>
+                                        <div>
+                                            <div class="flex justify-between items-center mb-1">
+                                                <span class="text-sm font-medium text-gray-700"><?php echo date('g A', mktime($hour['hour'], 0, 0)); ?></span>
+                                                <span class="text-sm text-gray-600"><?php echo $hour['heavy_count']; ?> / <?php echo $hour['total_reports']; ?> heavy</span>
+                                            </div>
+                                            <div class="w-full bg-gray-200 rounded-full h-2">
+                                                <div class="bg-orange-600 h-2 rounded-full" style="width: <?php echo $hour['total_reports'] > 0 ? ($hour['heavy_count'] / $hour['total_reports']) * 100 : 0; ?>%"></div>
+                                            </div>
+                                        </div>
+                                    <?php endforeach; ?>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Users Management Table -->
+                <div class="bg-white rounded-lg shadow-md overflow-hidden">
+                    <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+                        <h3 class="text-xl font-semibold text-gray-800">User Management</h3>
+                        <a href="user_management.php" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition duration-150 font-medium text-sm">
+                            Manage Users
+                        </a>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Registered</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-200">
+                                <?php if (empty($users_data)): ?>
+                                    <tr>
+                                        <td colspan="4" class="px-6 py-4 text-center text-gray-500">
+                                            No users found.
+                                        </td>
+                                    </tr>
+                                <?php else: ?>
+                                    <?php foreach ($users_data as $user): ?>
+                                        <tr class="hover:bg-gray-50">
+                                            <td class="px-6 py-4 whitespace-nowrap">
+                                                <div class="text-sm font-medium text-gray-900">
+                                                    <?php echo htmlspecialchars($user['name']); ?>
+                                                </div>
+                                            </td>
+                                            <td class="px-6 py-4 whitespace-nowrap">
+                                                <div class="text-sm text-gray-600">
+                                                    <?php echo htmlspecialchars($user['email']); ?>
+                                                </div>
+                                            </td>
+                                            <td class="px-6 py-4 whitespace-nowrap">
+                                                <?php
+                                                $roleColors = [
+                                                    'Admin' => 'bg-red-100 text-red-800 border-red-300',
+                                                    'Driver' => 'bg-blue-100 text-blue-800 border-blue-300',
+                                                    'Commuter' => 'bg-gray-100 text-gray-800 border-gray-300'
+                                                ];
+                                                $roleColor = $roleColors[$user['role']] ?? 'bg-gray-100 text-gray-800 border-gray-300';
+                                                ?>
+                                                <span class="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full border <?php echo $roleColor; ?>">
+                                                    <?php echo htmlspecialchars($user['role']); ?>
+                                                </span>
+                                            </td>
+                                            <td class="px-6 py-4 whitespace-nowrap">
+                                                <div class="text-sm text-gray-600">
+                                                    <?php echo date('M d, Y', strtotime($user['created_at'])); ?>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                <?php endif; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+</body>
+</html>
+
