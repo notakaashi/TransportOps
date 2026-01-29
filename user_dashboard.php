@@ -77,6 +77,7 @@ function getStatusBadge($status) {
                         <a href="about.php" class="text-gray-700 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium">About</a>
                         <a href="user_dashboard.php" class="text-blue-600 hover:text-blue-800 px-3 py-2 rounded-md text-sm font-medium border-b-2 border-blue-600">Dashboard</a>
                         <a href="report.php" class="text-gray-700 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium">Submit Report</a>
+                        <a href="reports_map.php" class="text-gray-700 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium">Reports Map</a>
                     </div>
                 </div>
                 <div class="flex items-center space-x-4">

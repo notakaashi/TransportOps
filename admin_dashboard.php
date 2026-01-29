@@ -167,6 +167,13 @@ function getStatusBadge($status) {
                         </svg>
                         Real-Time Tracking
                     </a>
+                    <a href="admin_reports.php" 
+                       class="flex items-center px-4 py-3 hover:bg-gray-700 rounded-lg transition duration-150 group">
+                        <svg class="w-5 h-5 mr-3 group-hover:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-6a2 2 0 012-2h6m-4-4l4 4-4 4"></path>
+                        </svg>
+                        Reports
+                    </a>
                     <a href="route_status.php" 
                        class="flex items-center px-4 py-3 hover:bg-gray-700 rounded-lg transition duration-150 group">
                         <svg class="w-5 h-5 mr-3 group-hover:text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -352,8 +359,14 @@ function getStatusBadge($status) {
 
                 <!-- Recent Reports Table -->
                 <div class="bg-white rounded-lg shadow-md overflow-hidden mb-8">
-                    <div class="px-6 py-4 border-b border-gray-200">
-                        <h3 class="text-xl font-semibold text-gray-800">Recent Reports</h3>
+                    <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+                        <h3 class="text-xl font-semibold text-gray-800 flex items-center">
+                            Recent Reports
+                            <span id="report-notification-badge" class="ml-3 hidden px-2 py-1 text-xs font-semibold rounded-full bg-red-600 text-white">
+                                New
+                            </span>
+                        </h3>
+                        <span id="report-notification-count" class="text-sm text-gray-500"></span>
                     </div>
                     <div class="overflow-x-auto">
                         <table class="w-full">
@@ -542,5 +555,64 @@ function getStatusBadge($status) {
         </main>
     </div>
 </body>
+<script>
+    (function () {
+        let lastReportTimestamp = <?php
+            $latest = !empty($recent_reports) ? $recent_reports[0]['timestamp'] : null;
+            echo $latest ? json_encode($latest) : 'null';
+        ?>;
+        let notificationAudio;
+
+        function initAudio() {
+            try {
+                notificationAudio = new Audio('https://actions.google.com/sounds/v1/alarms/beep_short.ogg');
+            } catch (e) {
+                notificationAudio = null;
+            }
+        }
+
+        function playNotificationSound() {
+            if (!notificationAudio) return;
+            notificationAudio.currentTime = 0;
+            notificationAudio.play().catch(() => {});
+        }
+
+        async function checkNewReports() {
+            try {
+                const params = lastReportTimestamp ? '?since=' + encodeURIComponent(lastReportTimestamp) : '';
+                const response = await fetch('admin_notifications.php' + params, { credentials: 'same-origin' });
+                if (!response.ok) return;
+
+                const data = await response.json();
+                const newCount = data.new_count || 0;
+                const latest = data.latest_timestamp || null;
+
+                const badge = document.getElementById('report-notification-badge');
+                const countLabel = document.getElementById('report-notification-count');
+
+                if (newCount > 0) {
+                    if (badge) badge.classList.remove('hidden');
+                    if (countLabel) {
+                        countLabel.textContent = newCount + ' new report' + (newCount > 1 ? 's' : '');
+                    }
+                    playNotificationSound();
+                } else {
+                    if (countLabel && !countLabel.textContent) {
+                        countLabel.textContent = '';
+                    }
+                }
+
+                if (latest) {
+                    lastReportTimestamp = latest;
+                }
+            } catch (e) {
+                console.error('Notification check failed', e);
+            }
+        }
+
+        initAudio();
+        setInterval(checkNewReports, 15000);
+    })();
+</script>
 </html>
 

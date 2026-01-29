@@ -33,7 +33,6 @@ CREATE TABLE IF NOT EXISTS `puv_units` (
     INDEX `idx_crowd_status` (`crowd_status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Create reports table
 CREATE TABLE IF NOT EXISTS `reports` (
     `id` INT(11) NOT NULL AUTO_INCREMENT,
     `user_id` INT(11) NOT NULL,
@@ -54,6 +53,22 @@ CREATE TABLE IF NOT EXISTS `reports` (
     INDEX `idx_puv_id` (`puv_id`),
     INDEX `idx_timestamp` (`timestamp`),
     INDEX `idx_trust_score` (`trust_score`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Table to track individual peer verifications per report
+CREATE TABLE IF NOT EXISTS `report_verifications` (
+    `id` INT(11) NOT NULL AUTO_INCREMENT,
+    `report_id` INT(11) NOT NULL,
+    `verifier_user_id` INT(11) NOT NULL,
+    `latitude` DECIMAL(10, 8) DEFAULT NULL,
+    `longitude` DECIMAL(11, 8) DEFAULT NULL,
+    `distance_km` DECIMAL(5, 2) DEFAULT NULL,
+    `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    FOREIGN KEY (`report_id`) REFERENCES `reports`(`id`) ON DELETE CASCADE,
+    FOREIGN KEY (`verifier_user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE,
+    UNIQUE KEY `uniq_report_verifier` (`report_id`, `verifier_user_id`),
+    INDEX `idx_report_id` (`report_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Create routes table for schedule management
