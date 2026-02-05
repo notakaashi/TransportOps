@@ -98,3 +98,4 @@ CREATE TABLE IF NOT EXISTS `delay_analytics` (
     INDEX `idx_occurred_at` (`occurred_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+asdasdasd
