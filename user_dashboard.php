@@ -78,6 +78,7 @@ function getStatusBadge($status) {
                         <a href="user_dashboard.php" class="text-blue-600 hover:text-blue-800 px-3 py-2 rounded-md text-sm font-medium border-b-2 border-blue-600">Dashboard</a>
                         <a href="report.php" class="text-gray-700 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium">Submit Report</a>
                         <a href="reports_map.php" class="text-gray-700 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium">Reports Map</a>
+                        <a href="routes.php" class="text-gray-700 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium">Routes</a>
                     </div>
                 </div>
                 <div class="flex items-center space-x-4">
@@ -102,7 +103,7 @@ function getStatusBadge($status) {
         </div>
 
         <!-- Quick Actions -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
             <a href="report.php" class="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition duration-150 border-l-4 border-blue-500">
                 <div class="flex items-center justify-between">
                     <div>
@@ -146,6 +147,20 @@ function getStatusBadge($status) {
                     </div>
                 </div>
             </div>
+
+            <a href="routes.php" class="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition duration-150 border-l-4 border-indigo-500">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h3 class="text-lg font-semibold text-gray-800 mb-2">View Routes</h3>
+                        <p class="text-sm text-gray-600">See routes and stops on the map</p>
+                    </div>
+                    <div class="bg-indigo-100 p-3 rounded-full">
+                        <svg class="w-8 h-8 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"></path>
+                        </svg>
+                    </div>
+                </div>
+            </a>
         </div>
 
         <!-- Recent Reports -->

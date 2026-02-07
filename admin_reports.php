@@ -59,6 +59,7 @@ try {
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="js/osrm-helpers.js"></script>
 </head>
 <body class="bg-gradient-to-br from-gray-50 to-blue-50">
     <div class="flex h-screen overflow-hidden">
@@ -321,13 +322,26 @@ try {
             }
             const route = routesWithStops.find(r => r.name === routeName);
             if (!route || !route.stops || route.stops.length === 0) return;
-            const latlngs = route.stops.map(s => [s.latitude, s.longitude]);
-            routeLayer = L.polyline(latlngs, { color: '#2563eb', weight: 5, opacity: 0.8 }).addTo(map);
-            route.stops.forEach((s, i) => {
-                L.marker([s.latitude, s.longitude])
-                    .bindPopup('<strong>' + (i + 1) + '. ' + (s.stop_name || 'Stop') + '</strong>')
-                    .addTo(routeLayer);
-            });
+            const waypoints = route.stops.map(s => [s.latitude, s.longitude]);
+            routeLayer = L.layerGroup().addTo(map);
+            if (typeof getRouteGeometry === 'function') {
+                getRouteGeometry(waypoints, function (roadLatlngs) {
+                    const latlngs = roadLatlngs && roadLatlngs.length ? roadLatlngs : waypoints;
+                    L.polyline(latlngs, { color: '#2563eb', weight: 5, opacity: 0.8 }).addTo(routeLayer);
+                    route.stops.forEach((s, i) => {
+                        L.marker([s.latitude, s.longitude])
+                            .bindPopup('<strong>' + (i + 1) + '. ' + (s.stop_name || 'Stop') + '</strong>')
+                            .addTo(routeLayer);
+                    });
+                });
+            } else {
+                L.polyline(waypoints, { color: '#2563eb', weight: 5, opacity: 0.8 }).addTo(routeLayer);
+                route.stops.forEach((s, i) => {
+                    L.marker([s.latitude, s.longitude])
+                        .bindPopup('<strong>' + (i + 1) + '. ' + (s.stop_name || 'Stop') + '</strong>')
+                        .addTo(routeLayer);
+                });
+            }
         }
 
         function showReportsOnMap(reports, fitBounds) {

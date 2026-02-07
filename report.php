@@ -101,6 +101,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="js/osrm-helpers.js"></script>
 </head>
 <body class="bg-gray-50">
     <!-- Navigation Bar -->
@@ -119,6 +120,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         <?php endif; ?>
                         <a href="report.php" class="text-blue-600 hover:text-blue-800 px-3 py-2 rounded-md text-sm font-medium border-b-2 border-blue-600">Submit Report</a>
                         <a href="reports_map.php" class="text-gray-700 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium">Reports Map</a>
+                        <a href="routes.php" class="text-gray-700 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium">Routes</a>
                     </div>
                 </div>
                 <div class="flex items-center space-x-4">
@@ -205,11 +207,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 
                 <div class="bg-blue-50 p-4 rounded-lg">
                     <p class="text-sm text-gray-700 mb-2">
-                        <strong>GPS Location:</strong> Enable location services for better report validation.
+                        <strong>Report location:</strong> Click on the map to pin where you are (pins snap to the nearest road). Or use GPS below.
                     </p>
                     <button type="button" onclick="getLocation()" 
                             class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition duration-150 font-medium text-sm">
-                        Get My Location
+                        Use my current location (GPS)
                     </button>
                     <input type="hidden" id="latitude" name="latitude">
                     <input type="hidden" id="longitude" name="longitude">
@@ -225,8 +227,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         <div class="bg-white rounded-lg shadow-md overflow-hidden">
             <div class="px-4 py-3 border-b border-gray-200">
-                <h3 class="text-lg font-semibold text-gray-800">Route map</h3>
-                <p class="text-sm text-gray-500">Select a vehicle to see its route on the map.</p>
+                <h3 class="text-lg font-semibold text-gray-800">Pin your report location</h3>
+                <p class="text-sm text-gray-500">Click on the map to pin your location (snaps to the nearest road). Select a vehicle to see its route along roads.</p>
             </div>
             <div class="h-[400px] lg:h-[500px]" id="report-route-map"></div>
         </div>
@@ -244,10 +246,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         function showPosition(position) {
-            document.getElementById('latitude').value = position.coords.latitude;
-            document.getElementById('longitude').value = position.coords.longitude;
+            const lat = position.coords.latitude;
+            const lng = position.coords.longitude;
+            document.getElementById('latitude').value = lat;
+            document.getElementById('longitude').value = lng;
             document.getElementById('locationStatus').textContent = 'Location captured successfully!';
             document.getElementById('locationStatus').classList.add('text-green-600');
+            if (window.setReportPinOnMap) window.setReportPinOnMap(lat, lng);
         }
 
         function showError(error) {
@@ -290,6 +295,53 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             const map = L.map('report-route-map').setView([14.5995, 120.9842], 12);
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(map);
             let routeLayer = null;
+            let reportPinMarker = null;
+
+            function setReportPin(lat, lng) {
+                document.getElementById('latitude').value = lat;
+                document.getElementById('longitude').value = lng;
+                document.getElementById('locationStatus').textContent = 'Location set. You can drag the pin to adjust.';
+                document.getElementById('locationStatus').classList.add('text-green-600');
+                if (reportPinMarker) {
+                    reportPinMarker.setLatLng([lat, lng]);
+                } else {
+                    reportPinMarker = L.marker([lat, lng], { draggable: true })
+                        .addTo(map)
+                        .bindPopup('Report location (drag to move)');
+                    reportPinMarker.on('dragend', function () {
+                        var pos = reportPinMarker.getLatLng();
+                        if (typeof snapToRoad === 'function') {
+                            snapToRoad(pos.lat, pos.lng, function (snapLat, snapLng) {
+                                if (snapLat != null && snapLng != null) {
+                                    reportPinMarker.setLatLng([snapLat, snapLng]);
+                                    document.getElementById('latitude').value = snapLat;
+                                    document.getElementById('longitude').value = snapLng;
+                                } else {
+                                    document.getElementById('latitude').value = pos.lat;
+                                    document.getElementById('longitude').value = pos.lng;
+                                }
+                            });
+                        } else {
+                            document.getElementById('latitude').value = pos.lat;
+                            document.getElementById('longitude').value = pos.lng;
+                        }
+                    });
+                }
+            }
+            window.setReportPinOnMap = setReportPin;
+
+            map.on('click', function (e) {
+                document.getElementById('locationStatus').textContent = 'Snapping to road…';
+                document.getElementById('locationStatus').classList.remove('text-green-600', 'text-red-600');
+                if (typeof snapToRoad === 'function') {
+                    snapToRoad(e.latlng.lat, e.latlng.lng, function (lat, lng) {
+                        if (lat != null && lng != null) setReportPin(lat, lng);
+                        else setReportPin(e.latlng.lat, e.latlng.lng);
+                    });
+                } else {
+                    setReportPin(e.latlng.lat, e.latlng.lng);
+                }
+            });
 
             function drawRoute(routeName) {
                 if (routeLayer) {
@@ -299,14 +351,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if (!window.reportPageRoutes || !routeName) return;
                 const route = window.reportPageRoutes.find(function (r) { return r.name === routeName; });
                 if (!route || !route.stops || route.stops.length === 0) return;
-                const latlngs = route.stops.map(function (s) { return [s.latitude, s.longitude]; });
-                routeLayer = L.polyline(latlngs, { color: '#2563eb', weight: 5, opacity: 0.8 }).addTo(map);
-                route.stops.forEach(function (s, i) {
-                    L.marker([s.latitude, s.longitude])
-                        .bindPopup('<strong>' + (i + 1) + '. ' + (s.stop_name || 'Stop') + '</strong>')
-                        .addTo(routeLayer);
-                });
-                map.fitBounds(latlngs, { padding: [30, 30] });
+                const waypoints = route.stops.map(function (s) { return [s.latitude, s.longitude]; });
+                function drawWithRoads() {
+                    if (typeof getRouteGeometry === 'function') {
+                        getRouteGeometry(waypoints, function (roadLatlngs) {
+                            var latlngs = roadLatlngs && roadLatlngs.length ? roadLatlngs : waypoints;
+                            routeLayer = L.layerGroup().addTo(map);
+                            L.polyline(latlngs, { color: '#2563eb', weight: 5, opacity: 0.8 }).addTo(routeLayer);
+                            route.stops.forEach(function (s, i) {
+                                L.marker([s.latitude, s.longitude])
+                                    .bindPopup('<strong>' + (i + 1) + '. ' + (s.stop_name || 'Stop') + '</strong>')
+                                    .addTo(routeLayer);
+                            });
+                            map.fitBounds(latlngs, { padding: [30, 30] });
+                        });
+                    } else {
+                        routeLayer = L.polyline(waypoints, { color: '#2563eb', weight: 5, opacity: 0.8 }).addTo(map);
+                        route.stops.forEach(function (s, i) {
+                            L.marker([s.latitude, s.longitude])
+                                .bindPopup('<strong>' + (i + 1) + '. ' + (s.stop_name || 'Stop') + '</strong>')
+                                .addTo(routeLayer);
+                        });
+                        map.fitBounds(waypoints, { padding: [30, 30] });
+                    }
+                }
+                drawWithRoads();
             }
 
             fetch('api_routes_with_stops.php', { credentials: 'same-origin' })

@@ -75,6 +75,36 @@ if (!$error) {
                 $stmt->execute([$route_id]);
                 $success = 'Route deleted.';
             }
+        } elseif ($action === 'reorder_stops') {
+            $route_id = (int)($_POST['route_id'] ?? 0);
+            $order = isset($_POST['order']) && is_array($_POST['order']) ? $_POST['order'] : [];
+            if ($route_id && !empty($order)) {
+                try {
+                    $stmt = $pdo->prepare("UPDATE route_stops SET stop_order = ? WHERE id = ? AND route_definition_id = ?");
+                    foreach ($order as $idx => $stop_id) {
+                        $stmt->execute([(int)$idx, (int)$stop_id, $route_id]);
+                    }
+                    $success = 'Route saved. Stops updated.';
+                } catch (PDOException $e) {
+                    $error = 'Failed to reorder stops.';
+                }
+            }
+        } elseif ($action === 'save_route') {
+            $route_id = (int)($_POST['route_id'] ?? 0);
+            $order = isset($_POST['order']) && is_array($_POST['order']) ? $_POST['order'] : [];
+            if ($route_id) {
+                try {
+                    if (!empty($order)) {
+                        $stmt = $pdo->prepare("UPDATE route_stops SET stop_order = ? WHERE id = ? AND route_definition_id = ?");
+                        foreach ($order as $idx => $stop_id) {
+                            $stmt->execute([(int)$idx, (int)$stop_id, $route_id]);
+                        }
+                    }
+                    $success = 'Route saved. It is now in your list and visible to commuters.';
+                } catch (PDOException $e) {
+                    $error = 'Failed to save route.';
+                }
+            }
         }
     }
 
@@ -96,6 +126,7 @@ if (!$error) {
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="js/osrm-helpers.js"></script>
 </head>
 <body class="bg-gradient-to-br from-gray-50 to-blue-50">
     <div class="flex h-screen overflow-hidden">
@@ -157,7 +188,7 @@ if (!$error) {
         <main class="flex-1 overflow-y-auto">
             <div class="p-8">
                 <h2 class="text-3xl font-bold text-gray-800">Manage Routes</h2>
-                <p class="text-gray-600 mt-2">Define routes with stops (e.g. Guadalupe → FTI Tenement). Stops are connected on the map and used in Reports.</p>
+                <p class="text-gray-600 mt-2">Define routes with stops (e.g. Guadalupe → FTI Tenement). Pin the start point, end point, and any waypoints by clicking on the map — no need to enter coordinates. Stops are connected on the map and used in Reports.</p>
 
                 <?php if ($error): ?>
                     <div class="mt-4 bg-red-100 border-l-4 border-red-500 text-red-700 px-4 py-3 rounded"><?php echo htmlspecialchars($error); ?></div>
@@ -185,49 +216,85 @@ if (!$error) {
                 <div class="mt-8 space-y-6">
                     <?php foreach ($routes_with_stops as $route): ?>
                         <div class="bg-white rounded-lg shadow-md overflow-hidden">
-                            <div class="px-6 py-4 bg-gray-50 border-b flex justify-between items-center">
+                            <div class="px-6 py-4 bg-gray-50 border-b flex flex-wrap justify-between items-center gap-2">
                                 <h3 class="text-lg font-semibold text-gray-800"><?php echo htmlspecialchars($route['name']); ?></h3>
-                                <form method="POST" onsubmit="return confirm('Delete this route and all its stops?');" class="inline">
-                                    <input type="hidden" name="action" value="delete_route">
-                                    <input type="hidden" name="route_id" value="<?php echo (int)$route['id']; ?>">
-                                    <button type="submit" class="text-red-600 hover:text-red-800 text-sm font-medium">Delete route</button>
-                                </form>
+                                <div class="flex items-center gap-2">
+                                    <form method="POST" id="save-route-form-<?php echo (int)$route['id']; ?>" class="inline">
+                                        <input type="hidden" name="action" value="save_route">
+                                        <input type="hidden" name="route_id" value="<?php echo (int)$route['id']; ?>">
+                                        <button type="submit" class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 text-sm font-medium">Save route</button>
+                                    </form>
+                                    <form method="POST" onsubmit="return confirm('Delete this route and all its stops?');" class="inline">
+                                        <input type="hidden" name="action" value="delete_route">
+                                        <input type="hidden" name="route_id" value="<?php echo (int)$route['id']; ?>">
+                                        <button type="submit" class="text-red-600 hover:text-red-800 text-sm font-medium">Delete route</button>
+                                    </form>
+                                </div>
                             </div>
                             <div class="p-6 flex flex-col lg:flex-row gap-6">
                                 <div class="lg:w-1/2 space-y-4">
-                                    <p class="text-sm text-gray-600">Stops in order: <?php
-                                        if (empty($route['stops'])) echo 'None yet.';
-                                        else echo htmlspecialchars(implode(' → ', array_column($route['stops'], 'stop_name')));
-                                    ?></p>
-                                    <ul class="list-disc list-inside text-sm text-gray-700">
-                                        <?php foreach ($route['stops'] as $s): ?>
-                                            <li class="flex items-center justify-between group">
-                                                <span><?php echo htmlspecialchars($s['stop_name']); ?> (<?php echo $s['latitude']; ?>, <?php echo $s['longitude']; ?>)</span>
+                                    <p class="text-sm text-gray-600">Drag stops to reorder. Route line follows this order.</p>
+                                    <ul id="stops-list-<?php echo (int)$route['id']; ?>" class="space-y-1 text-sm text-gray-700" data-route-id="<?php echo (int)$route['id']; ?>">
+                                        <?php foreach ($route['stops'] as $i => $s): ?>
+                                            <li draggable="true" data-stop-id="<?php echo (int)$s['id']; ?>" class="flex items-center gap-2 p-2 rounded border border-gray-200 bg-gray-50 hover:bg-gray-100 cursor-move select-none">
+                                                <span class="text-gray-400 cursor-move" title="Drag to reorder">⋮⋮</span>
+                                                <span class="flex-1"><?php echo htmlspecialchars($s['stop_name']); ?></span>
                                                 <form method="POST" onsubmit="return confirm('Remove this stop?');" class="inline">
                                                     <input type="hidden" name="action" value="delete_stop">
                                                     <input type="hidden" name="stop_id" value="<?php echo (int)$s['id']; ?>">
-                                                    <button type="submit" class="text-red-500 hover:text-red-700 text-xs opacity-0 group-hover:opacity-100">Remove</button>
+                                                    <button type="submit" class="text-red-500 hover:text-red-700 text-xs">Remove</button>
                                                 </form>
                                             </li>
                                         <?php endforeach; ?>
                                     </ul>
-                                    <form method="POST" class="border-t pt-4 space-y-3">
+                                    <?php if (empty($route['stops'])): ?>
+                                        <p class="text-xs text-gray-500">No stops yet. Add one below.</p>
+                                    <?php endif; ?>
+                                    <form method="POST" id="add-stop-form-<?php echo (int)$route['id']; ?>" class="border-t pt-4 space-y-3">
                                         <input type="hidden" name="action" value="add_stop">
                                         <input type="hidden" name="route_id" value="<?php echo (int)$route['id']; ?>">
                                         <div>
                                             <label class="block text-sm font-medium text-gray-700 mb-1">Add stop</label>
-                                            <input type="text" name="stop_name" required placeholder="Stop name" class="w-full px-3 py-2 border border-gray-300 rounded-md">
-                                        </div>
-                                        <div class="grid grid-cols-2 gap-2">
-                                            <input type="number" step="any" name="latitude" required placeholder="Latitude" class="px-3 py-2 border border-gray-300 rounded-md">
-                                            <input type="number" step="any" name="longitude" required placeholder="Longitude" class="px-3 py-2 border border-gray-300 rounded-md">
+                                            <input type="text" name="stop_name" required placeholder="Stop name (e.g. Start, Terminal)" class="w-full px-3 py-2 border border-gray-300 rounded-md">
                                         </div>
                                         <div>
-                                            <label class="block text-sm text-gray-500 mb-1">Order (0, 1, 2…)</label>
-                                            <input type="number" name="stop_order" value="<?php echo count($route['stops']); ?>" min="0" class="w-24 px-3 py-2 border border-gray-300 rounded-md">
+                                            <label class="block text-sm text-gray-700 mb-1">Set location</label>
+                                            <div class="flex gap-2 mb-1">
+                                                <input type="text" id="place-search-<?php echo (int)$route['id']; ?>" placeholder="Search place (e.g. Guadalupe Manila)" class="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm">
+                                                <button type="button" id="place-search-btn-<?php echo (int)$route['id']; ?>" class="bg-gray-600 text-white px-3 py-2 rounded-md text-sm font-medium hover:bg-gray-700">Search</button>
+                                            </div>
+                                            <div id="place-results-<?php echo (int)$route['id']; ?>" class="hidden mt-1 max-h-32 overflow-y-auto border border-gray-200 rounded bg-white shadow text-sm"></div>
+                                            <p class="text-xs text-gray-500 mt-1">Or click on the map to pin (snaps to road).</p>
+                                            <p id="pin-status-<?php echo (int)$route['id']; ?>" class="text-xs text-gray-500 mt-0.5">No location set.</p>
+                                            <input type="hidden" name="latitude" id="lat-<?php echo (int)$route['id']; ?>" required>
+                                            <input type="hidden" name="longitude" id="lng-<?php echo (int)$route['id']; ?>" required>
                                         </div>
+                                        <input type="hidden" name="stop_order" value="<?php echo count($route['stops']); ?>">
                                         <button type="submit" class="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 font-medium text-sm">Add stop</button>
                                     </form>
+                                    <script>
+                                    document.getElementById('add-stop-form-<?php echo (int)$route['id']; ?>').addEventListener('submit', function(e) {
+                                        var lat = document.getElementById('lat-<?php echo (int)$route['id']; ?>').value;
+                                        var lng = document.getElementById('lng-<?php echo (int)$route['id']; ?>').value;
+                                        if (!lat || !lng) {
+                                            e.preventDefault();
+                                            alert('Please search for a place or click on the map to set this stop\'s location first.');
+                                            return false;
+                                        }
+                                    });
+                                    document.getElementById('save-route-form-<?php echo (int)$route['id']; ?>').addEventListener('submit', function() {
+                                        var list = document.getElementById('stops-list-<?php echo (int)$route['id']; ?>');
+                                        var form = document.getElementById('save-route-form-<?php echo (int)$route['id']; ?>');
+                                        form.querySelectorAll('input[name="order[]"]').forEach(function(i) { i.remove(); });
+                                        (list ? list.querySelectorAll('li[data-stop-id]') : []).forEach(function(li) {
+                                            var inpt = document.createElement('input');
+                                            inpt.type = 'hidden';
+                                            inpt.name = 'order[]';
+                                            inpt.value = li.getAttribute('data-stop-id');
+                                            form.appendChild(inpt);
+                                        });
+                                    });
+                                    </script>
                                 </div>
                                 <div class="lg:w-1/2 h-64 rounded-lg overflow-hidden border border-gray-200" id="map-route-<?php echo (int)$route['id']; ?>"></div>
                             </div>
@@ -250,16 +317,160 @@ if (!$error) {
             const map = L.map(el).setView([14.5995, 120.9842], 12);
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(map);
             const stops = route.stops || [];
-            if (stops.length > 0) {
-                const latlngs = stops.map(function (s) { return [parseFloat(s.latitude), parseFloat(s.longitude)]; });
-                L.polyline(latlngs, { color: '#2563eb', weight: 4 }).addTo(map);
-                stops.forEach(function (s, i) {
-                    L.marker([parseFloat(s.latitude), parseFloat(s.longitude)])
-                        .bindPopup((i + 1) + '. ' + s.stop_name)
-                        .addTo(map);
-                });
-                map.fitBounds(latlngs, { padding: [20, 20] });
+            let pendingMarker = null;
+            let routeLine = null;
+
+            function setStopFromClick(lat, lng) {
+                document.getElementById('lat-' + route.id).value = lat;
+                document.getElementById('lng-' + route.id).value = lng;
+                var statusEl = document.getElementById('pin-status-' + route.id);
+                if (statusEl) statusEl.textContent = 'Location set (on road): ' + lat.toFixed(5) + ', ' + lng.toFixed(5);
+                if (pendingMarker) map.removeLayer(pendingMarker);
+                pendingMarker = L.marker([lat, lng], { opacity: 0.8 })
+                    .bindPopup('New stop here')
+                    .addTo(map);
             }
+            window.setStopForRoute = window.setStopForRoute || {};
+            window.setStopForRoute[route.id] = setStopFromClick;
+
+            if (stops.length > 0) {
+                var waypoints = stops.map(function (s) { return [parseFloat(s.latitude), parseFloat(s.longitude)]; });
+                function drawRoadRoute() {
+                    if (typeof getRouteGeometry === 'function') {
+                        getRouteGeometry(waypoints, function (roadLatlngs) {
+                            var latlngs = roadLatlngs && roadLatlngs.length ? roadLatlngs : waypoints;
+                            if (routeLine) map.removeLayer(routeLine);
+                            routeLine = L.polyline(latlngs, { color: '#2563eb', weight: 4 }).addTo(map);
+                            stops.forEach(function (s, i) {
+                                L.marker([parseFloat(s.latitude), parseFloat(s.longitude)])
+                                    .bindPopup((i + 1) + '. ' + s.stop_name)
+                                    .addTo(map);
+                            });
+                            map.fitBounds(latlngs, { padding: [20, 20] });
+                        });
+                    } else {
+                        routeLine = L.polyline(waypoints, { color: '#2563eb', weight: 4 }).addTo(map);
+                        stops.forEach(function (s, i) {
+                            L.marker([parseFloat(s.latitude), parseFloat(s.longitude)])
+                                .bindPopup((i + 1) + '. ' + s.stop_name)
+                                .addTo(map);
+                        });
+                        map.fitBounds(waypoints, { padding: [20, 20] });
+                    }
+                }
+                drawRoadRoute();
+            }
+
+            map.on('click', function (e) {
+                var statusEl = document.getElementById('pin-status-' + route.id);
+                if (statusEl) statusEl.textContent = 'Snapping to road…';
+                if (typeof snapToRoad === 'function') {
+                    snapToRoad(e.latlng.lat, e.latlng.lng, function (lat, lng) {
+                        if (lat != null && lng != null) setStopFromClick(lat, lng);
+                        else setStopFromClick(e.latlng.lat, e.latlng.lng);
+                    });
+                } else {
+                    setStopFromClick(e.latlng.lat, e.latlng.lng);
+                }
+            });
+        });
+
+        // Drag-and-drop reorder for stops
+        document.querySelectorAll('[id^="stops-list-"]').forEach(function (listEl) {
+            var routeId = listEl.getAttribute('data-route-id');
+            if (!routeId) return;
+            var dragged = null;
+            listEl.addEventListener('dragstart', function (e) {
+                dragged = e.target;
+                e.target.style.opacity = '0.5';
+                e.dataTransfer.effectAllowed = 'move';
+                e.dataTransfer.setData('text/html', e.target.innerHTML);
+            });
+            listEl.addEventListener('dragend', function (e) {
+                e.target.style.opacity = '1';
+                dragged = null;
+            });
+            listEl.addEventListener('dragover', function (e) {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+            });
+            listEl.addEventListener('drop', function (e) {
+                e.preventDefault();
+                var dropTarget = e.target.closest('li[data-stop-id]');
+                if (dropTarget && dragged) {
+                    var rect = dropTarget.getBoundingClientRect();
+                    var mid = rect.top + rect.height / 2;
+                    if (e.clientY < mid) listEl.insertBefore(dragged, dropTarget);
+                    else listEl.insertBefore(dragged, dropTarget.nextSibling);
+                }
+                var stopIds = [];
+                listEl.querySelectorAll('li[data-stop-id]').forEach(function (li) {
+                    stopIds.push(li.getAttribute('data-stop-id'));
+                });
+                if (stopIds.length === 0) return;
+                var formData = new FormData();
+                formData.append('action', 'reorder_stops');
+                formData.append('route_id', routeId);
+                stopIds.forEach(function (id) { formData.append('order[]', id); });
+                fetch('manage_routes.php', { method: 'POST', body: formData, credentials: 'same-origin' })
+                    .then(function () { window.location.reload(); })
+                    .catch(function () { alert('Failed to save order.'); });
+            });
+        });
+
+        // Place search (Nominatim)
+        function searchPlace(routeId, query, resultsEl, setStopFn) {
+            if (!query || !query.trim()) return;
+            resultsEl.classList.remove('hidden');
+            resultsEl.innerHTML = '<p class="p-2 text-gray-500">Searching…</p>';
+            var url = 'https://nominatim.openstreetmap.org/search?q=' + encodeURIComponent(query.trim()) + '&format=json&limit=6';
+            fetch(url, { headers: { 'Accept': 'application/json', 'User-Agent': 'TransportOps/1.0 (Route Management)' } })
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    if (!data || data.length === 0) {
+                        resultsEl.innerHTML = '<p class="p-2 text-gray-500">No places found.</p>';
+                        return;
+                    }
+                    resultsEl.innerHTML = '';
+                    data.forEach(function (item) {
+                        var lat = parseFloat(item.lat);
+                        var lng = parseFloat(item.lon);
+                        var name = item.display_name || (lat + ', ' + lng);
+                        var div = document.createElement('div');
+                        div.className = 'p-2 hover:bg-blue-50 cursor-pointer border-b border-gray-100 last:border-0';
+                        div.textContent = name.length > 80 ? name.substring(0, 80) + '…' : name;
+                        div.addEventListener('click', function () {
+                            resultsEl.classList.add('hidden');
+                            resultsEl.innerHTML = '';
+                            if (typeof snapToRoad === 'function') {
+                                var statusEl = document.getElementById('pin-status-' + routeId);
+                                if (statusEl) statusEl.textContent = 'Snapping to road…';
+                                snapToRoad(lat, lng, function (snapLat, snapLng) {
+                                    if (snapLat != null && snapLng != null && setStopFn) setStopFn(snapLat, snapLng);
+                                    else if (setStopFn) setStopFn(lat, lng);
+                                });
+                            } else if (setStopFn) {
+                                setStopFn(lat, lng);
+                            }
+                        });
+                        resultsEl.appendChild(div);
+                    });
+                })
+                .catch(function () {
+                    resultsEl.innerHTML = '<p class="p-2 text-red-500">Search failed.</p>';
+                });
+        }
+        routesData.forEach(function (route) {
+            var searchInput = document.getElementById('place-search-' + route.id);
+            var searchBtn = document.getElementById('place-search-btn-' + route.id);
+            var resultsEl = document.getElementById('place-results-' + route.id);
+            var setStopFn = window.setStopForRoute && window.setStopForRoute[route.id];
+            if (!searchInput || !resultsEl || !setStopFn) return;
+            function doSearch() { searchPlace(route.id, searchInput.value, resultsEl, setStopFn); }
+            if (searchBtn) searchBtn.addEventListener('click', doSearch);
+            searchInput.addEventListener('keydown', function (e) {
+                if (e.key === 'Enter') { e.preventDefault(); doSearch(); }
+            });
         });
     </script>
 </body>
