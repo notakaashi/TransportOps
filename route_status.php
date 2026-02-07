@@ -1,54 +1,68 @@
 <?php
 /**
  * Route Status Overview
- * Displays current state of each route and flags units off schedule
+ * Displays routes from route_definitions with report counts. Select a route to edit or delete.
  */
 
 session_start();
 require_once 'db.php';
 
-// Check if user is logged in and is an Admin
 if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'Admin') {
     header('Location: login.php');
     exit;
 }
 
-// Fetch route status data
+$routes = [];
+$delayed_route_ids = [];
+$selected_route_id = isset($_GET['route_id']) ? (int)$_GET['route_id'] : null;
+
 try {
     $pdo = getDBConnection();
     
-    // Get routes with PUV counts and status
-    $stmt = $pdo->query("
-        SELECT 
-            current_route,
-            COUNT(*) as puv_count,
-            SUM(CASE WHEN crowd_status = 'Light' THEN 1 ELSE 0 END) as light_count,
-            SUM(CASE WHEN crowd_status = 'Moderate' THEN 1 ELSE 0 END) as moderate_count,
-            SUM(CASE WHEN crowd_status = 'Heavy' THEN 1 ELSE 0 END) as heavy_count
-        FROM puv_units
-        GROUP BY current_route
-        ORDER BY current_route
-    ");
-    $routes = $stmt->fetchAll();
+    $stmt = $pdo->query("SELECT id, name, created_at FROM route_definitions ORDER BY name");
+    $routes = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
-    // Get PUVs with delay reports
-    $stmt = $pdo->query("
-        SELECT DISTINCT p.current_route, COUNT(DISTINCT r.puv_id) as delayed_puvs
-        FROM reports r
-        JOIN puv_units p ON r.puv_id = p.id
-        WHERE r.delay_reason IS NOT NULL AND r.delay_reason != ''
-        AND r.timestamp >= DATE_SUB(NOW(), INTERVAL 1 HOUR)
-        GROUP BY p.current_route
-    ");
-    $delayed_routes = [];
-    while ($row = $stmt->fetch()) {
-        $delayed_routes[$row['current_route']] = $row['delayed_puvs'];
+    foreach ($routes as &$r) {
+        $rid = (int)$r['id'];
+        $stmt = $pdo->prepare("
+            SELECT 
+                COUNT(*) as report_count,
+                SUM(CASE WHEN crowd_level = 'Light' THEN 1 ELSE 0 END) as light_count,
+                SUM(CASE WHEN crowd_level = 'Moderate' THEN 1 ELSE 0 END) as moderate_count,
+                SUM(CASE WHEN crowd_level = 'Heavy' THEN 1 ELSE 0 END) as heavy_count
+            FROM reports
+            WHERE route_definition_id = ?
+        ");
+        $stmt->execute([$rid]);
+        $stats = $stmt->fetch(PDO::FETCH_ASSOC);
+        $r['report_count'] = (int)($stats['report_count'] ?? 0);
+        $r['light_count'] = (int)($stats['light_count'] ?? 0);
+        $r['moderate_count'] = (int)($stats['moderate_count'] ?? 0);
+        $r['heavy_count'] = (int)($stats['heavy_count'] ?? 0);
+        
+        $stmt = $pdo->prepare("
+            SELECT COUNT(*) as c FROM reports
+            WHERE route_definition_id = ? AND delay_reason IS NOT NULL AND delay_reason != ''
+            AND timestamp >= DATE_SUB(NOW(), INTERVAL 1 HOUR)
+        ");
+        $stmt->execute([$rid]);
+        $r['delayed_count'] = (int)$stmt->fetchColumn();
     }
+    unset($r);
     
+    $stmt = $pdo->query("
+        SELECT route_definition_id, COUNT(*) as delayed_count
+        FROM reports
+        WHERE route_definition_id IS NOT NULL AND delay_reason IS NOT NULL AND delay_reason != ''
+        AND timestamp >= DATE_SUB(NOW(), INTERVAL 1 HOUR)
+        GROUP BY route_definition_id
+    ");
+    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+        $delayed_route_ids[(int)$row['route_definition_id']] = (int)$row['delayed_count'];
+    }
 } catch (PDOException $e) {
     error_log("Route status error: " . $e->getMessage());
     $routes = [];
-    $delayed_routes = [];
 }
 ?>
 <!DOCTYPE html>
@@ -79,14 +93,6 @@ try {
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
                         </svg>
                         Fleet Overview
-                    </a>
-                    <a href="tracking.php" 
-                       class="flex items-center px-4 py-3 hover:bg-gray-700 rounded-lg transition duration-150 group">
-                        <svg class="w-5 h-5 mr-3 group-hover:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path>
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                        </svg>
-                        Real-Time Tracking
                     </a>
                     <a href="admin_reports.php" 
                        class="flex items-center px-4 py-3 hover:bg-gray-700 rounded-lg transition duration-150 group">
@@ -123,13 +129,6 @@ try {
                         </svg>
                         User Management
                     </a>
-                    <a href="add_puv.php" 
-                       class="flex items-center px-4 py-3 hover:bg-gray-700 rounded-lg transition duration-150 group">
-                        <svg class="w-5 h-5 mr-3 group-hover:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
-                        </svg>
-                        Add Vehicle
-                    </a>
                 </nav>
             </div>
             <div class="mt-auto p-6 border-t border-gray-700">
@@ -151,65 +150,86 @@ try {
                 <!-- Page Header -->
                 <div class="mb-8">
                     <h2 class="text-3xl font-bold text-gray-800">Route Status Overview</h2>
-                    <p class="text-gray-600 mt-2">Monitor route performance and identify units off schedule</p>
+                    <p class="text-gray-600 mt-2">Monitor routes and report counts. Select a route to edit or delete it.</p>
+                </div>
+
+                <!-- Route selector -->
+                <div class="mb-6 bg-white rounded-lg shadow-md p-4">
+                    <label for="routeSelect" class="block text-sm font-medium text-gray-700 mb-2">Select a route to edit or delete</label>
+                    <div class="flex flex-wrap items-center gap-3">
+                        <select id="routeSelect" class="px-4 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm">
+                            <option value="">-- Select a route --</option>
+                            <?php foreach ($routes as $r): ?>
+                                <option value="<?php echo (int)$r['id']; ?>" <?php echo $selected_route_id === (int)$r['id'] ? 'selected' : ''; ?>>
+                                    <?php echo htmlspecialchars($r['name']); ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                        <a id="editRouteBtn" href="#" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm font-medium hidden">Edit route</a>
+                        <form id="deleteRouteForm" method="POST" action="manage_routes.php" class="inline" onsubmit="return confirm('Delete this route and all its stops? Reports for this route will keep the route name as null.');">
+                            <input type="hidden" name="action" value="delete_route">
+                            <input type="hidden" name="route_id" id="deleteRouteId" value="">
+                            <button type="submit" class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm font-medium hidden" id="deleteRouteBtn">Delete route</button>
+                        </form>
+                    </div>
                 </div>
 
                 <!-- Routes Grid -->
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     <?php if (empty($routes)): ?>
                         <div class="col-span-full bg-white rounded-lg shadow-md p-8 text-center">
-                            <p class="text-gray-500">No routes found. Add PUV units to see route status.</p>
+                            <p class="text-gray-500">No routes found. <a href="manage_routes.php" class="text-blue-600 hover:underline">Create routes</a> in Manage Routes.</p>
                         </div>
                     <?php else: ?>
                         <?php foreach ($routes as $route): ?>
                             <?php 
-                            $has_delays = isset($delayed_routes[$route['current_route']]);
-                            $delayed_count = $has_delays ? $delayed_routes[$route['current_route']] : 0;
+                            $has_delays = !empty($route['delayed_count']);
+                            $delayed_count = (int)($route['delayed_count'] ?? 0);
                             $status_class = $has_delays ? 'border-red-500' : 'border-green-500';
+                            $is_selected = $selected_route_id === (int)$route['id'];
                             ?>
-                            <div class="bg-white rounded-lg shadow-md p-6 border-l-4 <?php echo $status_class; ?>">
+                            <div class="bg-white rounded-lg shadow-md p-6 border-l-4 <?php echo $status_class; ?> <?php echo $is_selected ? 'ring-2 ring-blue-500' : ''; ?>">
                                 <div class="flex items-center justify-between mb-4">
-                                    <h3 class="text-xl font-semibold text-gray-800"><?php echo htmlspecialchars($route['current_route']); ?></h3>
+                                    <h3 class="text-xl font-semibold text-gray-800"><?php echo htmlspecialchars($route['name']); ?></h3>
                                     <?php if ($has_delays): ?>
-                                        <span class="px-3 py-1 bg-red-100 text-red-800 text-xs font-semibold rounded-full">
-                                            Delayed
-                                        </span>
+                                        <span class="px-3 py-1 bg-red-100 text-red-800 text-xs font-semibold rounded-full">Delayed</span>
                                     <?php else: ?>
-                                        <span class="px-3 py-1 bg-green-100 text-green-800 text-xs font-semibold rounded-full">
-                                            On Time
-                                        </span>
+                                        <span class="px-3 py-1 bg-green-100 text-green-800 text-xs font-semibold rounded-full">On Time</span>
                                     <?php endif; ?>
                                 </div>
-                                
                                 <div class="space-y-3">
                                     <div class="flex justify-between items-center">
-                                        <span class="text-sm text-gray-600">Total PUVs</span>
-                                        <span class="font-semibold text-gray-800"><?php echo $route['puv_count']; ?></span>
+                                        <span class="text-sm text-gray-600">Total Reports</span>
+                                        <span class="font-semibold text-gray-800"><?php echo $route['report_count']; ?></span>
                                     </div>
-                                    
                                     <div class="flex justify-between items-center">
                                         <span class="text-sm text-gray-600">Light Crowding</span>
                                         <span class="font-semibold text-green-600"><?php echo $route['light_count']; ?></span>
                                     </div>
-                                    
                                     <div class="flex justify-between items-center">
                                         <span class="text-sm text-gray-600">Moderate Crowding</span>
                                         <span class="font-semibold text-yellow-600"><?php echo $route['moderate_count']; ?></span>
                                     </div>
-                                    
                                     <div class="flex justify-between items-center">
                                         <span class="text-sm text-gray-600">Heavy Crowding</span>
                                         <span class="font-semibold text-red-600"><?php echo $route['heavy_count']; ?></span>
                                     </div>
-                                    
                                     <?php if ($has_delays): ?>
                                         <div class="pt-3 border-t border-gray-200">
                                             <div class="flex justify-between items-center">
-                                                <span class="text-sm text-red-600 font-medium">Delayed PUVs</span>
+                                                <span class="text-sm text-red-600 font-medium">Delays (last hour)</span>
                                                 <span class="font-semibold text-red-600"><?php echo $delayed_count; ?></span>
                                             </div>
                                         </div>
                                     <?php endif; ?>
+                                </div>
+                                <div class="mt-4 pt-3 border-t border-gray-200 flex gap-2">
+                                    <a href="manage_routes.php?highlight=<?php echo (int)$route['id']; ?>" class="text-sm text-blue-600 hover:text-blue-800 font-medium">Edit</a>
+                                    <form method="POST" action="manage_routes.php" class="inline" onsubmit="return confirm('Delete this route and all its stops?');">
+                                        <input type="hidden" name="action" value="delete_route">
+                                        <input type="hidden" name="route_id" value="<?php echo (int)$route['id']; ?>">
+                                        <button type="submit" class="text-sm text-red-600 hover:text-red-800 font-medium">Delete</button>
+                                    </form>
                                 </div>
                             </div>
                         <?php endforeach; ?>
@@ -218,6 +238,32 @@ try {
             </div>
         </main>
     </div>
+    <script>
+        (function() {
+            var sel = document.getElementById('routeSelect');
+            var editBtn = document.getElementById('editRouteBtn');
+            var deleteBtn = document.getElementById('deleteRouteBtn');
+            var deleteId = document.getElementById('deleteRouteId');
+            if (!sel) return;
+            function update() {
+                var id = sel.value;
+                if (id) {
+                    editBtn.href = 'manage_routes.php?highlight=' + id;
+                    editBtn.classList.remove('hidden');
+                    deleteBtn.classList.remove('hidden');
+                    deleteId.value = id;
+                } else {
+                    editBtn.classList.add('hidden');
+                    deleteBtn.classList.add('hidden');
+                }
+            }
+            sel.addEventListener('change', function() {
+                if (sel.value) window.location = 'route_status.php?route_id=' + sel.value;
+                update();
+            });
+            update();
+        })();
+    </script>
 </body>
 </html>
 

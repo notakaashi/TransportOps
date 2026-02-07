@@ -17,9 +17,10 @@ try {
         SELECT r.id, r.crowd_level, r.delay_reason, r.timestamp, r.latitude, r.longitude,
                r.is_verified, r.peer_verifications,
                u.name AS user_name, u.email AS user_email,
-               p.plate_number, p.vehicle_type, p.current_route
+               COALESCE(rd.name, p.current_route) AS route_name
         FROM reports r
         LEFT JOIN users u ON r.user_id = u.id
+        LEFT JOIN route_definitions rd ON r.route_definition_id = rd.id
         LEFT JOIN puv_units p ON r.puv_id = p.id
         ORDER BY r.timestamp DESC
         LIMIT 200
@@ -81,14 +82,6 @@ try {
                         </svg>
                         Fleet Overview
                     </a>
-                    <a href="tracking.php" 
-                       class="flex items-center px-4 py-3 hover:bg-gray-700 rounded-lg transition duration-150 group">
-                        <svg class="w-5 h-5 mr-3 group-hover:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path>
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                        </svg>
-                        Real-Time Tracking
-                    </a>
                     <a href="admin_reports.php" 
                        class="flex items-center px-4 py-3 bg-blue-600 rounded-lg hover:bg-blue-700 transition duration-150 shadow-lg">
                         <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -123,13 +116,6 @@ try {
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path>
                         </svg>
                         User Management
-                    </a>
-                    <a href="add_puv.php" 
-                       class="flex items-center px-4 py-3 hover:bg-gray-700 rounded-lg transition duration-150 group">
-                        <svg class="w-5 h-5 mr-3 group-hover:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
-                        </svg>
-                        Add Vehicle
                     </a>
                 </nav>
             </div>
@@ -177,7 +163,7 @@ try {
                                 <thead class="bg-gray-50">
                                     <tr>
                                         <th class="px-4 py-2 text-left font-medium text-gray-500 uppercase tracking-wider">Time</th>
-                                        <th class="px-4 py-2 text-left font-medium text-gray-500 uppercase tracking-wider">Vehicle</th>
+                                        <th class="px-4 py-2 text-left font-medium text-gray-500 uppercase tracking-wider">Route</th>
                                         <th class="px-4 py-2 text-left font-medium text-gray-500 uppercase tracking-wider">Crowd</th>
                                         <th class="px-4 py-2 text-left font-medium text-gray-500 uppercase tracking-wider">Verified</th>
                                         <th class="px-4 py-2 text-left font-medium text-gray-500 uppercase tracking-wider">Actions</th>
@@ -192,16 +178,13 @@ try {
                                         </tr>
                                     <?php else: ?>
                                         <?php foreach ($reports as $report): ?>
-                                            <tr class="report-row" data-route="<?php echo htmlspecialchars($report['current_route'] ?? ''); ?>">
+                                            <tr class="report-row" data-route="<?php echo htmlspecialchars($report['route_name'] ?? ''); ?>">
                                                 <td class="px-4 py-2 whitespace-nowrap">
                                                     <?php echo date('M d, Y H:i', strtotime($report['timestamp'])); ?>
                                                 </td>
                                                 <td class="px-4 py-2 whitespace-nowrap">
                                                     <div class="font-medium text-gray-900">
-                                                        <?php echo htmlspecialchars($report['plate_number'] ?? 'N/A'); ?>
-                                                    </div>
-                                                    <div class="text-xs text-gray-500">
-                                                        <?php echo htmlspecialchars(($report['vehicle_type'] ?? 'Bus') . ' - ' . ($report['current_route'] ?? '')); ?>
+                                                        <?php echo htmlspecialchars($report['route_name'] ?? 'N/A'); ?>
                                                     </div>
                                                 </td>
                                                 <td class="px-4 py-2 whitespace-nowrap">
@@ -297,8 +280,7 @@ try {
             const timestamp = new Date(report.timestamp).toLocaleString();
             marker.bindPopup(`
                 <div class="text-sm">
-                    <strong>${report.plate_number || 'Unknown'} (${report.vehicle_type || 'Bus'})</strong><br>
-                    Route: ${report.current_route || 'N/A'}<br>
+                    <strong>Route:</strong> ${report.route_name || 'N/A'}<br>
                     Crowd: ${report.crowd_level}<br>
                     Verified: ${isVerified ? 'Yes' : 'No'} (${report.peer_verifications || 0}/3)<br>
                     Reported by: ${report.user_name || 'Unknown'}<br>
@@ -385,7 +367,7 @@ try {
                 row.style.display = (!routeName || rowRoute === routeName) ? '' : 'none';
             });
             if (routeName) {
-                const filtered = reportsData.filter(r => (r.current_route || '') === routeName);
+                const filtered = reportsData.filter(r => (r.route_name || '') === routeName);
                 showReportsOnMap(filtered, true);
                 drawRouteOnMap(routeName);
                 const route = routesWithStops.find(r => r.name === routeName);

@@ -105,6 +105,24 @@ if (!$error) {
                     $error = 'Failed to save route.';
                 }
             }
+        } elseif ($action === 'edit_route') {
+            $route_id = (int)($_POST['route_id'] ?? 0);
+            $new_name = trim($_POST['route_name'] ?? '');
+            if ($route_id && $new_name !== '') {
+                try {
+                    $stmt = $pdo->prepare("UPDATE route_definitions SET name = ? WHERE id = ?");
+                    $stmt->execute([$new_name, $route_id]);
+                    $success = 'Route name updated.';
+                } catch (PDOException $e) {
+                    if (strpos($e->getMessage(), 'Duplicate') !== false) {
+                        $error = 'A route with this name already exists.';
+                    } else {
+                        $error = 'Failed to update route name.';
+                    }
+                }
+            } else {
+                $error = 'Route and name are required.';
+            }
         }
     }
 
@@ -145,10 +163,6 @@ if (!$error) {
                         <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
                         Fleet Overview
                     </a>
-                    <a href="tracking.php" class="flex items-center px-4 py-3 hover:bg-gray-700 rounded-lg transition duration-150 group">
-                        <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
-                        Real-Time Tracking
-                    </a>
                     <a href="admin_reports.php" class="flex items-center px-4 py-3 hover:bg-gray-700 rounded-lg transition duration-150 group">
                         <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-6a2 2 0 012-2h6m-4-4l4 4-4 4"></path></svg>
                         Reports
@@ -168,10 +182,6 @@ if (!$error) {
                     <a href="user_management.php" class="flex items-center px-4 py-3 hover:bg-gray-700 rounded-lg transition duration-150 group">
                         <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
                         User Management
-                    </a>
-                    <a href="add_puv.php" class="flex items-center px-4 py-3 hover:bg-gray-700 rounded-lg transition duration-150 group">
-                        <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
-                        Add Vehicle
                     </a>
                 </nav>
             </div>
@@ -213,11 +223,20 @@ if (!$error) {
                 </div>
 
                 <!-- List routes and add stops -->
+                <?php $highlight_route_id = isset($_GET['highlight']) ? (int)$_GET['highlight'] : 0; ?>
                 <div class="mt-8 space-y-6">
                     <?php foreach ($routes_with_stops as $route): ?>
-                        <div class="bg-white rounded-lg shadow-md overflow-hidden">
+                        <div class="bg-white rounded-lg shadow-md overflow-hidden<?php echo $highlight_route_id === (int)$route['id'] ? ' ring-2 ring-blue-500' : ''; ?>" id="route-<?php echo (int)$route['id']; ?>">
                             <div class="px-6 py-4 bg-gray-50 border-b flex flex-wrap justify-between items-center gap-2">
-                                <h3 class="text-lg font-semibold text-gray-800"><?php echo htmlspecialchars($route['name']); ?></h3>
+                                <div class="flex items-center gap-2 flex-wrap">
+                                    <h3 class="text-lg font-semibold text-gray-800"><?php echo htmlspecialchars($route['name']); ?></h3>
+                                    <form method="POST" class="inline flex items-center gap-1" id="edit-name-form-<?php echo (int)$route['id']; ?>">
+                                        <input type="hidden" name="action" value="edit_route">
+                                        <input type="hidden" name="route_id" value="<?php echo (int)$route['id']; ?>">
+                                        <input type="text" name="route_name" value="<?php echo htmlspecialchars($route['name']); ?>" placeholder="Route name" class="px-2 py-1 border border-gray-300 rounded text-sm w-48">
+                                        <button type="submit" class="text-sm text-blue-600 hover:text-blue-800 font-medium">Update name</button>
+                                    </form>
+                                </div>
                                 <div class="flex items-center gap-2">
                                     <form method="POST" id="save-route-form-<?php echo (int)$route['id']; ?>" class="inline">
                                         <input type="hidden" name="action" value="save_route">
@@ -303,7 +322,7 @@ if (!$error) {
                 </div>
 
                 <?php if (empty($routes_with_stops)): ?>
-                    <p class="mt-6 text-gray-500">No routes yet. Create one above. When adding vehicles in Add Vehicle, use the same route name (e.g. Guadalupe - FTI Tenement) so the route appears on the Reports map.</p>
+                    <p class="mt-6 text-gray-500">No routes yet. Create one above. Routes appear on the report form and Reports map.</p>
                 <?php endif; ?>
                 <?php endif; ?>
             </div>
@@ -472,6 +491,11 @@ if (!$error) {
                 if (e.key === 'Enter') { e.preventDefault(); doSearch(); }
             });
         });
+        var highlightId = <?php echo $highlight_route_id ? (int)$highlight_route_id : 0; ?>;
+        if (highlightId) {
+            var el = document.getElementById('route-' + highlightId);
+            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
     </script>
 </body>
 </html>

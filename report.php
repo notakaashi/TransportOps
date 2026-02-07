@@ -15,75 +15,95 @@ if (!isset($_SESSION['user_id'])) {
 
 $error = '';
 $success = '';
-$puvs = [];
+$routes_list = [];
 
-// Fetch available PUVs
+// Fetch available routes (from route_definitions with at least one stop)
 try {
     $pdo = getDBConnection();
-    $stmt = $pdo->query("SELECT id, plate_number, vehicle_type, current_route FROM puv_units ORDER BY plate_number");
-    $puvs = $stmt->fetchAll();
+    $stmt = $pdo->query("
+        SELECT rd.id, rd.name
+        FROM route_definitions rd
+        INNER JOIN (SELECT route_definition_id FROM route_stops GROUP BY route_definition_id) rs ON rs.route_definition_id = rd.id
+        ORDER BY rd.name
+    ");
+    $routes_list = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
-    error_log("Error fetching PUVs: " . $e->getMessage());
+    error_log("Error fetching routes: " . $e->getMessage());
+}
+
+// Haversine distance in km
+function distanceKm($lat1, $lng1, $lat2, $lng2) {
+    $earthRadius = 6371;
+    $dLat = deg2rad($lat2 - $lat1);
+    $dLng = deg2rad($lng2 - $lng1);
+    $a = sin($dLat/2)*sin($dLat/2) + cos(deg2rad($lat1))*cos(deg2rad($lat2))*sin($dLng/2)*sin($dLng/2);
+    $c = 2 * atan2(sqrt($a), sqrt(1-$a));
+    return $earthRadius * $c;
 }
 
 // Process report submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $puv_id = $_POST['puv_id'] ?? '';
+    $route_definition_id = isset($_POST['route_definition_id']) ? (int)$_POST['route_definition_id'] : 0;
     $crowd_level = $_POST['crowd_level'] ?? '';
     $delay_reason = trim($_POST['delay_reason'] ?? '');
-    $latitude = $_POST['latitude'] ?? null;
-    $longitude = $_POST['longitude'] ?? null;
+    $latitude = isset($_POST['latitude']) && $_POST['latitude'] !== '' ? (float)$_POST['latitude'] : null;
+    $longitude = isset($_POST['longitude']) && $_POST['longitude'] !== '' ? (float)$_POST['longitude'] : null;
     
-    // Validate input
-    if (empty($puv_id) || empty($crowd_level)) {
-        $error = 'Please select a PUV and crowd level.';
+    if ($route_definition_id <= 0 || empty($crowd_level)) {
+        $error = 'Please select a route and crowd level.';
     } elseif (!in_array($crowd_level, ['Light', 'Moderate', 'Heavy'])) {
         $error = 'Invalid crowd level selected.';
+    } elseif ($latitude === null || $longitude === null) {
+        $error = 'Please set your location on the map or use GPS so we can confirm you are on or near the route.';
     } else {
         try {
             $pdo = getDBConnection();
             
-            // Verify PUV exists
-            $stmt = $pdo->prepare("SELECT id FROM puv_units WHERE id = ?");
-            $stmt->execute([$puv_id]);
-            $puv = $stmt->fetch();
+            $stmt = $pdo->prepare("SELECT id, name FROM route_definitions WHERE id = ?");
+            $stmt->execute([$route_definition_id]);
+            $route = $stmt->fetch(PDO::FETCH_ASSOC);
             
-            if (!$puv) {
-                $error = 'Selected vehicle not found. Please select a valid vehicle.';
+            if (!$route) {
+                $error = 'Selected route not found. Please select a valid route.';
             } else {
-                $geofence_validated = 0;
-                $trust_score = 1.00;
+                $stmt = $pdo->prepare("SELECT latitude, longitude FROM route_stops WHERE route_definition_id = ? ORDER BY stop_order");
+                $stmt->execute([$route_definition_id]);
+                $stops = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 
-                // If GPS coordinates provided, validate them
-                if ($latitude && $longitude) {
-                    $geofence_validated = 1;
-                    $trust_score = 1.00;
+                if (empty($stops)) {
+                    $error = 'This route has no stops defined. Report cannot be validated.';
+                } else {
+                    $minDist = null;
+                    foreach ($stops as $stop) {
+                        $d = distanceKm($latitude, $longitude, (float)$stop['latitude'], (float)$stop['longitude']);
+                        if ($minDist === null || $d < $minDist) $minDist = $d;
+                    }
+                    $thresholdKm = 0.5;
+                    if ($minDist > $thresholdKm) {
+                        $error = 'Your location must be on or near the selected route (within about 500 m of a stop) to submit a report. Current distance to nearest stop: ' . number_format($minDist * 1000, 0) . ' m.';
+                    } else {
+                        $geofence_validated = 1;
+                        $trust_score = 1.00;
+                        
+                        $stmt = $pdo->prepare("
+                            INSERT INTO reports (user_id, route_definition_id, puv_id, crowd_level, delay_reason, latitude, longitude, geofence_validated, trust_score)
+                            VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?)
+                        ");
+                        $stmt->execute([
+                            $_SESSION['user_id'],
+                            $route_definition_id,
+                            $crowd_level,
+                            $delay_reason ?: null,
+                            $latitude,
+                            $longitude,
+                            $geofence_validated,
+                            $trust_score
+                        ]);
+                        
+                        $success = 'Report submitted successfully! Thank you for your contribution.';
+                        $_POST = [];
+                    }
                 }
-                
-                // Insert report
-                $stmt = $pdo->prepare("
-                    INSERT INTO reports (user_id, puv_id, crowd_level, delay_reason, latitude, longitude, geofence_validated, trust_score) 
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                ");
-                $stmt->execute([
-                    $_SESSION['user_id'],
-                    $puv_id,
-                    $crowd_level,
-                    $delay_reason ?: null,
-                    $latitude ?: null,
-                    $longitude ?: null,
-                    $geofence_validated,
-                    $trust_score
-                ]);
-                
-                // Update PUV crowd status based on report
-                $stmt = $pdo->prepare("UPDATE puv_units SET crowd_status = ? WHERE id = ?");
-                $stmt->execute([$crowd_level, $puv_id]);
-                
-                $success = 'Report submitted successfully! Thank you for your contribution.';
-                
-                // Clear form after successful submission
-                $_POST = [];
             }
         } catch (PDOException $e) {
             error_log("Report submission error: " . $e->getMessage());
@@ -152,16 +172,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             
             <form method="POST" action="" id="reportForm" class="space-y-6" onsubmit="return validateForm()">
                 <div>
-                    <label for="puv_id" class="block text-sm font-medium text-gray-700 mb-2">Select Vehicle</label>
-                    <select id="puv_id" name="puv_id" required
+                    <label for="route_definition_id" class="block text-sm font-medium text-gray-700 mb-2">Select Route</label>
+                    <select id="route_definition_id" name="route_definition_id" required
                             class="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
-                        <option value="">-- Select a Vehicle --</option>
-                        <?php foreach ($puvs as $puv): ?>
-                            <option value="<?php echo $puv['id']; ?>" data-route="<?php echo htmlspecialchars($puv['current_route'] ?? ''); ?>">
-                                <?php echo htmlspecialchars($puv['plate_number'] . ' (' . ($puv['vehicle_type'] ?? 'Bus') . ') - ' . $puv['current_route']); ?>
+                        <option value="">-- Select a Route --</option>
+                        <?php foreach ($routes_list as $r): ?>
+                            <option value="<?php echo (int)$r['id']; ?>" data-route="<?php echo htmlspecialchars($r['name']); ?>">
+                                <?php echo htmlspecialchars($r['name']); ?>
                             </option>
                         <?php endforeach; ?>
                     </select>
+                    <?php if (empty($routes_list)): ?>
+                        <p class="text-sm text-amber-600 mt-1">No routes available. Ask an admin to add routes in Manage Routes.</p>
+                    <?php endif; ?>
                 </div>
                 
                 <div>
@@ -228,7 +251,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <div class="bg-white rounded-lg shadow-md overflow-hidden">
             <div class="px-4 py-3 border-b border-gray-200">
                 <h3 class="text-lg font-semibold text-gray-800">Pin your report location</h3>
-                <p class="text-sm text-gray-500">Click on the map to pin your location (snaps to the nearest road). Select a vehicle to see its route along roads.</p>
+                <p class="text-sm text-gray-500">Select a route to see it on the map. Pin your location (click map or use GPS)—reports are only accepted when you're on or near the route.</p>
             </div>
             <div class="h-[400px] lg:h-[500px]" id="report-route-map"></div>
         </div>
@@ -273,19 +296,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         
         function validateForm() {
-            const puvId = document.getElementById('puv_id').value;
+            const routeId = document.getElementById('route_definition_id').value;
             const crowdLevel = document.querySelector('input[name="crowd_level"]:checked');
+            const lat = document.getElementById('latitude').value;
+            const lng = document.getElementById('longitude').value;
             
-            if (!puvId) {
-                alert('Please select a PUV.');
+            if (!routeId) {
+                alert('Please select a route.');
                 return false;
             }
-            
             if (!crowdLevel) {
                 alert('Please select a crowd level.');
                 return false;
             }
-            
+            if (!lat || !lng) {
+                alert('Please set your location on the map or use the GPS button.');
+                return false;
+            }
             return true;
         }
 
@@ -385,7 +412,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 })
                 .catch(function () { window.reportPageRoutes = []; });
 
-            document.getElementById('puv_id').addEventListener('change', function () {
+            document.getElementById('route_definition_id').addEventListener('change', function () {
                 const opt = this.options[this.selectedIndex];
                 const routeName = opt ? opt.getAttribute('data-route') : '';
                 drawRoute(routeName || '');

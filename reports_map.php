@@ -13,9 +13,10 @@ try {
         SELECT r.id, r.crowd_level, r.delay_reason, r.timestamp, r.latitude, r.longitude,
                r.is_verified, r.peer_verifications,
                u.name as user_name,
-               p.plate_number, p.vehicle_type, p.current_route
+               COALESCE(rd.name, p.current_route) AS route_name
         FROM reports r
         LEFT JOIN users u ON r.user_id = u.id
+        LEFT JOIN route_definitions rd ON r.route_definition_id = rd.id
         LEFT JOIN puv_units p ON r.puv_id = p.id
         WHERE r.latitude IS NOT NULL AND r.longitude IS NOT NULL
         ORDER BY r.timestamp DESC
@@ -168,8 +169,7 @@ try {
 
                 marker.bindPopup(`
                     <div class="text-sm">
-                        <strong>${r.plate_number || 'Unknown'} (${r.vehicle_type || 'Bus'})</strong><br>
-                        Route: ${r.current_route || 'N/A'}<br>
+                        <strong>Route:</strong> ${r.route_name || 'N/A'}<br>
                         Crowd: ${r.crowd_level}<br>
                         Reported by: ${r.user_name || 'Unknown'}<br>
                         Time: ${timestamp}<br>

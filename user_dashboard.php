@@ -24,8 +24,9 @@ try {
     $pdo = getDBConnection();
     $stmt = $pdo->prepare("
         SELECT r.id, r.crowd_level, r.delay_reason, r.timestamp, r.trust_score, r.is_verified,
-               p.plate_number, p.vehicle_type, p.current_route
+               COALESCE(rd.name, p.current_route) AS route_name
         FROM reports r
+        LEFT JOIN route_definitions rd ON r.route_definition_id = rd.id
         LEFT JOIN puv_units p ON r.puv_id = p.id
         WHERE r.user_id = ?
         ORDER BY r.timestamp DESC
@@ -173,7 +174,7 @@ function getStatusBadge($status) {
                     <thead class="bg-gray-50">
                         <tr>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date & Time</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Vehicle</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Route</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Crowd Level</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Delay Reason</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
@@ -196,10 +197,7 @@ function getStatusBadge($status) {
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap">
                                         <div class="text-sm font-medium text-gray-900">
-                                            <?php echo htmlspecialchars($report['plate_number'] ?? 'N/A'); ?>
-                                        </div>
-                                        <div class="text-xs text-gray-500">
-                                            <?php echo htmlspecialchars(($report['vehicle_type'] ?? 'Bus') . ' - ' . ($report['current_route'] ?? '')); ?>
+                                            <?php echo htmlspecialchars($report['route_name'] ?? 'N/A'); ?>
                                         </div>
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap">

@@ -15,26 +15,17 @@ if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'Admin') {
 }
 
 // Fetch statistics from database
-$active_puvs = 0;
 $total_reports = 0;
 $active_delays = 0;
 $total_users = 0;
 $total_routes = 0;
 $recent_reports = [];
 $users_data = [];
-$fleet_data = [];
 $delay_trends = [];
 $peak_hours = [];
-$vehicle_types = [];
-$crowd_status_dist = [];
 
 try {
     $pdo = getDBConnection();
-    
-    // Get active vehicles count
-    $stmt = $pdo->query("SELECT COUNT(*) as count FROM puv_units");
-    $result = $stmt->fetch(PDO::FETCH_ASSOC);
-    $active_puvs = isset($result['count']) ? (int)$result['count'] : 0;
     
     // Get total reports count
     $stmt = $pdo->query("SELECT COUNT(*) as count FROM reports");
@@ -51,26 +42,23 @@ try {
     $result = $stmt->fetch(PDO::FETCH_ASSOC);
     $total_users = isset($result['count']) ? (int)$result['count'] : 0;
     
-    // Get unique routes count
-    $stmt = $pdo->query("SELECT COUNT(DISTINCT current_route) as count FROM puv_units WHERE current_route IS NOT NULL AND current_route != ''");
-    $result = $stmt->fetch(PDO::FETCH_ASSOC);
-    $total_routes = isset($result['count']) ? (int)$result['count'] : 0;
-    
-    // Get vehicle type distribution
-    $stmt = $pdo->query("SELECT vehicle_type, COUNT(*) as count FROM puv_units GROUP BY vehicle_type");
-    $vehicle_types = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    
-    // Get crowd status distribution
-    $stmt = $pdo->query("SELECT crowd_status, COUNT(*) as count FROM puv_units GROUP BY crowd_status");
-    $crowd_status_dist = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    // Get routes count from route_definitions
+    try {
+        $stmt = $pdo->query("SELECT COUNT(*) as count FROM route_definitions");
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        $total_routes = isset($result['count']) ? (int)$result['count'] : 0;
+    } catch (PDOException $e) {
+        $total_routes = 0;
+    }
     
     // Get recent reports (last 10)
     $stmt = $pdo->query("
         SELECT r.id, r.crowd_level, r.delay_reason, r.timestamp, r.latitude, r.longitude,
                u.name as user_name, u.role as user_role,
-               p.plate_number, p.vehicle_type, p.current_route
+               COALESCE(rd.name, p.current_route) AS route_name
         FROM reports r
         LEFT JOIN users u ON r.user_id = u.id
+        LEFT JOIN route_definitions rd ON r.route_definition_id = rd.id
         LEFT JOIN puv_units p ON r.puv_id = p.id
         ORDER BY r.timestamp DESC
         LIMIT 10
@@ -80,10 +68,6 @@ try {
     // Get all users for management
     $stmt = $pdo->query("SELECT id, name, email, role, created_at FROM users ORDER BY created_at DESC");
     $users_data = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    
-    // Get fleet overview data
-    $stmt = $pdo->query("SELECT id, plate_number, vehicle_type, current_route, crowd_status FROM puv_units ORDER BY plate_number");
-    $fleet_data = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
     // Delay trend analysis - get delay reasons count for last 7 days
     $stmt = $pdo->query("
@@ -157,15 +141,7 @@ function getStatusBadge($status) {
                         <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
                         </svg>
-                        Fleet Overview
-                    </a>
-                    <a href="tracking.php" 
-                       class="flex items-center px-4 py-3 hover:bg-gray-700 rounded-lg transition duration-150 group">
-                        <svg class="w-5 h-5 mr-3 group-hover:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path>
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                        </svg>
-                        Real-Time Tracking
+                        Dashboard
                     </a>
                     <a href="admin_reports.php" 
                        class="flex items-center px-4 py-3 hover:bg-gray-700 rounded-lg transition duration-150 group">
@@ -202,13 +178,6 @@ function getStatusBadge($status) {
                         </svg>
                         User Management
                     </a>
-                    <a href="add_puv.php" 
-                       class="flex items-center px-4 py-3 hover:bg-gray-700 rounded-lg transition duration-150 group">
-                        <svg class="w-5 h-5 mr-3 group-hover:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
-                        </svg>
-                        Add Vehicle
-                    </a>
                 </nav>
             </div>
             <div class="mt-auto p-6 border-t border-gray-700">
@@ -229,27 +198,12 @@ function getStatusBadge($status) {
             <div class="p-8">
                 <!-- Page Header -->
                 <div class="mb-8">
-                    <h2 class="text-3xl font-bold text-gray-800">Fleet Overview</h2>
-                    <p class="text-gray-600 mt-2">Monitor and manage your transportation fleet</p>
+                    <h2 class="text-3xl font-bold text-gray-800">Dashboard</h2>
+                    <p class="text-gray-600 mt-2">Monitor routes and reports</p>
                 </div>
 
                 <!-- Stats Cards -->
-                <div class="grid grid-cols-1 md:grid-cols-5 gap-6 mb-8">
-                    <!-- Active Vehicles Card -->
-                    <div class="bg-white rounded-lg shadow-md p-6 border-l-4 border-blue-500">
-                        <div class="flex items-center justify-between">
-                            <div>
-                                <p class="text-gray-600 text-sm font-medium">Active Vehicles</p>
-                                <p class="text-3xl font-bold text-gray-800 mt-2"><?php echo number_format($active_puvs); ?></p>
-                            </div>
-                            <div class="bg-blue-100 p-3 rounded-full">
-                                <svg class="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path>
-                                </svg>
-                            </div>
-                        </div>
-                    </div>
-
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
                     <!-- Total Reports Card -->
                     <div class="bg-white rounded-lg shadow-md p-6 border-l-4 border-green-500">
                         <div class="flex items-center justify-between">
@@ -299,7 +253,7 @@ function getStatusBadge($status) {
                     <div class="bg-white rounded-lg shadow-md p-6 border-l-4 border-indigo-500">
                         <div class="flex items-center justify-between">
                             <div>
-                                <p class="text-gray-600 text-sm font-medium">Active Routes</p>
+                                <p class="text-gray-600 text-sm font-medium">Routes</p>
                                 <p class="text-3xl font-bold text-gray-800 mt-2"><?php echo number_format($total_routes); ?></p>
                             </div>
                             <div class="bg-indigo-100 p-3 rounded-full">
@@ -308,59 +262,6 @@ function getStatusBadge($status) {
                                 </svg>
                             </div>
                         </div>
-                    </div>
-                </div>
-
-                <!-- Fleet Overview Table -->
-                <div class="bg-white rounded-lg shadow-md overflow-hidden mb-8">
-                    <div class="px-6 py-4 border-b border-gray-200">
-                        <h3 class="text-xl font-semibold text-gray-800">Fleet Overview</h3>
-                    </div>
-                    <div class="overflow-x-auto">
-                        <table class="w-full">
-                            <thead class="bg-gray-50">
-                                <tr>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Plate Number</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Vehicle Type</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Route</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                                </tr>
-                            </thead>
-                            <tbody class="bg-white divide-y divide-gray-200">
-                                <?php if (empty($fleet_data)): ?>
-                                    <tr>
-                                        <td colspan="4" class="px-6 py-4 text-center text-gray-500">
-                                            No vehicles found. <a href="add_puv.php" class="text-blue-600 hover:text-blue-800">Add vehicles</a> to see them here.
-                                        </td>
-                                    </tr>
-                                <?php else: ?>
-                                    <?php foreach ($fleet_data as $puv): ?>
-                                        <tr class="hover:bg-gray-50">
-                                            <td class="px-6 py-4 whitespace-nowrap">
-                                                <div class="text-sm font-medium text-gray-900">
-                                                    <?php echo htmlspecialchars($puv['plate_number']); ?>
-                                                </div>
-                                            </td>
-                                            <td class="px-6 py-4 whitespace-nowrap">
-                                                <div class="text-sm text-gray-600">
-                                                    <?php echo htmlspecialchars($puv['vehicle_type'] ?? 'Bus'); ?>
-                                                </div>
-                                            </td>
-                                            <td class="px-6 py-4 whitespace-nowrap">
-                                                <div class="text-sm text-gray-600">
-                                                    <?php echo htmlspecialchars($puv['current_route']); ?>
-                                                </div>
-                                            </td>
-                                            <td class="px-6 py-4 whitespace-nowrap">
-                                                <span class="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full border <?php echo getStatusBadge($puv['crowd_status']); ?>">
-                                                    <?php echo htmlspecialchars($puv['crowd_status']); ?>
-                                                </span>
-                                            </td>
-                                        </tr>
-                                    <?php endforeach; ?>
-                                <?php endif; ?>
-                            </tbody>
-                        </table>
                     </div>
                 </div>
 
@@ -381,7 +282,7 @@ function getStatusBadge($status) {
                                 <tr>
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Timestamp</th>
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Vehicle</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Route</th>
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Crowd Level</th>
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Delay Reason</th>
                                 </tr>
@@ -413,10 +314,7 @@ function getStatusBadge($status) {
                                             </td>
                                             <td class="px-6 py-4 whitespace-nowrap">
                                                 <div class="text-sm font-medium text-gray-900">
-                                                    <?php echo htmlspecialchars($report['plate_number'] ?? 'N/A'); ?>
-                                                </div>
-                                                <div class="text-xs text-gray-500">
-                                                    <?php echo htmlspecialchars(($report['vehicle_type'] ?? 'Bus') . ' - ' . ($report['current_route'] ?? '')); ?>
+                                                    <?php echo htmlspecialchars($report['route_name'] ?? 'N/A'); ?>
                                                 </div>
                                             </td>
                                             <td class="px-6 py-4 whitespace-nowrap">
@@ -657,8 +555,7 @@ function getStatusBadge($status) {
             body.innerHTML = [
                 '<p><strong>Time:</strong> ' + (time) + '</p>',
                 '<p><strong>Reported by:</strong> ' + (r.user_name || 'N/A') + ' <span class="text-gray-500">(' + (r.user_role || '') + ')</span></p>',
-                '<p><strong>Vehicle:</strong> ' + (r.plate_number || 'N/A') + ' <span class="text-gray-500">' + (r.vehicle_type || 'Bus') + '</span></p>',
-                '<p><strong>Route:</strong> ' + (r.current_route || 'N/A') + '</p>',
+                '<p><strong>Route:</strong> ' + (r.route_name || 'N/A') + '</p>',
                 '<p><strong>Crowd level:</strong> <span class="px-2 py-0.5 rounded border ' + (r.crowd_level === 'Heavy' ? 'bg-red-100 text-red-800' : r.crowd_level === 'Moderate' ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800') + '">' + (r.crowd_level || '') + '</span></p>',
                 r.delay_reason ? '<p><strong>Delay reason:</strong> ' + escapeHtml(r.delay_reason) + '</p>' : '',
                 (r.latitude && r.longitude) ? '<p class="text-gray-500"><strong>Location:</strong> ' + parseFloat(r.latitude).toFixed(5) + ', ' + parseFloat(r.longitude).toFixed(5) + '</p>' : ''
