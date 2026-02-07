@@ -178,12 +178,26 @@ try {
                         </svg>
                         Real-Time Tracking
                     </a>
+                    <a href="admin_reports.php" 
+                       class="flex items-center px-4 py-3 hover:bg-gray-700 rounded-lg transition duration-150 group">
+                        <svg class="w-5 h-5 mr-3 group-hover:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-6a2 2 0 012-2h6m-4-4l4 4-4 4"></path>
+                        </svg>
+                        Reports
+                    </a>
                     <a href="route_status.php" 
                        class="flex items-center px-4 py-3 hover:bg-gray-700 rounded-lg transition duration-150 group">
                         <svg class="w-5 h-5 mr-3 group-hover:text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"></path>
                         </svg>
                         Route Status
+                    </a>
+                    <a href="manage_routes.php" 
+                       class="flex items-center px-4 py-3 hover:bg-gray-700 rounded-lg transition duration-150 group">
+                        <svg class="w-5 h-5 mr-3 group-hover:text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"></path>
+                        </svg>
+                        Manage Routes
                     </a>
                     <a href="heatmap.php" 
                        class="flex items-center px-4 py-3 hover:bg-gray-700 rounded-lg transition duration-150 group">
@@ -204,7 +218,7 @@ try {
                         <svg class="w-5 h-5 mr-3 group-hover:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
                         </svg>
-                        Add PUV
+                        Add Vehicle
                     </a>
                 </nav>
             </div>

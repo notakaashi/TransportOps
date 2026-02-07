@@ -181,6 +181,13 @@ function getStatusBadge($status) {
                         </svg>
                         Route Status
                     </a>
+                    <a href="manage_routes.php" 
+                       class="flex items-center px-4 py-3 hover:bg-gray-700 rounded-lg transition duration-150 group">
+                        <svg class="w-5 h-5 mr-3 group-hover:text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"></path>
+                        </svg>
+                        Manage Routes
+                    </a>
                     <a href="heatmap.php" 
                        class="flex items-center px-4 py-3 hover:bg-gray-700 rounded-lg transition duration-150 group">
                         <svg class="w-5 h-5 mr-3 group-hover:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -388,7 +395,9 @@ function getStatusBadge($status) {
                                     </tr>
                                 <?php else: ?>
                                     <?php foreach ($recent_reports as $report): ?>
-                                        <tr class="hover:bg-gray-50">
+                                        <tr class="hover:bg-gray-50 cursor-pointer transition duration-150 report-row"
+                                            data-report="<?php echo htmlspecialchars(json_encode($report)); ?>"
+                                            title="Click to view details">
                                             <td class="px-6 py-4 whitespace-nowrap">
                                                 <div class="text-sm text-gray-900">
                                                     <?php echo date('M d, Y H:i', strtotime($report['timestamp'])); ?>
@@ -554,6 +563,26 @@ function getStatusBadge($status) {
             </div>
         </main>
     </div>
+
+    <!-- Report detail modal -->
+    <div id="reportModal" class="fixed inset-0 z-50 hidden overflow-y-auto" aria-modal="true" role="dialog">
+        <div class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:p-0">
+            <div id="reportModalBackdrop" class="fixed inset-0 transition-opacity bg-gray-500 bg-opacity-75"></div>
+            <div class="relative inline-block w-full max-w-lg p-6 my-8 overflow-hidden text-left align-middle transition-all transform bg-white shadow-xl rounded-xl">
+                <div class="flex justify-between items-start mb-4">
+                    <h3 class="text-xl font-semibold text-gray-900">Report details</h3>
+                    <button type="button" id="reportModalClose" class="text-gray-400 hover:text-gray-600 rounded-lg focus:ring-2 focus:ring-gray-300">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                </div>
+                <div id="reportModalBody" class="space-y-3 text-sm text-gray-700"></div>
+                <div class="mt-6 flex gap-3">
+                    <a id="reportModalViewOnMap" href="#" class="inline-flex justify-center px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700">View on map</a>
+                    <button type="button" id="reportModalCloseBtn" class="inline-flex justify-center px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
 </body>
 <script>
     (function () {
@@ -612,6 +641,54 @@ function getStatusBadge($status) {
 
         initAudio();
         setInterval(checkNewReports, 15000);
+    })();
+
+    (function () {
+        const modal = document.getElementById('reportModal');
+        const body = document.getElementById('reportModalBody');
+        const viewOnMapLink = document.getElementById('reportModalViewOnMap');
+        const closeBtn = document.getElementById('reportModalClose');
+        const closeBtn2 = document.getElementById('reportModalCloseBtn');
+        const backdrop = document.getElementById('reportModalBackdrop');
+
+        function openModal(report) {
+            const r = report;
+            const time = r.timestamp ? new Date(r.timestamp).toLocaleString() : 'N/A';
+            body.innerHTML = [
+                '<p><strong>Time:</strong> ' + (time) + '</p>',
+                '<p><strong>Reported by:</strong> ' + (r.user_name || 'N/A') + ' <span class="text-gray-500">(' + (r.user_role || '') + ')</span></p>',
+                '<p><strong>Vehicle:</strong> ' + (r.plate_number || 'N/A') + ' <span class="text-gray-500">' + (r.vehicle_type || 'Bus') + '</span></p>',
+                '<p><strong>Route:</strong> ' + (r.current_route || 'N/A') + '</p>',
+                '<p><strong>Crowd level:</strong> <span class="px-2 py-0.5 rounded border ' + (r.crowd_level === 'Heavy' ? 'bg-red-100 text-red-800' : r.crowd_level === 'Moderate' ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800') + '">' + (r.crowd_level || '') + '</span></p>',
+                r.delay_reason ? '<p><strong>Delay reason:</strong> ' + escapeHtml(r.delay_reason) + '</p>' : '',
+                (r.latitude && r.longitude) ? '<p class="text-gray-500"><strong>Location:</strong> ' + parseFloat(r.latitude).toFixed(5) + ', ' + parseFloat(r.longitude).toFixed(5) + '</p>' : ''
+            ].join('');
+            viewOnMapLink.href = (r.latitude && r.longitude) ? 'admin_reports.php?focus=' + r.id : 'admin_reports.php';
+            viewOnMapLink.style.visibility = (r.latitude && r.longitude) ? 'visible' : 'hidden';
+            modal.classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
+        }
+        function escapeHtml(str) {
+            const div = document.createElement('div');
+            div.textContent = str;
+            return div.innerHTML;
+        }
+        function closeModal() {
+            modal.classList.add('hidden');
+            document.body.style.overflow = '';
+        }
+
+        document.querySelectorAll('.report-row').forEach(function (row) {
+            row.addEventListener('click', function () {
+                try {
+                    const data = this.getAttribute('data-report');
+                    if (data) openModal(JSON.parse(data));
+                } catch (e) { console.error(e); }
+            });
+        });
+        closeBtn.addEventListener('click', closeModal);
+        closeBtn2.addEventListener('click', closeModal);
+        backdrop.addEventListener('click', closeModal);
     })();
 </script>
 </html>

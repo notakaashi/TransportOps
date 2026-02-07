@@ -99,6 +99,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Submit Report - Transport Operations System</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 </head>
 <body class="bg-gray-50">
     <!-- Navigation Bar -->
@@ -115,6 +117,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         <?php else: ?>
                             <a href="user_dashboard.php" class="text-gray-700 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium">Dashboard</a>
                         <?php endif; ?>
+                        <a href="report.php" class="text-blue-600 hover:text-blue-800 px-3 py-2 rounded-md text-sm font-medium border-b-2 border-blue-600">Submit Report</a>
+                        <a href="reports_map.php" class="text-gray-700 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium">Reports Map</a>
                     </div>
                 </div>
                 <div class="flex items-center space-x-4">
@@ -126,7 +130,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </nav>
 
     <!-- Main Content -->
-    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <div class="bg-white rounded-lg shadow-md p-8">
             <h2 class="text-3xl font-bold text-gray-800 mb-6">Submit Report</h2>
             <p class="text-gray-600 mb-6">Help improve transportation services by reporting crowding levels and delays in real-time.</p>
@@ -150,7 +155,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             class="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
                         <option value="">-- Select a Vehicle --</option>
                         <?php foreach ($puvs as $puv): ?>
-                            <option value="<?php echo $puv['id']; ?>">
+                            <option value="<?php echo $puv['id']; ?>" data-route="<?php echo htmlspecialchars($puv['current_route'] ?? ''); ?>">
                                 <?php echo htmlspecialchars($puv['plate_number'] . ' (' . ($puv['vehicle_type'] ?? 'Bus') . ') - ' . $puv['current_route']); ?>
                             </option>
                         <?php endforeach; ?>
@@ -217,6 +222,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </button>
             </form>
         </div>
+
+        <div class="bg-white rounded-lg shadow-md overflow-hidden">
+            <div class="px-4 py-3 border-b border-gray-200">
+                <h3 class="text-lg font-semibold text-gray-800">Route map</h3>
+                <p class="text-sm text-gray-500">Select a vehicle to see its route on the map.</p>
+            </div>
+            <div class="h-[400px] lg:h-[500px]" id="report-route-map"></div>
+        </div>
+        </div>
     </div>
 
     <script>
@@ -269,6 +283,45 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             
             return true;
         }
+
+        (function () {
+            const mapEl = document.getElementById('report-route-map');
+            if (!mapEl) return;
+            const map = L.map('report-route-map').setView([14.5995, 120.9842], 12);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(map);
+            let routeLayer = null;
+
+            function drawRoute(routeName) {
+                if (routeLayer) {
+                    map.removeLayer(routeLayer);
+                    routeLayer = null;
+                }
+                if (!window.reportPageRoutes || !routeName) return;
+                const route = window.reportPageRoutes.find(function (r) { return r.name === routeName; });
+                if (!route || !route.stops || route.stops.length === 0) return;
+                const latlngs = route.stops.map(function (s) { return [s.latitude, s.longitude]; });
+                routeLayer = L.polyline(latlngs, { color: '#2563eb', weight: 5, opacity: 0.8 }).addTo(map);
+                route.stops.forEach(function (s, i) {
+                    L.marker([s.latitude, s.longitude])
+                        .bindPopup('<strong>' + (i + 1) + '. ' + (s.stop_name || 'Stop') + '</strong>')
+                        .addTo(routeLayer);
+                });
+                map.fitBounds(latlngs, { padding: [30, 30] });
+            }
+
+            fetch('api_routes_with_stops.php', { credentials: 'same-origin' })
+                .then(function (res) { return res.json(); })
+                .then(function (data) {
+                    window.reportPageRoutes = data.routes || [];
+                })
+                .catch(function () { window.reportPageRoutes = []; });
+
+            document.getElementById('puv_id').addEventListener('change', function () {
+                const opt = this.options[this.selectedIndex];
+                const routeName = opt ? opt.getAttribute('data-route') : '';
+                drawRoute(routeName || '');
+            });
+        })();
     </script>
 </body>
 </html>

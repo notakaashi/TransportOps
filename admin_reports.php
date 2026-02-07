@@ -8,6 +8,8 @@ if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'Admin') {
 }
 
 $reports = [];
+$routes_with_stops = [];
+$focus_report_id = isset($_GET['focus']) ? (int)$_GET['focus'] : 0;
 
 try {
     $pdo = getDBConnection();
@@ -23,6 +25,26 @@ try {
         LIMIT 200
     ");
     $reports = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    try {
+        $stmt = $pdo->query("SELECT id, name FROM route_definitions ORDER BY name");
+        $routeDefs = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $stmt = $pdo->query("SELECT route_definition_id, stop_name, latitude, longitude, stop_order FROM route_stops ORDER BY route_definition_id, stop_order");
+        $stops = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $stopsByRoute = [];
+        foreach ($stops as $s) {
+            $rid = $s['route_definition_id'];
+            if (!isset($stopsByRoute[$rid])) $stopsByRoute[$rid] = [];
+            $stopsByRoute[$rid][] = ['stop_name' => $s['stop_name'], 'latitude' => (float)$s['latitude'], 'longitude' => (float)$s['longitude'], 'stop_order' => (int)$s['stop_order']];
+        }
+        foreach ($routeDefs as $r) {
+            $r['stops'] = $stopsByRoute[$r['id']] ?? [];
+            usort($r['stops'], function ($a, $b) { return $a['stop_order'] - $b['stop_order']; });
+            $routes_with_stops[] = $r;
+        }
+    } catch (PDOException $e) {
+        // route_definitions may not exist yet
+    }
 } catch (PDOException $e) {
     error_log('Admin reports error: ' . $e->getMessage());
     $reports = [];
@@ -80,6 +102,13 @@ try {
                         </svg>
                         Route Status
                     </a>
+                    <a href="manage_routes.php" 
+                       class="flex items-center px-4 py-3 hover:bg-gray-700 rounded-lg transition duration-150 group">
+                        <svg class="w-5 h-5 mr-3 group-hover:text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"></path>
+                        </svg>
+                        Manage Routes
+                    </a>
                     <a href="heatmap.php" 
                        class="flex items-center px-4 py-3 hover:bg-gray-700 rounded-lg transition duration-150 group">
                         <svg class="w-5 h-5 mr-3 group-hover:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -119,7 +148,18 @@ try {
         <main class="flex-1 flex flex-col">
             <div class="bg-white shadow-sm border-b border-gray-200 p-6">
                 <h2 class="text-3xl font-bold text-gray-800">Reports</h2>
-                <p class="text-gray-600 mt-2">Browse all reports and inspect a single report on the map.</p>
+                <p class="text-gray-600 mt-2">Browse all reports and inspect a single report on the map. Select a route to see it drawn on the map.</p>
+                <?php if (!empty($routes_with_stops)): ?>
+                <div class="mt-4 flex items-center gap-3">
+                    <label for="routeFilter" class="text-sm font-medium text-gray-700">Filter by route:</label>
+                    <select id="routeFilter" class="px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm">
+                        <option value="">All reports</option>
+                        <?php foreach ($routes_with_stops as $rd): ?>
+                            <option value="<?php echo htmlspecialchars($rd['name']); ?>"><?php echo htmlspecialchars($rd['name']); ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <?php endif; ?>
             </div>
 
             <div class="flex-1 flex overflow-hidden">
@@ -151,7 +191,7 @@ try {
                                         </tr>
                                     <?php else: ?>
                                         <?php foreach ($reports as $report): ?>
-                                            <tr>
+                                            <tr class="report-row" data-route="<?php echo htmlspecialchars($report['current_route'] ?? ''); ?>">
                                                 <td class="px-4 py-2 whitespace-nowrap">
                                                     <?php echo date('M d, Y H:i', strtotime($report['timestamp'])); ?>
                                                 </td>
@@ -211,6 +251,8 @@ try {
 
     <script>
         const reportsData = <?php echo json_encode($reports); ?>;
+        const routesWithStops = <?php echo json_encode($routes_with_stops); ?>;
+        const focusReportId = <?php echo $focus_report_id; ?>;
 
         const map = L.map('report-map').setView([14.5995, 120.9842], 12);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -218,6 +260,7 @@ try {
         }).addTo(map);
 
         const markersLayer = L.layerGroup().addTo(map);
+        let routeLayer = null;
 
         function getIconColor(crowdLevel) {
             if (crowdLevel === 'Light') return 'green';
@@ -271,10 +314,26 @@ try {
             return marker;
         }
 
-        function showAllReportsOnMap() {
+        function drawRouteOnMap(routeName) {
+            if (routeLayer) {
+                map.removeLayer(routeLayer);
+                routeLayer = null;
+            }
+            const route = routesWithStops.find(r => r.name === routeName);
+            if (!route || !route.stops || route.stops.length === 0) return;
+            const latlngs = route.stops.map(s => [s.latitude, s.longitude]);
+            routeLayer = L.polyline(latlngs, { color: '#2563eb', weight: 5, opacity: 0.8 }).addTo(map);
+            route.stops.forEach((s, i) => {
+                L.marker([s.latitude, s.longitude])
+                    .bindPopup('<strong>' + (i + 1) + '. ' + (s.stop_name || 'Stop') + '</strong>')
+                    .addTo(routeLayer);
+            });
+        }
+
+        function showReportsOnMap(reports, fitBounds) {
             markersLayer.clearLayers();
             const bounds = [];
-            reportsData.forEach(r => {
+            (reports || reportsData).forEach(r => {
                 if (!r.latitude || !r.longitude) return;
                 const marker = addMarkerForReport(r);
                 if (marker) {
@@ -282,10 +341,13 @@ try {
                     bounds.push([latLng.lat, latLng.lng]);
                 }
             });
-
-            if (bounds.length > 0) {
+            if (fitBounds !== false && bounds.length > 0) {
                 map.fitBounds(bounds, { padding: [40, 40] });
             }
+        }
+
+        function showAllReportsOnMap() {
+            showReportsOnMap(reportsData, true);
         }
 
         function focusReportOnMap(reportId) {
@@ -302,16 +364,54 @@ try {
             addMarkerForReport(report, true);
         }
 
+        function applyRouteFilter() {
+            const routeName = document.getElementById('routeFilter') ? document.getElementById('routeFilter').value : '';
+            document.querySelectorAll('.report-row').forEach(row => {
+                const rowRoute = row.getAttribute('data-route') || '';
+                row.style.display = (!routeName || rowRoute === routeName) ? '' : 'none';
+            });
+            if (routeName) {
+                const filtered = reportsData.filter(r => (r.current_route || '') === routeName);
+                showReportsOnMap(filtered, true);
+                drawRouteOnMap(routeName);
+                const route = routesWithStops.find(r => r.name === routeName);
+                if (route && route.stops && route.stops.length > 0) {
+                    const latlngs = route.stops.map(s => [s.latitude, s.longitude]);
+                    map.fitBounds(latlngs, { padding: [50, 50] });
+                }
+            } else {
+                if (routeLayer) {
+                    map.removeLayer(routeLayer);
+                    routeLayer = null;
+                }
+                showAllReportsOnMap();
+            }
+        }
+
         if (reportsData.length > 0) {
             showAllReportsOnMap();
         }
+        if (focusReportId) {
+            focusReportOnMap(focusReportId);
+        }
+
+        const routeFilterEl = document.getElementById('routeFilter');
+        if (routeFilterEl) {
+            routeFilterEl.addEventListener('change', applyRouteFilter);
+        }
 
         document.getElementById('showAllBtn').addEventListener('click', function () {
+            if (routeFilterEl) routeFilterEl.value = '';
+            if (routeLayer) {
+                map.removeLayer(routeLayer);
+                routeLayer = null;
+            }
             showAllReportsOnMap();
         });
 
         document.querySelectorAll('.view-on-map-btn').forEach(btn => {
-            btn.addEventListener('click', function () {
+            btn.addEventListener('click', function (e) {
+                e.stopPropagation();
                 const reportId = this.getAttribute('data-report-id');
                 focusReportOnMap(reportId);
             });

@@ -27,8 +27,13 @@ function getDBConnection() {
         $pdo = new PDO($dsn, DB_USER, DB_PASS, $options);
         return $pdo;
     } catch (PDOException $e) {
-        // Log error in production, show generic message to user
         error_log("Database connection failed: " . $e->getMessage());
+        // On localhost, show the real error so you can fix it (MySQL not running, database missing, etc.)
+        $isLocal = in_array($_SERVER['HTTP_HOST'] ?? '', ['localhost', '127.0.0.1'], true)
+            || (isset($_SERVER['SERVER_NAME']) && $_SERVER['SERVER_NAME'] === 'localhost');
+        if ($isLocal) {
+            die("Database connection failed: " . htmlspecialchars($e->getMessage()) . ". Make sure MySQL is running in XAMPP and the database exists (run database.sql in phpMyAdmin).");
+        }
         die("Database connection failed. Please contact the administrator.");
     }
 }

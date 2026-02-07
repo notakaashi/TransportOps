@@ -15,6 +15,15 @@ if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'Admin') {
 
 $error = '';
 $success = '';
+$route_names = [];
+
+try {
+    $pdo = getDBConnection();
+    $stmt = $pdo->query("SELECT name FROM route_definitions ORDER BY name");
+    $route_names = $stmt->fetchAll(PDO::FETCH_COLUMN);
+} catch (PDOException $e) {
+    // route_definitions may not exist
+}
 
 // Process form submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -99,12 +108,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         </svg>
                         Real-Time Tracking
                     </a>
+                    <a href="admin_reports.php" 
+                       class="flex items-center px-4 py-3 hover:bg-gray-700 rounded-lg transition duration-150 group">
+                        <svg class="w-5 h-5 mr-3 group-hover:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-6a2 2 0 012-2h6m-4-4l4 4-4 4"></path>
+                        </svg>
+                        Reports
+                    </a>
                     <a href="route_status.php" 
                        class="flex items-center px-4 py-3 hover:bg-gray-700 rounded-lg transition duration-150 group">
                         <svg class="w-5 h-5 mr-3 group-hover:text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"></path>
                         </svg>
                         Route Status
+                    </a>
+                    <a href="manage_routes.php" 
+                       class="flex items-center px-4 py-3 hover:bg-gray-700 rounded-lg transition duration-150 group">
+                        <svg class="w-5 h-5 mr-3 group-hover:text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"></path>
+                        </svg>
+                        Manage Routes
                     </a>
                     <a href="heatmap.php" 
                        class="flex items-center px-4 py-3 hover:bg-gray-700 rounded-lg transition duration-150 group">
@@ -125,7 +148,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
                         </svg>
-                        Add PUV
+                        Add Vehicle
                     </a>
                 </nav>
             </div>
@@ -194,8 +217,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 <label for="current_route" class="block text-sm font-semibold text-gray-700 mb-2">Current Route</label>
                                 <input type="text" id="current_route" name="current_route" required 
                                        value="<?php echo htmlspecialchars($current_route ?? ''); ?>"
-                                       placeholder="Route Name (e.g., EDSA - Cubao)"
+                                       placeholder="Route Name (e.g., Guadalupe - FTI Tenement)"
+                                       list="route_names_list"
                                        class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition duration-150">
+                                <?php if (!empty($route_names)): ?>
+                                <datalist id="route_names_list">
+                                    <?php foreach ($route_names as $rn): ?>
+                                        <option value="<?php echo htmlspecialchars($rn); ?>">
+                                    <?php endforeach; ?>
+                                </datalist>
+                                <p class="text-xs text-gray-500 mt-1">Tip: Use a route from Manage Routes so it appears on the Reports map.</p>
+                                <?php endif; ?>
                             </div>
                             
                             <div class="grid grid-cols-2 gap-4">
