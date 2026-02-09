@@ -119,42 +119,112 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Submit Report - Transport Operations System</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --transit-primary-route: #ff1744;    /* Bright Red */
+            --transit-secondary-route: #4169e1;  /* Royal Blue */
+            --transit-info: #facc15;             /* Vivid Yellow */
+            --transit-foundation: #050505;       /* Matte Black */
+        }
+        .brand-font {
+            font-family: 'Poppins', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            letter-spacing: 0.02em;
+        }
+        .bg-transit-foundation {
+            background-color: var(--transit-foundation);
+            color: #f9fafb;
+        }
+        .text-transit-primary {
+            color: var(--transit-primary-route);
+        }
+        .bg-transit-primary {
+            background-color: var(--transit-primary-route);
+        }
+        .border-transit-primary {
+            border-color: var(--transit-primary-route);
+        }
+        .text-transit-secondary {
+            color: var(--transit-secondary-route);
+        }
+        .bg-transit-secondary {
+            background-color: var(--transit-secondary-route);
+        }
+        .border-transit-secondary {
+            border-color: var(--transit-secondary-route);
+        }
+        .bg-transit-info {
+            background-color: var(--transit-info);
+            color: #1f2933;
+        }
+    </style>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="js/osrm-helpers.js"></script>
 </head>
-<body class="bg-gray-50">
+<body class="bg-[#F3F4F6]">
     <!-- Navigation Bar -->
-    <nav class="bg-white shadow-md">
+    <nav class="fixed top-0 inset-x-0 z-30 bg-[#1E3A8A] text-white shadow-sm">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between items-center h-16">
                 <div class="flex items-center space-x-8">
-                    <a href="index.php" class="text-2xl font-bold text-gray-800">Transport Ops</a>
+                    <a href="index.php" class="brand-font text-xl sm:text-2xl font-bold text-white whitespace-nowrap">Transport Ops</a>
                     <div class="hidden md:flex space-x-4">
-                        <a href="index.php" class="text-gray-700 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium">Home</a>
-                        <a href="about.php" class="text-gray-700 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium">About</a>
+                        <a href="index.php" class="text-gray-100 hover:text-white px-3 py-2 rounded-md text-sm font-medium">Home</a>
+                        <a href="about.php" class="text-gray-100 hover:text-white px-3 py-2 rounded-md text-sm font-medium">About</a>
                         <?php if ($_SESSION['role'] === 'Admin'): ?>
-                            <a href="admin_dashboard.php" class="text-gray-700 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium">Dashboard</a>
+                            <a href="admin_dashboard.php" class="text-gray-100 hover:text-white px-3 py-2 rounded-md text-sm font-medium">Dashboard</a>
                         <?php else: ?>
-                            <a href="user_dashboard.php" class="text-gray-700 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium">Dashboard</a>
+                            <a href="user_dashboard.php" class="text-gray-100 hover:text-white px-3 py-2 rounded-md text-sm font-medium">Dashboard</a>
                         <?php endif; ?>
-                        <a href="report.php" class="text-blue-600 hover:text-blue-800 px-3 py-2 rounded-md text-sm font-medium border-b-2 border-blue-600">Submit Report</a>
-                        <a href="reports_map.php" class="text-gray-700 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium">Reports Map</a>
-                        <a href="routes.php" class="text-gray-700 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium">Routes</a>
+                        <a href="report.php" class="text-white px-3 py-2 rounded-md text-sm font-medium border-b-2 border-[#10B981]">Submit Report</a>
+                        <a href="reports_map.php" class="text-gray-100 hover:text-white px-3 py-2 rounded-md text-sm font-medium">Reports Map</a>
+                        <a href="routes.php" class="text-gray-100 hover:text-white px-3 py-2 rounded-md text-sm font-medium">Routes</a>
                     </div>
                 </div>
-                <div class="flex items-center space-x-4">
-                    <span class="text-gray-700"><?php echo htmlspecialchars($_SESSION['user_name']); ?></span>
-                    <a href="logout.php" class="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 transition duration-150 font-medium">Logout</a>
+                <div class="relative flex items-center gap-2 sm:gap-3">
+                    <button id="profileMenuButton"
+                            class="flex items-center gap-2 px-2 py-1.5 rounded-full hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-white/60">
+                        <div class="hidden sm:flex flex-col items-end leading-tight">
+                            <span class="text-xs sm:text-sm text-white font-medium">
+                                <?php echo htmlspecialchars($_SESSION['user_name']); ?>
+                            </span>
+                            <span class="text-[11px] text-blue-100">
+                                <?php echo htmlspecialchars($_SESSION['role']); ?>
+                            </span>
+                        </div>
+                        <div class="flex items-center gap-1">
+                            <div class="h-8 w-8 rounded-full bg-[#10B981] flex items-center justify-center text-white text-sm font-semibold">
+                                <?php echo strtoupper(substr($_SESSION['user_name'] ?? 'U', 0, 1)); ?>
+                            </div>
+                            <svg class="w-4 h-4 text-blue-100" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                            </svg>
+                        </div>
+                    </button>
+                    <div id="profileMenu"
+                         class="hidden absolute right-0 top-11 w-44 bg-white text-gray-800 rounded-lg shadow-lg border border-gray-100 py-1 z-40">
+                        <a href="profile.php"
+                           class="block px-3 py-2 text-sm hover:bg-gray-50">
+                            View &amp; Edit Profile
+                        </a>
+                        <div class="my-1 border-t border-gray-100"></div>
+                        <a href="logout.php"
+                           class="block px-3 py-2 text-sm text-red-600 hover:bg-red-50">
+                            Logout
+                        </a>
+                    </div>
                 </div>
             </div>
         </div>
     </nav>
 
     <!-- Main Content -->
-    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <div class="bg-white rounded-lg shadow-md p-8">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-8">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8 items-start">
+        <div class="bg-white rounded-2xl shadow-md p-6 sm:p-8">
             <h2 class="text-3xl font-bold text-gray-800 mb-6">Submit Report</h2>
             <p class="text-gray-600 mb-6">Help improve transportation services by reporting crowding levels and delays in real-time.</p>
             
@@ -189,27 +259,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 
                 <div>
                     <label for="crowd_level" class="block text-sm font-medium text-gray-700 mb-2">Crowd Level</label>
-                    <div class="grid grid-cols-3 gap-4">
-                        <label class="flex items-center p-4 border-2 border-gray-300 rounded-lg cursor-pointer hover:border-green-500 transition">
-                            <input type="radio" name="crowd_level" value="Light" required class="mr-2">
-                            <div>
-                                <div class="font-semibold text-green-700">Light</div>
-                                <div class="text-xs text-gray-600">Comfortable seating</div>
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+                        <label class="flex flex-col justify-between p-3 sm:p-4 border-2 border-gray-300 rounded-xl cursor-pointer hover:border-green-500 transition min-h-[80px] sm:min-h-[96px]">
+                            <div class="flex items-center">
+                                <input type="radio" name="crowd_level" value="Light" required class="mr-2">
+                                <span class="font-semibold text-green-700">Light</span>
                             </div>
+                            <div class="mt-1 text-xs text-gray-600">Comfortable seating</div>
                         </label>
-                        <label class="flex items-center p-4 border-2 border-gray-300 rounded-lg cursor-pointer hover:border-yellow-500 transition">
-                            <input type="radio" name="crowd_level" value="Moderate" required class="mr-2">
-                            <div>
-                                <div class="font-semibold text-yellow-700">Moderate</div>
-                                <div class="text-xs text-gray-600">Limited seating</div>
+                        <label class="flex flex-col justify-between p-3 sm:p-4 border-2 border-gray-300 rounded-xl cursor-pointer hover:border-yellow-500 transition min-h-[80px] sm:min-h-[96px]">
+                            <div class="flex items-center">
+                                <input type="radio" name="crowd_level" value="Moderate" required class="mr-2">
+                                <span class="font-semibold text-yellow-700">Moderate</span>
                             </div>
+                            <div class="mt-1 text-xs text-gray-600">Limited seating</div>
                         </label>
-                        <label class="flex items-center p-4 border-2 border-gray-300 rounded-lg cursor-pointer hover:border-red-500 transition">
-                            <input type="radio" name="crowd_level" value="Heavy" required class="mr-2">
-                            <div>
-                                <div class="font-semibold text-red-700">Heavy</div>
-                                <div class="text-xs text-gray-600">Crowded</div>
+                        <label class="flex flex-col justify-between p-3 sm:p-4 border-2 border-gray-300 rounded-xl cursor-pointer hover:border-red-500 transition min-h-[80px] sm:min-h-[96px]">
+                            <div class="flex items-center">
+                                <input type="radio" name="crowd_level" value="Heavy" required class="mr-2">
+                                <span class="font-semibold text-red-700">Heavy</span>
                             </div>
+                            <div class="mt-1 text-xs text-gray-600">Crowded</div>
                         </label>
                     </div>
                 </div>
@@ -228,12 +298,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     </select>
                 </div>
                 
-                <div class="bg-blue-50 p-4 rounded-lg">
+                <div class="bg-blue-50 p-4 rounded-xl">
                     <p class="text-sm text-gray-700 mb-2">
                         <strong>Report location:</strong> Click on the map to pin where you are (pins snap to the nearest road). Or use GPS below.
                     </p>
                     <button type="button" onclick="getLocation()" 
-                            class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition duration-150 font-medium text-sm">
+                            class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition duration-150 font-medium text-sm min-h-[48px]">
                         Use my current location (GPS)
                     </button>
                     <input type="hidden" id="latitude" name="latitude">
@@ -242,13 +312,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </div>
                 
                 <button type="submit" 
-                        class="w-full bg-blue-600 text-white py-3 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition duration-150 font-medium">
+                        class="w-full bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition duration-150 font-medium min-h-[48px]">
                     Submit Report
                 </button>
             </form>
         </div>
 
-        <div class="bg-white rounded-lg shadow-md overflow-hidden">
+        <div class="bg-white rounded-2xl shadow-md overflow-hidden">
             <div class="px-4 py-3 border-b border-gray-200">
                 <h3 class="text-lg font-semibold text-gray-800">Pin your report location</h3>
                 <p class="text-sm text-gray-500">Select a route to see it on the map. Pin your location (click map or use GPS)—reports are only accepted when you're on or near the route.</p>
@@ -384,7 +454,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         getRouteGeometry(waypoints, function (roadLatlngs) {
                             var latlngs = roadLatlngs && roadLatlngs.length ? roadLatlngs : waypoints;
                             routeLayer = L.layerGroup().addTo(map);
-                            L.polyline(latlngs, { color: '#2563eb', weight: 5, opacity: 0.8 }).addTo(routeLayer);
+                            L.polyline(latlngs, { color: '#10B981', weight: 5, opacity: 0.9 }).addTo(routeLayer);
                             route.stops.forEach(function (s, i) {
                                 L.marker([s.latitude, s.longitude])
                                     .bindPopup('<strong>' + (i + 1) + '. ' + (s.stop_name || 'Stop') + '</strong>')
@@ -393,7 +463,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             map.fitBounds(latlngs, { padding: [30, 30] });
                         });
                     } else {
-                        routeLayer = L.polyline(waypoints, { color: '#2563eb', weight: 5, opacity: 0.8 }).addTo(map);
+                        routeLayer = L.polyline(waypoints, { color: '#10B981', weight: 5, opacity: 0.9 }).addTo(map);
                         route.stops.forEach(function (s, i) {
                             L.marker([s.latitude, s.longitude])
                                 .bindPopup('<strong>' + (i + 1) + '. ' + (s.stop_name || 'Stop') + '</strong>')
@@ -419,6 +489,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             });
         })();
     </script>
+<script>
+    (function () {
+        const btn = document.getElementById('profileMenuButton');
+        const menu = document.getElementById('profileMenu');
+        if (!btn || !menu) return;
+        btn.addEventListener('click', function (e) {
+            e.stopPropagation();
+            menu.classList.toggle('hidden');
+        });
+        document.addEventListener('click', function () {
+            if (!menu.classList.contains('hidden')) {
+                menu.classList.add('hidden');
+            }
+        });
+    })();
+</script>
 </body>
 </html>
 

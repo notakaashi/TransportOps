@@ -147,18 +147,21 @@ if (!$error) {
     <script src="js/osrm-helpers.js"></script>
 </head>
 <body class="bg-gradient-to-br from-gray-50 to-blue-50">
-    <div class="flex h-screen overflow-hidden">
-        <aside class="w-64 bg-gradient-to-b from-gray-800 to-gray-900 text-white flex flex-col shadow-2xl">
-            <div class="p-6 flex-shrink-0">
-                <div class="flex items-center mb-8">
+    <div class="flex flex-col md:flex-row min-h-screen">
+        <aside class="w-full md:w-64 bg-gradient-to-b from-gray-800 to-gray-900 text-white flex flex-col shadow-2xl">
+            <div class="px-4 py-4 sm:p-6 flex-shrink-0 border-b border-gray-700 md:border-b-0">
+                <div id="adminNavToggle" class="flex items-center justify-between md:justify-start mb-4 md:mb-8 cursor-pointer md:cursor-default">
                     <div class="bg-blue-600 p-2 rounded-lg mr-3">
                         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"></path>
                         </svg>
                     </div>
-                    <h1 class="text-2xl font-bold">Transport Ops</h1>
+                    <h1 class="text-xl sm:text-2xl font-bold">Transport Ops</h1>
+                    <svg class="w-5 h-5 text-gray-300 md:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+                    </svg>
                 </div>
-                <nav class="space-y-2">
+                <nav id="adminNavLinks" class="space-y-1 md:space-y-2 text-sm sm:text-base hidden md:block">
                     <a href="admin_dashboard.php" class="flex items-center px-4 py-3 hover:bg-gray-700 rounded-lg transition duration-150 group">
                         <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
                         Fleet Overview
@@ -185,8 +188,8 @@ if (!$error) {
                     </a>
                 </nav>
             </div>
-            <div class="mt-auto p-6 border-t border-gray-700">
-                <div class="bg-gray-700 rounded-lg p-4 mb-4">
+            <div id="adminNavFooter" class="mt-auto p-4 sm:p-6 border-t border-gray-700 hidden md:block">
+                <div class="bg-gray-700 rounded-lg p-3 sm:p-4 mb-4">
                     <p class="text-xs text-gray-400 mb-1">Logged in as</p>
                     <p class="text-sm font-semibold"><?php echo htmlspecialchars($_SESSION['user_name']); ?></p>
                     <p class="text-xs text-blue-400 mt-1"><?php echo htmlspecialchars($_SESSION['role']); ?></p>
@@ -195,8 +198,8 @@ if (!$error) {
             </div>
         </aside>
 
-        <main class="flex-1 overflow-y-auto">
-            <div class="p-8">
+        <main class="flex-1 w-full overflow-y-auto">
+            <div class="p-4 sm:p-6 lg:p-8">
                 <h2 class="text-3xl font-bold text-gray-800">Manage Routes</h2>
                 <p class="text-gray-600 mt-2">Define routes with stops (e.g. Guadalupe → FTI Tenement). Pin the start point, end point, and any waypoints by clicking on the map — no need to enter coordinates. Stops are connected on the map and used in Reports.</p>
 
@@ -496,6 +499,18 @@ if (!$error) {
             var el = document.getElementById('route-' + highlightId);
             if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
+
+        (function () {
+            const toggle = document.getElementById('adminNavToggle');
+            const links = document.getElementById('adminNavLinks');
+            const footer = document.getElementById('adminNavFooter');
+            if (!toggle || !links || !footer) return;
+            toggle.addEventListener('click', function () {
+                if (window.innerWidth >= 768) return;
+                links.classList.toggle('hidden');
+                footer.classList.toggle('hidden');
+            });
+        })();
     </script>
 </body>
 </html>

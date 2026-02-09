@@ -43,19 +43,22 @@ try {
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 </head>
 <body class="bg-gradient-to-br from-gray-50 to-blue-50">
-    <div class="flex h-screen overflow-hidden">
+    <div class="flex flex-col md:flex-row min-h-screen">
         <!-- Sidebar -->
-        <aside class="w-64 bg-gradient-to-b from-gray-800 to-gray-900 text-white flex flex-col shadow-2xl">
-            <div class="p-6 flex-shrink-0">
-                <div class="flex items-center mb-8">
+        <aside class="w-full md:w-64 bg-gradient-to-b from-gray-800 to-gray-900 text-white flex flex-col shadow-2xl">
+            <div class="px-4 py-4 sm:p-6 flex-shrink-0 border-b border-gray-700 md:border-b-0">
+                <div id="adminNavToggle" class="flex items-center justify-between md:justify-start mb-4 md:mb-8 cursor-pointer md:cursor-default">
                     <div class="bg-blue-600 p-2 rounded-lg mr-3">
                         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path>
                         </svg>
                     </div>
-                    <h1 class="text-2xl font-bold">Transport Ops</h1>
+                    <h1 class="text-xl sm:text-2xl font-bold">Transport Ops</h1>
+                    <svg class="w-5 h-5 text-gray-300 md:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+                    </svg>
                 </div>
-                <nav class="space-y-2">
+                <nav id="adminNavLinks" class="space-y-1 md:space-y-2 text-sm sm:text-base hidden md:block">
                     <a href="admin_dashboard.php" 
                        class="flex items-center px-4 py-3 hover:bg-gray-700 rounded-lg transition duration-150 group">
                         <svg class="w-5 h-5 mr-3 group-hover:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -100,8 +103,8 @@ try {
                     </a>
                 </nav>
             </div>
-            <div class="mt-auto p-6 border-t border-gray-700">
-                <div class="bg-gray-700 rounded-lg p-4 mb-4">
+            <div id="adminNavFooter" class="mt-auto p-4 sm:p-6 border-t border-gray-700 hidden md:block">
+                <div class="bg-gray-700 rounded-lg p-3 sm:p-4 mb-4">
                     <p class="text-xs text-gray-400 mb-1">Logged in as</p>
                     <p class="text-sm font-semibold"><?php echo htmlspecialchars($_SESSION['user_name']); ?></p>
                     <p class="text-xs text-blue-400 mt-1"><?php echo htmlspecialchars($_SESSION['role']); ?></p>
@@ -114,7 +117,7 @@ try {
         </aside>
 
         <!-- Main Content -->
-        <main class="flex-1 flex flex-col">
+        <main class="flex-1 flex flex-col w-full">
             <!-- Header -->
             <div class="bg-white shadow-sm border-b border-gray-200 p-6">
                 <h2 class="text-3xl font-bold text-gray-800">Crowdsourcing Heatmap</h2>
@@ -129,7 +132,7 @@ try {
                 </div>
 
                 <!-- Sidebar Legend -->
-                <div class="w-80 bg-white shadow-2xl border-l-4 border-blue-500 p-6 overflow-y-auto">
+                <div class="w-full md:w-80 bg-white shadow-2xl border-l-0 md:border-l-4 border-blue-500 p-4 sm:p-6 overflow-y-auto">
                     <div class="flex items-center mb-6">
                         <div class="bg-blue-100 p-2 rounded-lg mr-3">
                             <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -277,6 +280,18 @@ try {
                 map.fitBounds(bounds, { padding: [50, 50] });
             }
         }
+
+        (function () {
+            const toggle = document.getElementById('adminNavToggle');
+            const links = document.getElementById('adminNavLinks');
+            const footer = document.getElementById('adminNavFooter');
+            if (!toggle || !links || !footer) return;
+            toggle.addEventListener('click', function () {
+                if (window.innerWidth >= 768) return;
+                links.classList.toggle('hidden');
+                footer.classList.toggle('hidden');
+            });
+        })();
     </script>
 </body>
 </html>
