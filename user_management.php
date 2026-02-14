@@ -12,6 +12,24 @@ $success = '';
 $edit_user_id = null;
 $edit_user = null;
 
+// Handle activation/deactivation
+if (isset($_GET['toggle_status']) && is_numeric($_GET['toggle_status'])) {
+    $toggle_id = (int)$_GET['toggle_status'];
+    if ($toggle_id === $_SESSION['user_id']) {
+        $error = 'You cannot change your own account status.';
+    } else {
+        try {
+            $pdo = getDBConnection();
+            $stmt = $pdo->prepare("UPDATE users SET is_active = NOT is_active WHERE id = ?");
+            $stmt->execute([$toggle_id]);
+            $success = 'User status updated successfully.';
+        } catch (PDOException $e) {
+            error_log("Toggle user status error: " . $e->getMessage());
+            $error = 'Failed to update user status.';
+        }
+    }
+}
+
 // Handle delete
 if (isset($_GET['delete']) && is_numeric($_GET['delete'])) {
     $delete_id = (int)$_GET['delete'];
@@ -135,7 +153,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 // Fetch all users
 try {
     $pdo = getDBConnection();
-    $stmt = $pdo->query("SELECT id, name, email, role, created_at FROM users ORDER BY created_at DESC");
+    $stmt = $pdo->query("SELECT id, name, email, role, is_active, created_at FROM users ORDER BY created_at DESC");
     $users = $stmt->fetchAll();
 } catch (PDOException $e) {
     error_log("Fetch users error: " . $e->getMessage());
@@ -261,6 +279,7 @@ try {
                                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
                                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
                                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
+                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
                                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                                         </tr>
@@ -268,7 +287,7 @@ try {
                                     <tbody class="bg-white divide-y divide-gray-200">
                                         <?php if (empty($users)): ?>
                                             <tr>
-                                                <td colspan="5" class="px-6 py-4 text-center text-gray-500">No users found.</td>
+                                                <td colspan="6" class="px-6 py-4 text-center text-gray-500">No users found.</td>
                                             </tr>
                                         <?php else: ?>
                                             <?php foreach ($users as $user): ?>
@@ -295,16 +314,33 @@ try {
                                                             <?php echo htmlspecialchars($user['role']); ?>
                                                         </span>
                                                     </td>
+                                                    <td class="px-6 py-4 whitespace-nowrap">
+                                                        <?php if ($user['is_active']): ?>
+                                                            <span class="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800 border-green-300">
+                                                                Active
+                                                            </span>
+                                                        <?php else: ?>
+                                                            <span class="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800 border-red-300">
+                                                                Inactive
+                                                            </span>
+                                                        <?php endif; ?>
+                                                    </td>
                                                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                                         <?php echo date('M d, Y', strtotime($user['created_at'])); ?>
                                                     </td>
                                                     <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                                        <a href="?edit=<?php echo $user['id']; ?>" class="text-blue-600 hover:text-blue-900 mr-4">Edit</a>
+                                                        <a href="?edit=<?php echo $user['id']; ?>" class="text-blue-600 hover:text-blue-900 mr-2">Edit</a>
                                                         <?php if ($user['id'] != $_SESSION['user_id']): ?>
+                                                            <a href="?toggle_status=<?php echo $user['id']; ?>" 
+                                                               onclick="return confirm('Are you sure you want to <?php echo $user['is_active'] ? 'deactivate' : 'activate'; ?> this user?')"
+                                                               class="text-<?php echo $user['is_active'] ? 'orange' : 'green'; ?>-600 hover:text-<?php echo $user['is_active'] ? 'orange' : 'green'; ?>-900 mr-2">
+                                                                <?php echo $user['is_active'] ? 'Deactivate' : 'Activate'; ?>
+                                                            </a>
                                                             <a href="?delete=<?php echo $user['id']; ?>" 
                                                                onclick="return confirm('Are you sure you want to delete this user?')"
                                                                class="text-red-600 hover:text-red-900">Delete</a>
                                                         <?php else: ?>
+                                                            <span class="text-gray-400 mr-2">Deactivate</span>
                                                             <span class="text-gray-400">Delete</span>
                                                         <?php endif; ?>
                                                     </td>

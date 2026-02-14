@@ -1,7 +1,7 @@
 <?php
 /**
- * User Profile Page
- * Allows logged-in users to view and edit their profile details
+ * User Profile Page with Image Upload/Delete
+ * Allows logged-in users to view and edit their profile details and profile picture
  */
 
 session_start();
@@ -20,7 +20,7 @@ try {
     $pdo = getDBConnection();
 
     // Load current user
-    $stmt = $pdo->prepare("SELECT id, name, email FROM users WHERE id = ?");
+    $stmt = $pdo->prepare("SELECT id, name, email, profile_image FROM users WHERE id = ?");
     $stmt->execute([$user_id]);
     $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -32,7 +32,81 @@ try {
     $error = 'Failed to load profile.';
 }
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($error)) {
+// Handle profile image upload - SIMPLIFIED VERSION
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    // Debug: Log everything for troubleshooting
+    error_log("POST received: " . print_r($_POST, true));
+    error_log("FILES received: " . print_r($_FILES, true));
+    
+    if (isset($_POST['action'])) {
+        if ($_POST['action'] === 'upload_image') {
+            // Check if file was uploaded
+            if (!isset($_FILES['profile_image']) || $_FILES['profile_image']['error'] !== UPLOAD_ERR_OK) {
+                $error = 'Please select a file to upload. Error: ' . ($_FILES['profile_image']['error'] ?? 'unknown');
+            } else {
+                $file = $_FILES['profile_image'];
+                
+                // Validate file
+                $allowed_types = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
+                $max_size = 5 * 1024 * 1024; // 5MB
+                
+                if (!in_array($file['type'], $allowed_types)) {
+                    $error = 'Invalid file type. Please upload JPG, PNG, or GIF images.';
+                } elseif ($file['size'] > $max_size) {
+                    $error = 'File too large. Maximum size is 5MB.';
+                } else {
+                    // Generate unique filename
+                    $extension = pathinfo($file['name'], PATHINFO_EXTENSION);
+                    $filename = 'profile_' . $user_id . '_' . time() . '.' . $extension;
+                    $upload_path = 'uploads/' . $filename;
+                    
+                    // Create uploads directory if it doesn't exist
+                    if (!is_dir('uploads')) {
+                        mkdir('uploads', 0755, true);
+                    }
+                    
+                    // Move uploaded file
+                    if (move_uploaded_file($file['tmp_name'], $upload_path)) {
+                        // Delete old profile image if exists
+                        if ($user['profile_image'] && file_exists('uploads/' . $user['profile_image'])) {
+                            unlink('uploads/' . $user['profile_image']);
+                        }
+                        
+                        // Update database
+                        $stmt = $pdo->prepare("UPDATE users SET profile_image = ? WHERE id = ?");
+                        $stmt->execute([$filename, $user_id]);
+                        
+                        $user['profile_image'] = $filename;
+                        $_SESSION['profile_image'] = $filename;  // Update session for site-wide reflection
+                        $success = 'Profile picture updated successfully! Your image is now visible across the site.';
+                        
+                        // Debug: Log success
+                        error_log("Upload successful: filename=$filename, path=$upload_path");
+                    } else {
+                        $error = 'Failed to upload image. Please try again.';
+                        error_log("Upload failed: move_uploaded_file returned false");
+                    }
+                }
+            }
+        } elseif ($_POST['action'] === 'delete_image') {
+            // Delete profile image
+            if ($user['profile_image'] && file_exists('uploads/' . $user['profile_image'])) {
+                unlink('uploads/' . $user['profile_image']);
+            }
+            
+            // Update database
+            $stmt = $pdo->prepare("UPDATE users SET profile_image = NULL WHERE id = ?");
+            $stmt->execute([$user_id]);
+            
+            $user['profile_image'] = null;
+            $_SESSION['profile_image'] = null;  // Update session for site-wide reflection
+            $success = 'Profile picture removed successfully!';
+        }
+    }
+}
+
+// Handle profile update
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($error) && !isset($_POST['action'])) {
     $name = trim($_POST['name'] ?? '');
     $email = trim($_POST['email'] ?? '');
     $new_password = $_POST['new_password'] ?? '';
@@ -96,6 +170,54 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($error)) {
             font-family: 'Poppins', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
             letter-spacing: 0.02em;
         }
+        .profile-image-preview {
+            width: 120px;
+            height: 120px;
+            object-fit: cover;
+            border-radius: 50%;
+            border: 4px solid #e5e7eb;
+            transition: all 0.3s ease;
+        }
+        .profile-image-preview:hover {
+            transform: scale(1.05);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        }
+        .profile-image-placeholder {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: white;
+            background: linear-gradient(135deg, #10B981 0%, #059669 100%);
+            border: 4px solid #e5e7eb;
+            transition: all 0.3s ease;
+        }
+        .upload-btn {
+            transition: all 0.3s ease;
+        }
+        .upload-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(16, 185, 129, 0.3);
+        }
+        .delete-btn {
+            transition: all 0.3s ease;
+        }
+        .delete-btn:hover {
+            transform: scale(1.1);
+            box-shadow: 0 8px 20px rgba(239, 68, 68, 0.3);
+        }
+        .profile-section {
+            background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+            border: 1px solid #e5e7eb;
+            border-radius: 16px;
+            padding: 2rem;
+            position: relative;
+            overflow: hidden;
+        }
     </style>
 </head>
 <body class="bg-[#F3F4F6] min-h-screen">
@@ -119,71 +241,151 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($error)) {
     </nav>
 
     <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-        <div class="bg-white rounded-2xl shadow-md p-6 sm:p-8">
-            <div class="flex items-center gap-4 mb-6">
-                <div class="h-14 w-14 rounded-full bg-[#10B981] flex items-center justify-center text-white text-2xl font-semibold">
-                    <?php echo strtoupper(substr($user['name'] ?? 'U', 0, 1)); ?>
-                </div>
-                <div>
-                    <h1 class="text-xl sm:text-2xl font-semibold text-gray-900">My Profile</h1>
-                    <p class="text-sm text-gray-500">Manage your account information</p>
+        <div class="bg-white rounded-2xl shadow-lg overflow-hidden">
+            <!-- Profile Header -->
+            <div class="profile-section">
+                <div class="flex flex-col sm:flex-row items-center gap-6 p-6">
+                    <!-- Profile Image -->
+                    <div class="relative group">
+                        <div class="relative">
+                            <?php if ($user['profile_image']): ?>
+                                <img src="uploads/<?php echo htmlspecialchars($user['profile_image']); ?>" 
+                                     alt="Profile" 
+                                     class="profile-image-preview">
+                                <div class="absolute inset-0 bg-black bg-opacity-0 rounded-full opacity-0 group-hover:opacity-10 transition-opacity duration-300"></div>
+                            <?php else: ?>
+                                <div class="profile-image-placeholder">
+                                    <?php echo strtoupper(substr($user['name'] ?? 'U', 0, 1)); ?>
+                                    <div class="absolute inset-0 bg-black bg-opacity-0 rounded-full opacity-0 group-hover:opacity-10 transition-opacity duration-300"></div>
+                                </div>
+                            <?php endif; ?>
+                            
+                            <!-- Upload Button -->
+                            <div class="relative">
+                                <form id="upload_form" method="POST" action="" enctype="multipart/form-data" class="hidden">
+                                    <input type="hidden" name="action" value="upload_image">
+                                    <input type="file" 
+                                           id="profile_image" 
+                                           name="profile_image" 
+                                           accept="image/*" 
+                                           class="hidden"
+                                           onchange="document.getElementById('upload_form').submit();">
+                                </form>
+                                <button type="button" 
+                                        onclick="document.getElementById('profile_image').click();"
+                                        class="absolute bottom-0 right-0 bg-blue-500 hover:bg-blue-600 text-white p-3 rounded-full shadow-lg transition-all duration-300 cursor-pointer hover:scale-105 upload-btn"
+                                        title="Upload new picture">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0118.07 6H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path>
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                    </svg>
+                                    <span class="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full px-2 py-1">NEW</span>
+                                </button>
+                            </div>
+                            <!-- Delete Button (only if image exists) -->
+                            <?php if ($user['profile_image']): ?>
+                                <form method="POST" onsubmit="return confirm('Remove your profile picture? This action cannot be undone.');" class="inline">
+                                    <input type="hidden" name="action" value="delete_image">
+                                    <button type="submit" 
+                                            class="absolute top-0 right-0 bg-red-500 hover:bg-red-600 text-white p-2 rounded-full shadow-lg transition-all duration-300 cursor-pointer hover:scale-105 delete-btn"
+                                            title="Remove profile picture">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                        </svg>
+                                    </button>
+                                </form>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                    
+                    <!-- User Info -->
+                    <div class="flex-1">
+                        <div>
+                            <h1 class="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">My Profile</h1>
+                            <p class="text-sm text-gray-600">Manage your account information and profile picture</p>
+                        </div>
+                        
+                        <?php if ($success): ?>
+                            <div class="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg mb-6">
+                                <div class="flex items-center">
+                                    <svg class="w-5 h-5 mr-2 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 0 01-2 0l-2 2v6m0 6h6l-2 2v6m0-6h6"></path>
+                                    </svg>
+                                    <span><?php echo htmlspecialchars($success); ?></span>
+                                </div>
+                            </div>
+                        <?php endif; ?>
+                        
+                        <?php if ($error): ?>
+                            <div class="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-6">
+                                <div class="flex items-center">
+                                    <svg class="w-5 h-5 mr-2 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h8m-4-4h.01M12 8v4m0 4h8m-4-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                    </svg>
+                                    <span><?php echo htmlspecialchars($error); ?></span>
+                                </div>
+                            </div>
+                        <?php endif; ?>
+                    </div>
                 </div>
             </div>
 
-            <?php if ($error): ?>
-                <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-                    <?php echo htmlspecialchars($error); ?>
-                </div>
-            <?php endif; ?>
+            <!-- Profile Form -->
+            <div class="profile-section">
+                <form method="POST" action="" class="space-y-6">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label for="name" class="block text-sm font-medium text-gray-700 mb-2">
+                                Full Name
+                            </label>
+                            <input type="text" id="name" name="name" required
+                                   value="<?php echo htmlspecialchars($user['name'] ?? ''); ?>"
+                                   class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors">
+                        </div>
 
-            <?php if ($success): ?>
-                <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">
-                    <?php echo htmlspecialchars($success); ?>
-                </div>
-            <?php endif; ?>
-
-            <form method="POST" action="" class="space-y-6">
-                <div>
-                    <label for="name" class="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
-                    <input type="text" id="name" name="name" required
-                           value="<?php echo htmlspecialchars($user['name'] ?? ''); ?>"
-                           class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#10B981]">
-                </div>
-
-                <div>
-                    <label for="email" class="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                    <input type="email" id="email" name="email" required
-                           value="<?php echo htmlspecialchars($user['email'] ?? ''); ?>"
-                           class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#10B981]">
-                </div>
-
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                        <label for="new_password" class="block text-sm font-medium text-gray-700 mb-1">
-                            New Password <span class="text-gray-400 text-xs">(optional)</span>
-                        </label>
-                        <input type="password" id="new_password" name="new_password"
-                               class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#10B981]">
+                        <div>
+                            <label for="email" class="block text-sm font-medium text-gray-700 mb-2">
+                                Email Address
+                            </label>
+                            <input type="email" id="email" name="email" required
+                                   value="<?php echo htmlspecialchars($user['email'] ?? ''); ?>"
+                                   class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors">
+                        </div>
                     </div>
-                    <div>
-                        <label for="confirm_password" class="block text-sm font-medium text-gray-700 mb-1">Confirm New Password</label>
-                        <input type="password" id="confirm_password" name="confirm_password"
-                               class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#10B981]">
-                    </div>
-                </div>
 
-                <div class="flex flex-wrap items-center gap-3 pt-2">
-                    <button type="submit"
-                            class="inline-flex items-center justify-center bg-[#10B981] text-white px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-[#059669] focus:outline-none focus:ring-2 focus:ring-[#10B981] focus:ring-offset-2">
-                        Save Changes
-                    </button>
-                    <a href="user_dashboard.php" class="text-sm text-gray-600 hover:text-gray-800">
-                        Cancel and go back
-                    </a>
-                </div>
-            </form>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label for="new_password" class="block text-sm font-medium text-gray-700 mb-2">
+                                New Password <span class="text-gray-400 text-xs">(optional)</span>
+                            </label>
+                            <input type="password" id="new_password" name="new_password"
+                                   class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors">
+                        </div>
+                        <div>
+                            <label for="confirm_password" class="block text-sm font-medium text-gray-700 mb-2">
+                                Confirm New Password
+                            </label>
+                            <input type="password" id="confirm_password" name="confirm_password"
+                                   class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors">
+                        </div>
+                    </div>
+
+                    <div class="flex flex-col sm:flex-row items-center gap-4 pt-4">
+                        <button type="submit"
+                                class="w-full sm:w-auto bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors">
+                            <svg class="w-5 h-5 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                            </svg>
+                            Save Changes
+                        </button>
+                        <a href="user_dashboard.php" class="w-full sm:w-auto text-center bg-gray-200 text-gray-700 px-6 py-3 rounded-lg font-medium hover:bg-gray-300 transition-colors">
+                            Cancel
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
         </div>
     </div>
 </body>
 </html>
-

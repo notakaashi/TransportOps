@@ -7,12 +7,16 @@
 
 session_start();
 require_once 'db.php';
+require_once 'auth_helper.php';
 
 // Check if user is logged in and is an Admin
 if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'Admin') {
     header('Location: login.php');
     exit;
 }
+
+// Check if admin is still active
+checkAdminActive();
 
 // Fetch statistics from database
 $total_reports = 0;
@@ -186,8 +190,35 @@ function getStatusBadge($status) {
             <div id="adminNavFooter" class="mt-auto p-4 sm:p-6 border-t border-gray-700 hidden md:block">
                 <div class="bg-gray-700 rounded-lg p-3 sm:p-4 mb-4">
                     <p class="text-xs text-gray-400 mb-1">Logged in as</p>
-                    <p class="text-sm font-semibold"><?php echo htmlspecialchars($_SESSION['user_name']); ?></p>
+                    <div class="flex items-center justify-between">
+                        <p class="text-sm font-semibold"><?php echo htmlspecialchars($_SESSION['user_name']); ?></p>
+                        <div class="flex items-center gap-2">
+                            <button id="adminProfileMenuButton"
+                                    class="flex items-center gap-2 px-2 py-1.5 rounded-full hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-white/60">
+                                <svg class="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
                     <p class="text-xs text-blue-400 mt-1"><?php echo htmlspecialchars($_SESSION['role']); ?></p>
+                </div>
+                <div id="adminProfileMenu"
+                     class="hidden absolute right-0 bottom-full mb-2 w-48 bg-white text-gray-800 rounded-lg shadow-lg border border-gray-100 py-1 z-40">
+                    <a href="profile.php"
+                       class="block px-3 py-2 text-sm hover:bg-gray-50">
+                        View &amp; Edit Profile
+                    </a>
+                    <div class="my-1 border-t border-gray-100"></div>
+                    <a href="admin_dashboard.php"
+                       class="block px-3 py-2 text-sm hover:bg-gray-50">
+                        Admin Dashboard
+                    </a>
+                    <div class="my-1 border-t border-gray-100"></div>
+                    <a href="logout.php"
+                       class="block px-3 py-2 text-sm text-red-600 hover:bg-red-50">
+                        Logout
+                    </a>
                 </div>
                 <a href="logout.php" 
                    class="block w-full text-center bg-gradient-to-r from-red-600 to-red-700 text-white py-2 px-4 rounded-md hover:from-red-700 hover:to-red-800 transition duration-150 font-medium shadow-lg">
@@ -600,6 +631,22 @@ function getStatusBadge($status) {
             if (window.innerWidth >= 768) return;
             links.classList.toggle('hidden');
             footer.classList.toggle('hidden');
+        });
+    })();
+
+    // Admin Profile Menu Toggle
+    (function () {
+        const btn = document.getElementById('adminProfileMenuButton');
+        const menu = document.getElementById('adminProfileMenu');
+        if (!btn || !menu) return;
+        btn.addEventListener('click', function (e) {
+            e.stopPropagation();
+            menu.classList.toggle('hidden');
+        });
+        document.addEventListener('click', function () {
+            if (!menu.classList.contains('hidden')) {
+                menu.classList.add('hidden');
+            }
         });
     })();
 </script>

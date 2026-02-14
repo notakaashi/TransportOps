@@ -1,6 +1,6 @@
 <?php
 /**
- * Commuter: View routes and stops on the map
+ * Enhanced Routes View - Individual and Combined Route Maps
  */
 session_start();
 require_once 'db.php';
@@ -8,6 +8,62 @@ require_once 'db.php';
 if (!isset($_SESSION['user_id'])) {
     header('Location: login.php');
     exit;
+}
+
+// Get user profile image for navigation
+try {
+    $pdo = getDBConnection();
+    // Always query database for latest profile image
+    $stmt = $pdo->prepare("SELECT profile_image FROM users WHERE id = ?");
+    $stmt->execute([$_SESSION['user_id']]);
+    $user_profile_data = $stmt->fetch(PDO::FETCH_ASSOC);
+    
+    // Cache in session for later pages
+    if ($user_profile_data && $user_profile_data['profile_image']) {
+        $_SESSION['profile_image'] = $user_profile_data['profile_image'];
+    }
+} catch (Exception $e) {
+    $user_profile_data = ['profile_image' => null];
+}
+
+// Fetch all routes with stops
+try {
+    $pdo = getDBConnection();
+    $stmt = $pdo->query("
+        SELECT id, name, created_at
+        FROM route_definitions
+        ORDER BY name
+    ");
+    $routes = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    $stmt = $pdo->query("
+        SELECT id, route_definition_id, stop_name, latitude, longitude, stop_order
+        FROM route_stops
+        ORDER BY route_definition_id, stop_order
+    ");
+    $stops = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    $stopsByRoute = [];
+    foreach ($stops as $s) {
+        $rid = $s['route_definition_id'];
+        if (!isset($stopsByRoute[$rid])) $stopsByRoute[$rid] = [];
+        $stopsByRoute[$rid][] = [
+            'id' => (int)$s['id'],
+            'stop_name' => $s['stop_name'],
+            'latitude' => (float)$s['latitude'],
+            'longitude' => (float)$s['longitude'],
+            'stop_order' => (int)$s['stop_order']
+        ];
+    }
+
+    foreach ($routes as &$r) {
+        $r['id'] = (int)$r['id'];
+        $r['stops'] = $stopsByRoute[$r['id']] ?? [];
+        usort($r['stops'], function ($a, $b) { return $a['stop_order'] - $b['stop_order']; });
+    }
+} catch (PDOException $e) {
+    error_log('Routes error: ' . $e->getMessage());
+    $routes = [];
 }
 ?>
 <!DOCTYPE html>
@@ -60,6 +116,27 @@ if (!isset($_SESSION['user_id'])) {
             background-color: var(--transit-info);
             color: #1f2933;
         }
+        .route-map {
+            height: 300px;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .combined-map {
+            height: 500px;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .route-card {
+            transition: all 0.3s ease;
+        }
+        .route-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        }
+        .tab-active {
+            border-bottom: 3px solid #10B981;
+            color: #10B981;
+        }
     </style>
 </head>
 <body class="bg-[#F3F4F6] min-h-screen">
@@ -93,9 +170,15 @@ if (!isset($_SESSION['user_id'])) {
                             </span>
                         </div>
                         <div class="flex items-center gap-1">
-                            <div class="h-8 w-8 rounded-full bg-[#10B981] flex items-center justify-center text-white text-sm font-semibold">
-                                <?php echo strtoupper(substr($_SESSION['user_name'] ?? 'U', 0, 1)); ?>
-                            </div>
+                            <?php if ($user_profile_data['profile_image']): ?>
+                                <img src="uploads/<?php echo htmlspecialchars($user_profile_data['profile_image']); ?>" 
+                                     alt="Profile" 
+                                     class="h-8 w-8 rounded-full object-cover border-2 border-white">
+                            <?php else: ?>
+                                <div class="h-8 w-8 rounded-full bg-[#10B981] flex items-center justify-center text-white text-sm font-semibold">
+                                    <?php echo strtoupper(substr($_SESSION['user_name'] ?? 'U', 0, 1)); ?>
+                                </div>
+                            <?php endif; ?>
                             <svg class="w-4 h-4 text-blue-100" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
                             </svg>
@@ -119,114 +202,342 @@ if (!isset($_SESSION['user_id'])) {
     </nav>
 
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-6">
-        <div class="bg-white rounded-2xl shadow-md overflow-hidden mb-4">
+        <!-- Header -->
+        <div class="bg-white rounded-2xl shadow-md overflow-hidden mb-6">
             <div class="px-6 py-4 border-b border-gray-200">
-                <h2 class="text-2xl font-semibold text-gray-800">Routes &amp; Stops</h2>
-                <p class="text-sm text-gray-600">Select a route to see it on the map with all stops. Routes follow actual roads.</p>
-            </div>
-            <div class="p-4 flex flex-wrap items-center gap-4">
-                <label for="routeSelect" class="text-sm font-medium text-gray-700">Select route</label>
-                <select id="routeSelect" class="px-4 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
-                    <option value="">-- Choose a route --</option>
-                </select>
-                <p id="routeStopsInfo" class="text-sm text-gray-500 hidden"></p>
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h2 class="text-2xl font-semibold text-gray-800">Transport Routes</h2>
+                        <p class="text-sm text-gray-600">View individual routes or see all routes combined on one map</p>
+                    </div>
+                    <a href="manage_routes.php" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                        </svg>
+                        Create New Route
+                    </a>
+                </div>
             </div>
         </div>
-        <div class="bg-white rounded-2xl shadow-md overflow-hidden">
-            <div id="map" class="w-full h-[500px] lg:h-[600px]"></div>
+
+        <!-- View Tabs -->
+        <div class="bg-white rounded-2xl shadow-md overflow-hidden mb-6">
+            <div class="flex border-b border-gray-200">
+                <button id="individualTab" class="flex-1 px-6 py-3 text-center font-medium tab-active transition-colors">
+                    <svg class="w-5 h-5 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"></path>
+                    </svg>
+                    Individual Routes
+                </button>
+                <button id="combinedTab" class="flex-1 px-6 py-3 text-center font-medium text-gray-500 hover:text-gray-700 transition-colors">
+                    <svg class="w-5 h-5 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                    </svg>
+                    Combined View
+                </button>
+            </div>
+        </div>
+
+        <!-- Individual Routes View -->
+        <div id="individualView" class="space-y-6">
+            <?php if (empty($routes)): ?>
+                <div class="bg-white rounded-2xl shadow-md p-8 text-center">
+                    <svg class="w-16 h-16 mx-auto text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"></path>
+                    </svg>
+                    <h3 class="text-lg font-medium text-gray-900 mb-2">No Routes Available</h3>
+                    <p class="text-gray-500 mb-6">There are currently no routes defined in the system.</p>
+                    <a href="manage_routes.php" class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-medium transition-colors inline-flex items-center gap-2">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                        </svg>
+                        Create Your First Route
+                    </a>
+                </div>
+            <?php else: ?>
+                <?php foreach ($routes as $route): ?>
+                    <div class="bg-white rounded-2xl shadow-md overflow-hidden route-card">
+                        <div class="p-6">
+                            <div class="flex items-center justify-between mb-4">
+                                <div>
+                                    <h3 class="text-xl font-semibold text-gray-800"><?php echo htmlspecialchars($route['name']); ?></h3>
+                                    <p class="text-sm text-gray-500">
+                                        <?php echo count($route['stops']); ?> stops • 
+                                        Created <?php echo date('M j, Y', strtotime($route['created_at'])); ?>
+                                    </p>
+                                </div>
+                                <div class="flex items-center space-x-2">
+                                    <span class="px-3 py-1 bg-green-100 text-green-800 text-sm font-medium rounded-full">
+                                        Active
+                                    </span>
+                                </div>
+                            </div>
+                            
+                            <?php if (!empty($route['stops'])): ?>
+                                <div class="mb-4">
+                                    <div class="flex flex-wrap gap-2">
+                                        <?php foreach ($route['stops'] as $stop): ?>
+                                            <span class="px-3 py-1 bg-blue-50 text-blue-700 text-sm rounded-full">
+                                                <?php echo htmlspecialchars($stop['stop_name']); ?>
+                                            </span>
+                                        <?php endforeach; ?>
+                                    </div>
+                                </div>
+                                
+                                <div class="route-map" id="map-<?php echo $route['id']; ?>"></div>
+                                
+                                <div class="mt-4 flex items-center justify-between">
+                                    <div class="text-sm text-gray-600">
+                                        <span class="font-medium">Route:</span> 
+                                        <?php echo implode(' → ', array_map(function($s) { return htmlspecialchars($s['stop_name']); }, $route['stops'])); ?>
+                                    </div>
+                                    <button onclick="focusRoute(<?php echo $route['id']; ?>)" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium">
+                                        View Details
+                                    </button>
+                                </div>
+                            <?php else: ?>
+                                <div class="text-center py-8 text-gray-500">
+                                    <svg class="w-12 h-12 mx-auto text-gray-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path>
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                    </svg>
+                                    <p>No stops defined for this route</p>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+            <?php endif; ?>
+        </div>
+
+        <!-- Combined View -->
+        <div id="combinedView" class="hidden">
+            <div class="bg-white rounded-2xl shadow-md overflow-hidden">
+                <div class="p-6 border-b border-gray-200">
+                    <h3 class="text-xl font-semibold text-gray-800 mb-2">All Routes Combined</h3>
+                    <p class="text-sm text-gray-600">View all transport routes on a single map</p>
+                    
+                    <div class="mt-4 flex flex-wrap gap-2">
+                        <?php foreach ($routes as $route): ?>
+                            <label class="flex items-center space-x-2 cursor-pointer">
+                                <input type="checkbox" class="route-toggle" data-route-id="<?php echo $route['id']; ?>" checked>
+                                <span class="px-3 py-1 bg-gray-100 text-gray-700 text-sm rounded-full">
+                                    <?php echo htmlspecialchars($route['name']); ?>
+                                </span>
+                            </label>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+                <div class="combined-map" id="combinedMap"></div>
+            </div>
         </div>
     </div>
 
     <script>
-        (function () {
-            var map = L.map('map').setView([14.5995, 120.9842], 12);
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(map);
-            var routeLayer = null;
-            var routesData = [];
+        // Route data from PHP
+        const routesData = <?php echo json_encode($routes); ?>;
+        let individualMaps = {};
+        let combinedMap = null;
+        let combinedLayers = {};
 
-            function drawRoute(route) {
-                if (routeLayer) {
-                    map.removeLayer(routeLayer);
-                    routeLayer = null;
-                }
-                if (!route || !route.stops || route.stops.length === 0) return;
-                var waypoints = route.stops.map(function (s) { return [s.latitude, s.longitude]; });
-                routeLayer = L.layerGroup().addTo(map);
+        // Color palette for different routes
+        const routeColors = [
+            '#10B981', '#3B82F6', '#F59E0B', '#EF4444', '#8B5CF6',
+            '#EC4899', '#14B8A6', '#F97316', '#6366F1', '#84CC16'
+        ];
+
+        function getRouteColor(index) {
+            return routeColors[index % routeColors.length];
+        }
+
+        // Initialize individual route maps
+        function initializeIndividualMaps() {
+            routesData.forEach(function(route, index) {
+                if (!route.stops || route.stops.length === 0) return;
+
+                const mapId = 'map-' + route.id;
+                const mapElement = document.getElementById(mapId);
+                if (!mapElement) return;
+
+                // Create map centered on route stops
+                const waypoints = route.stops.map(function(s) { return [s.latitude, s.longitude]; });
+                const center = waypoints[0];
+                
+                const map = L.map(mapId).setView(center, 13);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { 
+                    attribution: '© OpenStreetMap' 
+                }).addTo(map);
+
+                const routeLayer = L.layerGroup().addTo(map);
+                const color = getRouteColor(index);
+
+                // Draw route
                 if (typeof getRouteGeometry === 'function') {
-                    getRouteGeometry(waypoints, function (roadLatlngs) {
-                        var latlngs = roadLatlngs && roadLatlngs.length ? roadLatlngs : waypoints;
-                        L.polyline(latlngs, { color: '#10B981', weight: 5, opacity: 0.9 }).addTo(routeLayer);
-                        route.stops.forEach(function (s, i) {
-                            L.marker([s.latitude, s.longitude])
-                                .bindPopup('<strong>' + (i + 1) + '. ' + (s.stop_name || 'Stop') + '</strong>')
+                    getRouteGeometry(waypoints, function(roadLatlngs) {
+                        const latlngs = roadLatlngs && roadLatlngs.length ? roadLatlngs : waypoints;
+                        L.polyline(latlngs, { color: color, weight: 4, opacity: 0.8 }).addTo(routeLayer);
+                        
+                        // Add stops
+                        route.stops.forEach(function(stop, i) {
+                            L.marker([stop.latitude, stop.longitude])
+                                .bindPopup('<strong>' + (i + 1) + '. ' + (stop.stop_name || 'Stop') + '</strong>')
                                 .addTo(routeLayer);
                         });
-                        map.fitBounds(latlngs, { padding: [40, 40] });
+                        
+                        map.fitBounds(latlngs, { padding: [20, 20] });
                     });
                 } else {
-                    L.polyline(waypoints, { color: '#10B981', weight: 5, opacity: 0.9 }).addTo(routeLayer);
-                    route.stops.forEach(function (s, i) {
-                        L.marker([s.latitude, s.longitude])
-                            .bindPopup('<strong>' + (i + 1) + '. ' + (s.stop_name || 'Stop') + '</strong>')
+                    L.polyline(waypoints, { color: color, weight: 4, opacity: 0.8 }).addTo(routeLayer);
+                    route.stops.forEach(function(stop, i) {
+                        L.marker([stop.latitude, stop.longitude])
+                            .bindPopup('<strong>' + (i + 1) + '. ' + (stop.stop_name || 'Stop') + '</strong>')
                             .addTo(routeLayer);
                     });
-                    map.fitBounds(waypoints, { padding: [40, 40] });
+                    map.fitBounds(waypoints, { padding: [20, 20] });
+                }
+
+                individualMaps[route.id] = { map: map, layer: routeLayer, color: color };
+            });
+        }
+
+        // Initialize combined map
+        function initializeCombinedMap() {
+            combinedMap = L.map('combinedMap').setView([14.5995, 120.9842], 11);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { 
+                attribution: '© OpenStreetMap' 
+            }).addTo(combinedMap);
+
+            routesData.forEach(function(route, index) {
+                if (!route.stops || route.stops.length === 0) return;
+
+                const waypoints = route.stops.map(function(s) { return [s.latitude, s.longitude]; });
+                const color = getRouteColor(index);
+                
+                const routeLayer = L.layerGroup();
+                
+                // Draw route
+                if (typeof getRouteGeometry === 'function') {
+                    getRouteGeometry(waypoints, function(roadLatlngs) {
+                        const latlngs = roadLatlngs && roadLatlngs.length ? roadLatlngs : waypoints;
+                        L.polyline(latlngs, { color: color, weight: 3, opacity: 0.7 }).addTo(routeLayer);
+                        
+                        // Add stops
+                        route.stops.forEach(function(stop, i) {
+                            L.marker([stop.latitude, stop.longitude])
+                                .bindPopup('<strong>' + route.name + '</strong><br>' + 
+                                          (i + 1) + '. ' + (stop.stop_name || 'Stop'))
+                                .addTo(routeLayer);
+                        });
+                    });
+                } else {
+                    L.polyline(waypoints, { color: color, weight: 3, opacity: 0.7 }).addTo(routeLayer);
+                    route.stops.forEach(function(stop, i) {
+                        L.marker([stop.latitude, stop.longitude])
+                            .bindPopup('<strong>' + route.name + '</strong><br>' + 
+                                      (i + 1) + '. ' + (stop.stop_name || 'Stop'))
+                            .addTo(routeLayer);
+                    });
+                }
+
+                routeLayer.addTo(combinedMap);
+                combinedLayers[route.id] = routeLayer;
+            });
+
+            // Fit map to show all routes
+            const allBounds = [];
+            routesData.forEach(function(route) {
+                if (route.stops && route.stops.length > 0) {
+                    route.stops.forEach(function(stop) {
+                        allBounds.push([stop.latitude, stop.longitude]);
+                    });
+                }
+            });
+            
+            if (allBounds.length > 0) {
+                combinedMap.fitBounds(allBounds, { padding: [40, 40] });
+            }
+        }
+
+        // Toggle route visibility on combined map
+        function toggleRoute(routeId, visible) {
+            if (combinedLayers[routeId]) {
+                if (visible) {
+                    combinedLayers[routeId].addTo(combinedMap);
+                } else {
+                    combinedMap.removeLayer(combinedLayers[routeId]);
                 }
             }
+        }
 
-            fetch('api_routes_with_stops.php', { credentials: 'same-origin' })
-                .then(function (res) { return res.json(); })
-                .then(function (data) {
-                    routesData = data.routes || [];
-                    var sel = document.getElementById('routeSelect');
-                    routesData.forEach(function (r) {
-                        var opt = document.createElement('option');
-                        opt.value = r.name;
-                        opt.textContent = r.name + (r.stops && r.stops.length ? ' (' + r.stops.length + ' stops)' : '');
-                        sel.appendChild(opt);
-                    });
-                })
-                .catch(function () {
-                    document.getElementById('routeSelect').innerHTML = '<option value="">Failed to load routes</option>';
-                });
-
-            document.getElementById('routeSelect').addEventListener('change', function () {
-                var name = this.value;
-                var info = document.getElementById('routeStopsInfo');
-                if (!name) {
-                    if (routeLayer) {
-                        map.removeLayer(routeLayer);
-                        routeLayer = null;
+        // Focus on specific route
+        function focusRoute(routeId) {
+            const tabButton = document.getElementById('combinedTab');
+            tabButton.click();
+            
+            setTimeout(function() {
+                if (individualMaps[routeId]) {
+                    const map = individualMaps[routeId].map;
+                    map.invalidateSize();
+                    const waypoints = routesData.find(r => r.id === routeId).stops.map(s => [s.latitude, s.longitude]);
+                    if (waypoints.length > 0) {
+                        map.fitBounds(waypoints, { padding: [40, 40] });
                     }
-                    info.classList.add('hidden');
-                    return;
                 }
-                var route = routesData.find(function (r) { return r.name === name; });
-                if (route) {
-                    drawRoute(route);
-                    info.classList.remove('hidden');
-                    info.textContent = route.stops && route.stops.length
-                        ? 'Stops: ' + route.stops.map(function (s) { return s.stop_name; }).join(' → ')
-                        : 'No stops defined.';
+            }, 100);
+        }
+
+        // Tab switching
+        document.getElementById('individualTab').addEventListener('click', function() {
+            document.getElementById('individualView').classList.remove('hidden');
+            document.getElementById('combinedView').classList.add('hidden');
+            this.classList.add('tab-active');
+            document.getElementById('combinedTab').classList.remove('tab-active');
+            
+            // Initialize maps if not already done
+            if (Object.keys(individualMaps).length === 0) {
+                setTimeout(initializeIndividualMaps, 100);
+            }
+        });
+
+        document.getElementById('combinedTab').addEventListener('click', function() {
+            document.getElementById('individualView').classList.add('hidden');
+            document.getElementById('combinedView').classList.remove('hidden');
+            this.classList.add('tab-active');
+            document.getElementById('individualTab').classList.remove('tab-active');
+            
+            // Initialize combined map if not already done
+            if (!combinedMap) {
+                setTimeout(initializeCombinedMap, 100);
+            }
+        });
+
+        // Route toggle listeners
+        document.addEventListener('change', function(e) {
+            if (e.target.classList.contains('route-toggle')) {
+                const routeId = parseInt(e.target.dataset.routeId);
+                toggleRoute(routeId, e.target.checked);
+            }
+        });
+
+        // Initialize individual maps on page load
+        setTimeout(initializeIndividualMaps, 100);
+    </script>
+
+    <script>
+        (function () {
+            const btn = document.getElementById('profileMenuButton');
+            const menu = document.getElementById('profileMenu');
+            if (!btn || !menu) return;
+            btn.addEventListener('click', function (e) {
+                e.stopPropagation();
+                menu.classList.toggle('hidden');
+            });
+            document.addEventListener('click', function () {
+                if (!menu.classList.contains('hidden')) {
+                    menu.classList.add('hidden');
                 }
             });
         })();
     </script>
-<script>
-    (function () {
-        const btn = document.getElementById('profileMenuButton');
-        const menu = document.getElementById('profileMenu');
-        if (!btn || !menu) return;
-        btn.addEventListener('click', function (e) {
-            e.stopPropagation();
-            menu.classList.toggle('hidden');
-        });
-        document.addEventListener('click', function () {
-            if (!menu.classList.contains('hidden')) {
-                menu.classList.add('hidden');
-            }
-        });
-    })();
-</script>
 </body>
 </html>

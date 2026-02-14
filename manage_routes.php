@@ -282,11 +282,12 @@ if (!$error) {
                                         <div>
                                             <label class="block text-sm text-gray-700 mb-1">Set location</label>
                                             <div class="flex gap-2 mb-1">
-                                                <input type="text" id="place-search-<?php echo (int)$route['id']; ?>" placeholder="Search place (e.g. Guadalupe Manila)" class="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm">
-                                                <button type="button" id="place-search-btn-<?php echo (int)$route['id']; ?>" class="bg-gray-600 text-white px-3 py-2 rounded-md text-sm font-medium hover:bg-gray-700">Search</button>
+                                                <input type="text" id="place-search-<?php echo (int)$route['id']; ?>" placeholder="Search Philippines locations (autocomplete enabled)" class="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm">
+                                                <button type="button" id="place-search-btn-<?php echo (int)$route['id']; ?>" class="bg-blue-600 text-white px-3 py-2 rounded-md text-sm font-medium hover:bg-blue-700">Search</button>
                                             </div>
-                                            <div id="place-results-<?php echo (int)$route['id']; ?>" class="hidden mt-1 max-h-32 overflow-y-auto border border-gray-200 rounded bg-white shadow text-sm"></div>
-                                            <p class="text-xs text-gray-500 mt-1">Or click on the map to pin (snaps to road).</p>
+                                            <div id="place-results-<?php echo (int)$route['id']; ?>" class="hidden mt-1 max-h-48 overflow-y-auto border border-gray-200 rounded bg-white shadow text-sm"></div>
+                                            <p class="text-xs text-gray-500 mt-1">🇵🇭 Philippines locations only. Type 2+ characters for autocomplete, or click Search for manual search.</p>
+                                            <p class="text-xs text-gray-500">Or click on the map to pin (snaps to road).</p>
                                             <p id="pin-status-<?php echo (int)$route['id']; ?>" class="text-xs text-gray-500 mt-0.5">No location set.</p>
                                             <input type="hidden" name="latitude" id="lat-<?php echo (int)$route['id']; ?>" required>
                                             <input type="hidden" name="longitude" id="lng-<?php echo (int)$route['id']; ?>" required>
@@ -440,47 +441,284 @@ if (!$error) {
             });
         });
 
-        // Place search (Nominatim)
-        function searchPlace(routeId, query, resultsEl, setStopFn) {
-            if (!query || !query.trim()) return;
+        // Philippines-bounded search with enhanced filtering
+        let searchTimeouts = {};
+        let searchCache = {};
+        let recentSearches = JSON.parse(localStorage.getItem('transportOps_recentSearches') || '[]');
+        
+        // Philippines geographic bounds for filtering
+        const PHILIPPINES_BOUNDS = {
+            north: 21.5,
+            south: 4.0,
+            east: 126.5,
+            west: 116.0
+        };
+        
+        function isLocationInPhilippines(lat, lng) {
+            return lat >= PHILIPPINES_BOUNDS.south && lat <= PHILIPPINES_BOUNDS.north &&
+                   lng >= PHILIPPINES_BOUNDS.west && lng <= PHILIPPINES_BOUNDS.east;
+        }
+        
+        function searchPlace(routeId, query, resultsEl, setStopFn, isAutoComplete = false) {
+            if (!query || !query.trim()) {
+                if (!isAutoComplete) {
+                    showRecentSearches(routeId, resultsEl, setStopFn);
+                }
+                return;
+            }
+            
+            // Check cache first
+            const cacheKey = query.toLowerCase().trim();
+            if (searchCache[cacheKey] && !isAutoComplete) {
+                displaySearchResults(searchCache[cacheKey], routeId, resultsEl, setStopFn);
+                return;
+            }
+            
             resultsEl.classList.remove('hidden');
-            resultsEl.innerHTML = '<p class="p-2 text-gray-500">Searching…</p>';
-            var url = 'https://nominatim.openstreetmap.org/search?q=' + encodeURIComponent(query.trim()) + '&format=json&limit=6';
-            fetch(url, { headers: { 'Accept': 'application/json', 'User-Agent': 'TransportOps/1.0 (Route Management)' } })
-                .then(function (r) { return r.json(); })
+            resultsEl.innerHTML = '<div class="p-3 text-gray-500 flex items-center"><svg class="animate-spin h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>Searching Philippines…</div>';
+            
+            // Philippines-focused search queries
+            const phSearchQuery = query + ', Philippines';
+            
+            // Use different endpoints with Philippines filtering
+            const searchPromises = [
+                // Nominatim search with Philippines bounds
+                fetch('https://nominatim.openstreetmap.org/search?q=' + encodeURIComponent(phSearchQuery) + '&format=json&limit=8&addressdetails=1&countrycodes=ph&viewbox=' + 
+                      [PHILIPPINES_BOUNDS.west, PHILIPPINES_BOUNDS.north, PHILIPPINES_BOUNDS.east, PHILIPPINES_BOUNDS.south].join(','), {
+                    headers: { 'Accept': 'application/json', 'User-Agent': 'TransportOps/1.0 (Route Management)' }
+                }).then(r => r.json()).catch(() => []),
+                
+                // Photon API with Philippines bounds
+                fetch('https://photon.komoot.io/api/?q=' + encodeURIComponent(query) + '&limit=8&bbox=' + 
+                      [PHILIPPINES_BOUNDS.west, PHILIPPINES_BOUNDS.south, PHILIPPINES_BOUNDS.east, PHILIPPINES_BOUNDS.north].join(','), {
+                    headers: { 'Accept': 'application/json' }
+                }).then(r => r.json()).catch(() => []),
+                
+                // Fallback: General search but filter results
+                fetch('https://nominatim.openstreetmap.org/search?q=' + encodeURIComponent(query) + '&format=json&limit=5&addressdetails=1', {
+                    headers: { 'Accept': 'application/json', 'User-Agent': 'TransportOps/1.0 (Route Management)' }
+                }).then(r => r.json()).then(data => {
+                    // Filter results to only Philippines locations
+                    return data.filter(item => {
+                        const lat = parseFloat(item.lat);
+                        const lng = parseFloat(item.lon);
+                        return isLocationInPhilippines(lat, lng) || 
+                               (item.address && (item.address.country === 'Philippines' || 
+                                item.address.country_code === 'ph'));
+                    });
+                }).catch(() => [])
+            ];
+            
+            Promise.race(searchPromises)
                 .then(function (data) {
                     if (!data || data.length === 0) {
-                        resultsEl.innerHTML = '<p class="p-2 text-gray-500">No places found.</p>';
+                        resultsEl.innerHTML = '<div class="p-3 text-gray-500"><svg class="h-4 w-4 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>No places found in Philippines. Try: Manila, Quezon City, Cebu, Davao</div>';
                         return;
                     }
+                    
+                    // Cache the results
+                    if (!isAutoComplete) {
+                        searchCache[cacheKey] = data;
+                    }
+                    
+                    displaySearchResults(data, routeId, resultsEl, setStopFn);
+                })
+                .catch(function (error) {
+                    console.error('Search error:', error);
+                    resultsEl.innerHTML = '<div class="p-3 text-red-500"><svg class="h-4 w-4 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>Search failed. Check connection and try again.</div>';
+                });
+        }
+        
+        function displaySearchResults(data, routeId, resultsEl, setStopFn) {
+            resultsEl.innerHTML = '';
+            
+            // Add current location option (only if in Philippines)
+            if (navigator.geolocation) {
+                const locationDiv = document.createElement('div');
+                locationDiv.className = 'p-3 hover:bg-blue-50 cursor-pointer border-b border-gray-100 flex items-center';
+                locationDiv.innerHTML = '<svg class="h-4 w-4 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg><span class="font-medium">Use current location</span><span class="ml-2 text-xs text-gray-500">(Philippines only)</span>';
+                locationDiv.addEventListener('click', function () {
+                    resultsEl.classList.add('hidden');
                     resultsEl.innerHTML = '';
-                    data.forEach(function (item) {
-                        var lat = parseFloat(item.lat);
-                        var lng = parseFloat(item.lon);
-                        var name = item.display_name || (lat + ', ' + lng);
-                        var div = document.createElement('div');
-                        div.className = 'p-2 hover:bg-blue-50 cursor-pointer border-b border-gray-100 last:border-0';
-                        div.textContent = name.length > 80 ? name.substring(0, 80) + '…' : name;
-                        div.addEventListener('click', function () {
-                            resultsEl.classList.add('hidden');
-                            resultsEl.innerHTML = '';
+                    
+                    const statusEl = document.getElementById('pin-status-' + routeId);
+                    if (statusEl) statusEl.textContent = 'Getting location…';
+                    
+                    navigator.geolocation.getCurrentPosition(
+                        function (position) {
+                            const lat = position.coords.latitude;
+                            const lng = position.coords.longitude;
+                            
+                            // Check if location is in Philippines
+                            if (!isLocationInPhilippines(lat, lng)) {
+                                if (statusEl) statusEl.textContent = 'Location outside Philippines.';
+                                alert('Your current location is outside the Philippines. Please search for a location within the Philippines.');
+                                return;
+                            }
+                            
                             if (typeof snapToRoad === 'function') {
-                                var statusEl = document.getElementById('pin-status-' + routeId);
-                                if (statusEl) statusEl.textContent = 'Snapping to road…';
                                 snapToRoad(lat, lng, function (snapLat, snapLng) {
-                                    if (snapLat != null && snapLng != null && setStopFn) setStopFn(snapLat, snapLng);
-                                    else if (setStopFn) setStopFn(lat, lng);
+                                    if (snapLat != null && snapLng != null && setStopFn) {
+                                        setStopFn(snapLat, snapLng);
+                                    } else if (setStopFn) {
+                                        setStopFn(lat, lng);
+                                    }
                                 });
                             } else if (setStopFn) {
                                 setStopFn(lat, lng);
                             }
-                        });
-                        resultsEl.appendChild(div);
-                    });
-                })
-                .catch(function () {
-                    resultsEl.innerHTML = '<p class="p-2 text-red-500">Search failed.</p>';
+                        },
+                        function (error) {
+                            if (statusEl) statusEl.textContent = 'Location access denied.';
+                            alert('Could not get your location. Please check browser permissions.');
+                        }
+                    );
                 });
+                resultsEl.appendChild(locationDiv);
+            }
+            
+            // Process search results (already filtered for Philippines)
+            data.forEach(function (item, index) {
+                const lat = parseFloat(item.lat || item.geometry?.coordinates[1]);
+                const lng = parseFloat(item.lon || item.geometry?.coordinates[0]);
+                
+                if (isNaN(lat) || isNaN(lng)) return;
+                
+                // Double-check Philippines bounds (safety check)
+                if (!isLocationInPhilippines(lat, lng)) return;
+                
+                // Create a more informative display name
+                let displayName = '';
+                let details = '';
+                
+                if (item.display_name) {
+                    // Nominatim result
+                    const parts = item.display_name.split(',');
+                    displayName = parts[0] || 'Unknown location';
+                    details = parts.slice(1).join(',').trim();
+                    
+                    // Remove "Philippines" from details if it's there (redundant)
+                    details = details.replace(/,\s*Philippines\s*$/i, '').trim();
+                } else if (item.properties && item.properties.name) {
+                    // Photon result
+                    displayName = item.properties.name;
+                    details = (item.properties.city || item.properties.town || item.properties.county || '') + 
+                              (item.properties.postcode ? ', ' + item.properties.postcode : '');
+                } else {
+                    displayName = lat.toFixed(5) + ', ' + lng.toFixed(5);
+                }
+                
+                const resultDiv = document.createElement('div');
+                resultDiv.className = 'p-3 hover:bg-blue-50 cursor-pointer border-b border-gray-100 last:border-0';
+                
+                // Add Philippines-specific icons
+                let icon = '<svg class="h-4 w-4 mr-2 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6h-8.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9"></path></svg>';
+                
+                if (item.class) {
+                    switch(item.class) {
+                        case 'highway': icon = '<svg class="h-4 w-4 mr-2 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"></path></svg>'; break;
+                        case 'amenity': icon = '<svg class="h-4 w-4 mr-2 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path></svg>'; break;
+                        case 'shop': icon = '<svg class="h-4 w-4 mr-2 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"></path></svg>'; break;
+                        case 'tourism': icon = '<svg class="h-4 w-4 mr-2 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg>'; break;
+                    }
+                }
+                
+                resultDiv.innerHTML = `
+                    <div class="flex items-start">
+                        ${icon}
+                        <div class="flex-1 min-w-0">
+                            <div class="font-medium text-gray-900 truncate">${displayName}</div>
+                            ${details ? `<div class="text-sm text-gray-500 truncate">${details}</div>` : ''}
+                            <div class="text-xs text-blue-600 mt-1">🇵🇭 Philippines</div>
+                        </div>
+                    </div>
+                `;
+                
+                resultDiv.addEventListener('click', function () {
+                    resultsEl.classList.add('hidden');
+                    resultsEl.innerHTML = '';
+                    
+                    // Add to recent searches
+                    addToRecentSearches(displayName, lat, lng);
+                    
+                    const statusEl = document.getElementById('pin-status-' + routeId);
+                    if (statusEl) statusEl.textContent = 'Snapping to road…';
+                    
+                    if (typeof snapToRoad === 'function') {
+                        snapToRoad(lat, lng, function (snapLat, snapLng) {
+                            if (snapLat != null && snapLng != null && setStopFn) {
+                                setStopFn(snapLat, snapLng);
+                            } else if (setStopFn) {
+                                setStopFn(lat, lng);
+                            }
+                        });
+                    } else if (setStopFn) {
+                        setStopFn(lat, lng);
+                    }
+                });
+                
+                resultsEl.appendChild(resultDiv);
+            });
+        }
+        
+        function showRecentSearches(routeId, resultsEl, setStopFn) {
+            if (recentSearches.length === 0) {
+                resultsEl.classList.add('hidden');
+                return;
+            }
+            
+            resultsEl.classList.remove('hidden');
+            resultsEl.innerHTML = '<div class="p-2 text-xs text-gray-500 border-b border-gray-100">Recent searches</div>';
+            
+            recentSearches.slice(0, 5).forEach(function (search) {
+                const div = document.createElement('div');
+                div.className = 'p-2 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-0 flex items-center';
+                div.innerHTML = `
+                    <svg class="h-3 w-3 mr-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    <div>
+                        <div class="text-sm font-medium">${search.name}</div>
+                        <div class="text-xs text-gray-500">${search.lat.toFixed(4)}, ${search.lng.toFixed(4)}</div>
+                    </div>
+                `;
+                
+                div.addEventListener('click', function () {
+                    resultsEl.classList.add('hidden');
+                    resultsEl.innerHTML = '';
+                    
+                    const statusEl = document.getElementById('pin-status-' + routeId);
+                    if (statusEl) statusEl.textContent = 'Setting location…';
+                    
+                    if (typeof snapToRoad === 'function') {
+                        snapToRoad(search.lat, search.lng, function (snapLat, snapLng) {
+                            if (snapLat != null && snapLng != null && setStopFn) {
+                                setStopFn(snapLat, snapLng);
+                            } else if (setStopFn) {
+                                setStopFn(search.lat, search.lng);
+                            }
+                        });
+                    } else if (setStopFn) {
+                        setStopFn(search.lat, search.lng);
+                    }
+                });
+                
+                resultsEl.appendChild(div);
+            });
+        }
+        
+        function addToRecentSearches(name, lat, lng) {
+            // Remove existing entry with same coordinates
+            recentSearches = recentSearches.filter(function(search) {
+                return !(Math.abs(search.lat - lat) < 0.0001 && Math.abs(search.lng - lng) < 0.0001);
+            });
+            
+            // Add to beginning
+            recentSearches.unshift({ name: name, lat: lat, lng: lng });
+            
+            // Keep only last 10
+            recentSearches = recentSearches.slice(0, 10);
+            
+            // Save to localStorage
+            localStorage.setItem('transportOps_recentSearches', JSON.stringify(recentSearches));
         }
         routesData.forEach(function (route) {
             var searchInput = document.getElementById('place-search-' + route.id);
@@ -488,10 +726,55 @@ if (!$error) {
             var resultsEl = document.getElementById('place-results-' + route.id);
             var setStopFn = window.setStopForRoute && window.setStopForRoute[route.id];
             if (!searchInput || !resultsEl || !setStopFn) return;
-            function doSearch() { searchPlace(route.id, searchInput.value, resultsEl, setStopFn); }
-            if (searchBtn) searchBtn.addEventListener('click', doSearch);
+            
+            function doSearch(isAutoComplete = false) { 
+                searchPlace(route.id, searchInput.value, resultsEl, setStopFn, isAutoComplete); 
+            }
+            
+            // Debounced search for typing
+            function debouncedSearch() {
+                clearTimeout(searchTimeouts[route.id]);
+                const query = searchInput.value.trim();
+                
+                if (query.length >= 2) {
+                    searchTimeouts[route.id] = setTimeout(function() {
+                        doSearch(true); // Auto-complete search
+                    }, 300);
+                } else if (query.length === 0) {
+                    showRecentSearches(route.id, resultsEl, setStopFn);
+                } else {
+                    resultsEl.classList.add('hidden');
+                }
+            }
+            
+            // Show recent searches on focus
+            searchInput.addEventListener('focus', function() {
+                if (!searchInput.value.trim()) {
+                    showRecentSearches(route.id, resultsEl, setStopFn);
+                }
+            });
+            
+            // Hide results when clicking outside
+            document.addEventListener('click', function(e) {
+                if (!searchInput.contains(e.target) && !resultsEl.contains(e.target)) {
+                    resultsEl.classList.add('hidden');
+                }
+            });
+            
+            // Search button click
+            if (searchBtn) searchBtn.addEventListener('click', function() { doSearch(false); });
+            
+            // Input events for auto-complete
+            searchInput.addEventListener('input', debouncedSearch);
             searchInput.addEventListener('keydown', function (e) {
-                if (e.key === 'Enter') { e.preventDefault(); doSearch(); }
+                if (e.key === 'Enter') { 
+                    e.preventDefault(); 
+                    clearTimeout(searchTimeouts[route.id]);
+                    doSearch(false); // Manual search
+                } else if (e.key === 'Escape') {
+                    resultsEl.classList.add('hidden');
+                    searchInput.blur();
+                }
             });
         });
         var highlightId = <?php echo $highlight_route_id ? (int)$highlight_route_id : 0; ?>;

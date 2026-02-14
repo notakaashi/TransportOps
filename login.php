@@ -19,6 +19,11 @@ if (isset($_SESSION['user_id'])) {
 
 $error = '';
 
+// Check for deactivated account error
+if (isset($_GET['error']) && $_GET['error'] === 'deactivated') {
+    $error = 'Your account has been deactivated. Please contact an administrator.';
+}
+
 // Process login form submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $email = trim($_POST['email'] ?? '');
@@ -29,24 +34,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } else {
         try {
             $pdo = getDBConnection();
-            $stmt = $pdo->prepare("SELECT id, name, email, password, role FROM users WHERE LOWER(email) = LOWER(?)");
+            $stmt = $pdo->prepare("SELECT id, name, email, password, role, is_active, profile_image FROM users WHERE LOWER(email) = LOWER(?)");
             $stmt->execute([trim($email)]);
             $user = $stmt->fetch();
             
             if ($user && password_verify($password, $user['password'])) {
-                // Set session variables
-                $_SESSION['user_id'] = $user['id'];
-                $_SESSION['user_name'] = $user['name'];
-                $_SESSION['user_email'] = $user['email'];
-                $_SESSION['role'] = $user['role'];
-                
-                // Redirect based on role
-                if ($user['role'] === 'Admin') {
-                    header('Location: admin_dashboard.php');
+                if (!$user['is_active']) {
+                    $error = 'Your account has been deactivated. Please contact an administrator.';
                 } else {
-                    header('Location: user_dashboard.php');
+                    // Set session variables including profile image
+                    $_SESSION['user_id'] = $user['id'];
+                    $_SESSION['user_name'] = $user['name'];
+                    $_SESSION['user_email'] = $user['email'];
+                    $_SESSION['role'] = $user['role'];
+                    $_SESSION['profile_image'] = $user['profile_image'];  // Cache profile image in session
+                    
+                    // Redirect based on role
+                    if ($user['role'] === 'Admin') {
+                        header('Location: admin_dashboard.php');
+                    } else {
+                        header('Location: user_dashboard.php');
+                    }
+                    exit;
                 }
-                exit;
             } else {
                 $error = 'Invalid email or password.';
             }
