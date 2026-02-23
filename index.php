@@ -73,7 +73,7 @@ if (isset($_SESSION['user_id'])) {
                 <div class="flex items-center space-x-8">
                     <a href="index.php" class="brand-font text-xl sm:text-2xl font-bold text-white whitespace-nowrap">Transport Ops</a>
                     <div class="hidden md:flex space-x-4">
-                        <a href="index.php" class="text-white px-3 py-2 rounded-md text-sm font-medium border-b-2 border-[#10B981]">Home</a>
+                        <a href="index.php" class="bg-blue-500 text-white px-3 py-2 rounded-md text-sm font-medium border-b-2 border-blue-800">Home</a>
                         <a href="about.php" class="text-gray-100 hover:text-white px-3 py-2 rounded-md text-sm font-medium">About</a>
                     </div>
                 </div>

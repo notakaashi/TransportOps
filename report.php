@@ -27,8 +27,21 @@ try {
         ORDER BY rd.name
     ");
     $routes_list = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    // Fetch profile image for nav
+    if (isset($_SESSION['user_id'])) {
+        $stmt = $pdo->prepare("SELECT profile_image FROM users WHERE id = ?");
+        $stmt->execute([$_SESSION['user_id']]);
+        $user_profile_row = $stmt->fetch(PDO::FETCH_ASSOC);
+        $user_profile_data = $user_profile_row ?: ['profile_image' => null];
+        if ($user_profile_data['profile_image']) {
+            $_SESSION['profile_image'] = $user_profile_data['profile_image'];
+        }
+    } else {
+        $user_profile_data = ['profile_image' => null];
+    }
 } catch (PDOException $e) {
     error_log("Error fetching routes: " . $e->getMessage());
+    $user_profile_data = ['profile_image' => null];
 }
 
 // Haversine distance in km
@@ -179,7 +192,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         <?php else: ?>
                             <a href="user_dashboard.php" class="text-gray-100 hover:text-white px-3 py-2 rounded-md text-sm font-medium">Dashboard</a>
                         <?php endif; ?>
-                        <a href="report.php" class="text-white px-3 py-2 rounded-md text-sm font-medium border-b-2 border-[#10B981]">Submit Report</a>
+                        <a href="report.php" class="bg-blue-500 text-white px-3 py-2 rounded-md text-sm font-medium border-b-2 border-blue-800">Submit Report</a>
                         <a href="reports_map.php" class="text-gray-100 hover:text-white px-3 py-2 rounded-md text-sm font-medium">Reports Map</a>
                         <a href="routes.php" class="text-gray-100 hover:text-white px-3 py-2 rounded-md text-sm font-medium">Routes</a>
                     </div>
@@ -196,9 +209,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             </span>
                         </div>
                         <div class="flex items-center gap-1">
-                            <div class="h-8 w-8 rounded-full bg-[#10B981] flex items-center justify-center text-white text-sm font-semibold">
-                                <?php echo strtoupper(substr($_SESSION['user_name'] ?? 'U', 0, 1)); ?>
-                            </div>
+                            <?php if (!empty($user_profile_data['profile_image'])): ?>
+                                <img src="uploads/<?php echo htmlspecialchars($user_profile_data['profile_image']); ?>"
+                                     alt="Profile"
+                                     class="h-8 w-8 rounded-full object-cover border-2 border-white">
+                            <?php else: ?>
+                                <div class="h-8 w-8 rounded-full bg-[#10B981] flex items-center justify-center text-white text-sm font-semibold">
+                                    <?php echo strtoupper(substr($_SESSION['user_name'] ?? 'U', 0, 1)); ?>
+                                </div>
+                            <?php endif; ?>
                             <svg class="w-4 h-4 text-blue-100" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
                             </svg>

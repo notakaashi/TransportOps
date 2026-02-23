@@ -155,7 +155,7 @@ try {
                         <?php endif; ?>
                         <a href="report.php" class="text-gray-100 hover:text-white px-3 py-2 rounded-md text-sm font-medium">Submit Report</a>
                         <a href="reports_map.php" class="text-gray-100 hover:text-white px-3 py-2 rounded-md text-sm font-medium">Reports Map</a>
-                        <a href="routes.php" class="text-white px-3 py-2 rounded-md text-sm font-medium border-b-2 border-[#10B981]">Routes</a>
+                        <a href="routes.php" class="bg-blue-500 text-white px-3 py-2 rounded-md text-sm font-medium border-b-2 border-blue-800">Routes</a>
                     </div>
                 </div>
                 <div class="relative flex items-center gap-2 sm:gap-3">
@@ -210,12 +210,14 @@ try {
                         <h2 class="text-2xl font-semibold text-gray-800">Transport Routes</h2>
                         <p class="text-sm text-gray-600">View individual routes or see all routes combined on one map</p>
                     </div>
+                    <?php if ($_SESSION['role'] === 'Admin'): ?>
                     <a href="manage_routes.php" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
                         </svg>
                         Create New Route
                     </a>
+                    <?php endif; ?>
                 </div>
             </div>
         </div>

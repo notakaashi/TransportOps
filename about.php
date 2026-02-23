@@ -5,7 +5,25 @@
  */
 
 session_start();
+require_once 'db.php';
 $is_logged_in = isset($_SESSION['user_id']);
+$user_profile_data = ['profile_image' => null];
+
+// Fetch profile image for logged-in users
+if ($is_logged_in && isset($_SESSION['user_id'])) {
+    try {
+        $pdo = getDBConnection();
+        $stmt = $pdo->prepare("SELECT profile_image FROM users WHERE id = ?");
+        $stmt->execute([$_SESSION['user_id']]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        if ($row && $row['profile_image']) {
+            $user_profile_data['profile_image'] = $row['profile_image'];
+            $_SESSION['profile_image'] = $row['profile_image'];
+        }
+    } catch (PDOException $e) {
+        error_log("About: profile fetch error: " . $e->getMessage());
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -58,20 +76,23 @@ $is_logged_in = isset($_SESSION['user_id']);
 </head>
 <body class="bg-[#F3F4F6]">
     <!-- Navigation Bar -->
-    <nav class="bg-[#1E3A8A] text-white shadow-md">
+    <nav class="fixed top-0 inset-x-0 z-30 bg-[#1E3A8A] text-white shadow-sm">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between items-center h-16">
                 <div class="flex items-center space-x-8">
                     <a href="index.php" class="brand-font text-xl sm:text-2xl font-bold text-white whitespace-nowrap">Transport Ops</a>
                     <div class="hidden md:flex space-x-4">
                         <a href="index.php" class="text-gray-100 hover:text-white px-3 py-2 rounded-md text-sm font-medium">Home</a>
-                        <a href="about.php" class="text-white px-3 py-2 rounded-md text-sm font-medium border-b-2 border-[#10B981]">About</a>
+                        <a href="about.php" class="bg-blue-500 text-white px-3 py-2 rounded-md text-sm font-medium border-b-2 border-blue-800">About</a>
                         <?php if ($is_logged_in): ?>
                             <?php if ($_SESSION['role'] === 'Admin'): ?>
-                                <a href="admin_dashboard.php" class="text-gray-700 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium">Dashboard</a>
+                                <a href="admin_dashboard.php" class="text-gray-100 hover:text-white px-3 py-2 rounded-md text-sm font-medium">Dashboard</a>
                             <?php else: ?>
-                                <a href="user_dashboard.php" class="text-gray-700 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium">Dashboard</a>
+                                <a href="user_dashboard.php" class="text-gray-100 hover:text-white px-3 py-2 rounded-md text-sm font-medium">Dashboard</a>
                             <?php endif; ?>
+                            <a href="report.php" class="text-gray-100 hover:text-white px-3 py-2 rounded-md text-sm font-medium">Submit Report</a>
+                            <a href="reports_map.php" class="text-gray-100 hover:text-white px-3 py-2 rounded-md text-sm font-medium">Reports Map</a>
+                            <a href="routes.php" class="text-gray-100 hover:text-white px-3 py-2 rounded-md text-sm font-medium">Routes</a>
                         <?php endif; ?>
                     </div>
                 </div>
@@ -89,9 +110,15 @@ $is_logged_in = isset($_SESSION['user_id']);
                                     </span>
                                 </div>
                                 <div class="flex items-center gap-1">
-                                    <div class="h-8 w-8 rounded-full bg-[#10B981] flex items-center justify-center text-white text-sm font-semibold">
-                                        <?php echo strtoupper(substr($_SESSION['user_name'] ?? 'U', 0, 1)); ?>
-                                    </div>
+                                    <?php if ($user_profile_data['profile_image']): ?>
+                                        <img src="uploads/<?php echo htmlspecialchars($user_profile_data['profile_image']); ?>"
+                                             alt="Profile"
+                                             class="h-8 w-8 rounded-full object-cover border-2 border-white">
+                                    <?php else: ?>
+                                        <div class="h-8 w-8 rounded-full bg-[#10B981] flex items-center justify-center text-white text-sm font-semibold">
+                                            <?php echo strtoupper(substr($_SESSION['user_name'] ?? 'U', 0, 1)); ?>
+                                        </div>
+                                    <?php endif; ?>
                                     <svg class="w-4 h-4 text-blue-100" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
                                     </svg>
@@ -120,7 +147,7 @@ $is_logged_in = isset($_SESSION['user_id']);
     </nav>
 
     <!-- Main Content -->
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-12">
         <!-- Hero Section -->
         <div class="text-center mb-12">
             <h1 class="text-3xl sm:text-4xl font-extrabold text-gray-900 mb-4 leading-tight tracking-tight">About Our System</h1>
@@ -132,7 +159,7 @@ $is_logged_in = isset($_SESSION['user_id']);
         <!-- Content Sections -->
         <div class="space-y-12">
             <!-- Section 1 -->
-            <section class="bg-white rounded-lg shadow-md p-8">
+            <section class="bg-white rounded-2xl shadow-md p-8">
                 <h2 class="text-2xl font-bold text-gray-800 mb-4">System Overview</h2>
                 <p class="text-gray-600 leading-relaxed mb-4">
                     Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. 
@@ -146,7 +173,7 @@ $is_logged_in = isset($_SESSION['user_id']);
             </section>
 
             <!-- Section 2 -->
-            <section class="bg-white rounded-lg shadow-md p-8">
+            <section class="bg-white rounded-2xl shadow-md p-8">
                 <h2 class="text-2xl font-bold text-gray-800 mb-4">Key Features</h2>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div class="p-4 bg-blue-50 rounded-lg">
@@ -177,7 +204,7 @@ $is_logged_in = isset($_SESSION['user_id']);
             </section>
 
             <!-- Section 3 -->
-            <section class="bg-white rounded-lg shadow-md p-8">
+            <section class="bg-white rounded-2xl shadow-md p-8">
                 <h2 class="text-2xl font-bold text-gray-800 mb-4">Our Mission</h2>
                 <p class="text-gray-600 leading-relaxed mb-4">
                     Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. 
@@ -190,7 +217,7 @@ $is_logged_in = isset($_SESSION['user_id']);
             </section>
 
             <!-- Section 4 -->
-            <section class="bg-white rounded-lg shadow-md p-8">
+            <section class="bg-white rounded-2xl shadow-md p-8">
                 <h2 class="text-2xl font-bold text-gray-800 mb-4">Technology Stack</h2>
                 <p class="text-gray-600 leading-relaxed mb-4">
                     Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. 

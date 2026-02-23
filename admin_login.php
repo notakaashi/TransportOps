@@ -1,19 +1,21 @@
 <?php
 /**
- * User Login Page
- * Handles user authentication and session management
+ * Admin Login Page
+ * Admin-only authentication. Only users with Admin role can successfully log in here.
  */
 
 session_start();
 require_once 'db.php';
 
-// Redirect if already logged in
+// Redirect if already logged in as admin
+if (isset($_SESSION['user_id']) && $_SESSION['role'] === 'Admin') {
+    header('Location: admin_dashboard.php');
+    exit;
+}
+
+// If logged in as non-admin, redirect to user area
 if (isset($_SESSION['user_id'])) {
-    if ($_SESSION['role'] === 'Admin') {
-        header('Location: admin_dashboard.php');
-    } else {
-        header('Location: index.php');
-    }
+    header('Location: user_dashboard.php');
     exit;
 }
 
@@ -39,25 +41,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $user = $stmt->fetch();
             
             if ($user && password_verify($password, $user['password'])) {
-                if ($user['role'] === 'Admin') {
-                    $error = 'Administrators must use the admin login page.';
+                // Admin-only: reject non-admin users
+                if ($user['role'] !== 'Admin') {
+                    $error = 'This login page is for administrators only. Please use the main login page.';
                 } elseif (!$user['is_active']) {
                     $error = 'Your account has been deactivated. Please contact an administrator.';
                 } else {
-                    // Set session variables including profile image
                     $_SESSION['user_id'] = $user['id'];
                     $_SESSION['user_name'] = $user['name'];
                     $_SESSION['user_email'] = $user['email'];
                     $_SESSION['role'] = $user['role'];
                     $_SESSION['profile_image'] = $user['profile_image'];
-                    header('Location: user_dashboard.php');
+                    header('Location: admin_dashboard.php');
                     exit;
                 }
             } else {
                 $error = 'Invalid email or password.';
             }
         } catch (PDOException $e) {
-            error_log("Login error: " . $e->getMessage());
+            error_log("Admin login error: " . $e->getMessage());
             $error = 'Login failed. Please try again.';
         }
     }
@@ -68,21 +70,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login - Transport Operations System</title>
+    <title>Admin Login - Transport Operations System</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600&display=swap" rel="stylesheet">
     <style>
-        .auth-title {
-            font-family: 'Poppins', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            letter-spacing: 0.02em;
-        }
+        .auth-title { font-family: 'Poppins', system-ui, sans-serif; letter-spacing: 0.02em; }
     </style>
 </head>
-<body class="bg-[#F3F4F6] min-h-screen flex items-center justify-center px-4">
+<body class="bg-gray-800 min-h-screen flex items-center justify-center px-4">
     <div class="bg-white p-6 sm:p-8 rounded-2xl shadow-md w-full max-w-md">
-        <h2 class="auth-title text-2xl font-semibold text-gray-900 mb-6 text-center">Login</h2>
+        <h2 class="auth-title text-2xl font-semibold text-gray-900 mb-2 text-center">Admin Login</h2>
+        <p class="text-sm text-gray-500 text-center mb-6">Administrators only</p>
         
         <?php if ($error): ?>
             <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
@@ -95,16 +95,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <label for="email" class="block text-sm font-medium text-gray-700 mb-1">Email</label>
                 <input type="email" id="email" name="email" required 
                        value="<?php echo htmlspecialchars($email ?? ''); ?>"
-                       class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#10B981]">
+                       class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
             </div>
             
             <div>
                 <label for="password" class="block text-sm font-medium text-gray-700 mb-1">Password</label>
                 <div class="relative">
                     <input type="password" id="password" name="password" required
-                           class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#10B981]">
-                    <button type="button" onclick="togglePassword()" 
-                            class="absolute right-3 top-2 text-gray-500 hover:text-gray-700">
+                           class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+                    <button type="button" onclick="togglePassword()" class="absolute right-3 top-2 text-gray-500 hover:text-gray-700">
                         <svg id="eye-icon" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
@@ -116,36 +115,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </div>
             </div>
             
-            <button type="submit" 
-                    class="w-full bg-[#10B981] text-white py-3 px-4 rounded-lg hover:bg-[#059669] focus:outline-none focus:ring-2 focus:ring-[#10B981] focus:ring-offset-2 transition duration-150 font-medium min-h-[48px]">
-                Login
+            <button type="submit" class="w-full bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:ring-offset-2 transition duration-150 font-medium min-h-[48px]">
+                Admin Login
             </button>
         </form>
         
         <p class="mt-4 text-center text-sm text-gray-600">
-            Don't have an account? 
-            <a href="register.php" class="text-blue-600 hover:text-blue-800 font-medium">Register here</a><br>
-            <a href="admin_login.php" class="text-gray-500 hover:text-gray-700 text-xs mt-2 inline-block">Admin login</a>
+            Not an admin? <a href="login.php" class="text-blue-600 hover:text-blue-800 font-medium">User login</a>
         </p>
     </div>
     
     <script>
         function togglePassword() {
-            const passwordField = document.getElementById('password');
-            const eyeIcon = document.getElementById('eye-icon');
-            const eyeOffIcon = document.getElementById('eye-off-icon');
-            
-            if (passwordField.type === 'password') {
-                passwordField.type = 'text';
-                eyeIcon.classList.add('hidden');
-                eyeOffIcon.classList.remove('hidden');
-            } else {
-                passwordField.type = 'password';
-                eyeIcon.classList.remove('hidden');
-                eyeOffIcon.classList.add('hidden');
-            }
+            const pw = document.getElementById('password');
+            const eye = document.getElementById('eye-icon');
+            const off = document.getElementById('eye-off-icon');
+            if (pw.type === 'password') { pw.type = 'text'; eye.classList.add('hidden'); off.classList.remove('hidden'); }
+            else { pw.type = 'password'; eye.classList.remove('hidden'); off.classList.add('hidden'); }
         }
     </script>
 </body>
 </html>
-

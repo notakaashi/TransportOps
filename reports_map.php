@@ -7,6 +7,7 @@ if (!isset($_SESSION['user_id'])) {
     exit;
 }
 
+$user_profile_data = ['profile_image' => null];
 try {
     $pdo = getDBConnection();
     $stmt = $pdo->query("
@@ -23,6 +24,14 @@ try {
         LIMIT 100
     ");
     $reports = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    // Fetch profile image for nav
+    $stmt = $pdo->prepare("SELECT profile_image FROM users WHERE id = ?");
+    $stmt->execute([$_SESSION['user_id']]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    if ($row && $row['profile_image']) {
+        $user_profile_data['profile_image'] = $row['profile_image'];
+        $_SESSION['profile_image'] = $row['profile_image'];
+    }
 } catch (PDOException $e) {
     error_log('Reports map error: ' . $e->getMessage());
     $reports = [];
@@ -35,39 +44,72 @@ try {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Reports Map - Transport Operations System</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700&display=swap" rel="stylesheet">
+    <style>.brand-font { font-family: 'Poppins', system-ui, sans-serif; letter-spacing: 0.02em; }</style>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 </head>
-<body class="bg-gray-100 min-h-screen">
-    <nav class="bg-white shadow-md">
+<body class="bg-[#F3F4F6] min-h-screen">
+    <nav class="fixed top-0 inset-x-0 z-30 bg-[#1E3A8A] text-white shadow-sm">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between items-center h-16">
                 <div class="flex items-center space-x-8">
-                    <a href="index.php" class="text-2xl font-bold text-gray-800">Transport Ops</a>
+                    <a href="index.php" class="brand-font text-xl sm:text-2xl font-bold text-white whitespace-nowrap">Transport Ops</a>
                     <div class="hidden md:flex space-x-4">
-                        <a href="index.php" class="text-gray-700 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium">Home</a>
-                        <a href="about.php" class="text-gray-700 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium">About</a>
+                        <a href="index.php" class="text-gray-100 hover:text-white px-3 py-2 rounded-md text-sm font-medium">Home</a>
+                        <a href="about.php" class="text-gray-100 hover:text-white px-3 py-2 rounded-md text-sm font-medium">About</a>
                         <?php if ($_SESSION['role'] === 'Admin'): ?>
-                            <a href="admin_dashboard.php" class="text-gray-700 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium">Dashboard</a>
+                            <a href="admin_dashboard.php" class="text-gray-100 hover:text-white px-3 py-2 rounded-md text-sm font-medium">Dashboard</a>
                         <?php else: ?>
-                            <a href="user_dashboard.php" class="text-gray-700 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium">Dashboard</a>
+                            <a href="user_dashboard.php" class="text-gray-100 hover:text-white px-3 py-2 rounded-md text-sm font-medium">Dashboard</a>
                         <?php endif; ?>
-                        <a href="report.php" class="text-gray-700 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium">Submit Report</a>
-                        <a href="reports_map.php" class="text-blue-600 hover:text-blue-800 px-3 py-2 rounded-md text-sm font-medium border-b-2 border-blue-600">Reports Map</a>
-                        <a href="routes.php" class="text-gray-700 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium">Routes</a>
+                        <a href="report.php" class="text-gray-100 hover:text-white px-3 py-2 rounded-md text-sm font-medium">Submit Report</a>
+                        <a href="reports_map.php" class="bg-blue-500 text-white px-3 py-2 rounded-md text-sm font-medium border-b-2 border-blue-800">Reports Map</a>
+                        <a href="routes.php" class="text-gray-100 hover:text-white px-3 py-2 rounded-md text-sm font-medium">Routes</a>
                     </div>
                 </div>
-                <div class="flex items-center space-x-4">
-                    <span class="text-gray-700"><?php echo htmlspecialchars($_SESSION['user_name']); ?></span>
-                    <a href="logout.php" class="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 transition duration-150 font-medium">Logout</a>
+                <div class="relative flex items-center gap-2 sm:gap-3">
+                    <button id="profileMenuButton"
+                            class="flex items-center gap-2 px-2 py-1.5 rounded-full hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-white/60">
+                        <div class="hidden sm:flex flex-col items-end leading-tight">
+                            <span class="text-xs sm:text-sm text-white font-medium">
+                                <?php echo htmlspecialchars($_SESSION['user_name']); ?>
+                            </span>
+                            <span class="text-[11px] text-blue-100">
+                                <?php echo htmlspecialchars($_SESSION['role'] ?? 'User'); ?>
+                            </span>
+                        </div>
+                        <div class="flex items-center gap-1">
+                            <?php if ($user_profile_data['profile_image']): ?>
+                                <img src="uploads/<?php echo htmlspecialchars($user_profile_data['profile_image']); ?>"
+                                     alt="Profile"
+                                     class="h-8 w-8 rounded-full object-cover border-2 border-white">
+                            <?php else: ?>
+                                <div class="h-8 w-8 rounded-full bg-[#10B981] flex items-center justify-center text-white text-sm font-semibold">
+                                    <?php echo strtoupper(substr($_SESSION['user_name'] ?? 'U', 0, 1)); ?>
+                                </div>
+                            <?php endif; ?>
+                            <svg class="w-4 h-4 text-blue-100" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                            </svg>
+                        </div>
+                    </button>
+                    <div id="profileMenu"
+                         class="hidden absolute right-0 top-11 w-44 bg-white text-gray-800 rounded-lg shadow-lg border border-gray-100 py-1 z-40">
+                        <a href="profile.php" class="block px-3 py-2 text-sm hover:bg-gray-50">View &amp; Edit Profile</a>
+                        <div class="my-1 border-t border-gray-100"></div>
+                        <a href="logout.php" class="block px-3 py-2 text-sm text-red-600 hover:bg-red-50">Logout</a>
+                    </div>
                 </div>
             </div>
         </div>
     </nav>
 
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-6">
         <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
-            <div class="lg:col-span-3 bg-white rounded-lg shadow-md overflow-hidden">
+            <div class="lg:col-span-3 bg-white rounded-2xl shadow-md overflow-hidden">
                 <div class="px-6 py-4 border-b border-gray-200">
                     <h2 class="text-2xl font-semibold text-gray-800">Reports Map</h2>
                     <p class="text-sm text-gray-600">Tap a marker to see report details. Green border = verified report.</p>
@@ -75,7 +117,7 @@ try {
                 <div class="h-[500px] lg:h-[600px]" id="map"></div>
             </div>
 
-            <div class="bg-white rounded-lg shadow-md p-4 space-y-4">
+            <div class="bg-white rounded-2xl shadow-md p-4 space-y-4">
                 <div>
                     <h3 class="text-lg font-semibold text-gray-800 mb-2">Legend</h3>
                     <div class="space-y-2 text-sm text-gray-700">
@@ -256,6 +298,20 @@ try {
                 alert('An error occurred while verifying the report.');
             }
         });
+
+        // Profile menu toggle
+        (function () {
+            const btn = document.getElementById('profileMenuButton');
+            const menu = document.getElementById('profileMenu');
+            if (!btn || !menu) return;
+            btn.addEventListener('click', function (e) {
+                e.stopPropagation();
+                menu.classList.toggle('hidden');
+            });
+            document.addEventListener('click', function () {
+                menu.classList.add('hidden');
+            });
+        })();
     </script>
 </body>
 </html>

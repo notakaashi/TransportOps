@@ -222,25 +222,58 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($error) && !isset($_POST['act
 </head>
 <body class="bg-[#F3F4F6] min-h-screen">
     <!-- Navigation Bar -->
-    <nav class="bg-[#1E3A8A] text-white shadow-sm">
+    <nav class="fixed top-0 inset-x-0 z-30 bg-[#1E3A8A] text-white shadow-sm">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between items-center h-16">
                 <div class="flex items-center space-x-8">
                     <a href="index.php" class="brand-font text-xl sm:text-2xl font-bold text-white whitespace-nowrap">Transport Ops</a>
                     <div class="hidden md:flex space-x-4">
+                        <a href="index.php" class="text-gray-100 hover:text-white px-3 py-2 rounded-md text-sm font-medium">Home</a>
+                        <a href="about.php" class="text-gray-100 hover:text-white px-3 py-2 rounded-md text-sm font-medium">About</a>
                         <a href="user_dashboard.php" class="text-gray-100 hover:text-white px-3 py-2 rounded-md text-sm font-medium">Dashboard</a>
-                        <a href="routes.php" class="text-gray-100 hover:text-white px-3 py-2 rounded-md text-sm font-medium">Routes</a>
                         <a href="report.php" class="text-gray-100 hover:text-white px-3 py-2 rounded-md text-sm font-medium">Submit Report</a>
+                        <a href="reports_map.php" class="text-gray-100 hover:text-white px-3 py-2 rounded-md text-sm font-medium">Reports Map</a>
+                        <a href="routes.php" class="text-gray-100 hover:text-white px-3 py-2 rounded-md text-sm font-medium">Routes</a>
                     </div>
                 </div>
-                <a href="logout.php" class="bg-red-600 text-white px-3 py-1.5 rounded-md hover:bg-red-700 transition duration-150 font-medium text-sm flex items-center">
-                    Logout
-                </a>
+                <div class="relative flex items-center gap-2 sm:gap-3">
+                    <button id="profileMenuButton"
+                            class="flex items-center gap-2 px-2 py-1.5 rounded-full hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-white/60">
+                        <div class="hidden sm:flex flex-col items-end leading-tight">
+                            <span class="text-xs sm:text-sm text-white font-medium">
+                                <?php echo htmlspecialchars($_SESSION['user_name']); ?>
+                            </span>
+                            <span class="text-[11px] text-blue-100">
+                                <?php echo htmlspecialchars($_SESSION['role'] ?? 'User'); ?>
+                            </span>
+                        </div>
+                        <div class="flex items-center gap-1">
+                            <?php if ($user['profile_image']): ?>
+                                <img src="uploads/<?php echo htmlspecialchars($user['profile_image']); ?>"
+                                     alt="Profile"
+                                     class="h-8 w-8 rounded-full object-cover border-2 border-white">
+                            <?php else: ?>
+                                <div class="h-8 w-8 rounded-full bg-[#10B981] flex items-center justify-center text-white text-sm font-semibold">
+                                    <?php echo strtoupper(substr($_SESSION['user_name'] ?? 'U', 0, 1)); ?>
+                                </div>
+                            <?php endif; ?>
+                            <svg class="w-4 h-4 text-blue-100" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                            </svg>
+                        </div>
+                    </button>
+                    <div id="profileMenu"
+                         class="hidden absolute right-0 top-11 w-44 bg-white text-gray-800 rounded-lg shadow-lg border border-gray-100 py-1 z-40">
+                        <a href="profile.php" class="block px-3 py-2 text-sm bg-gray-50 font-medium">View &amp; Edit Profile</a>
+                        <div class="my-1 border-t border-gray-100"></div>
+                        <a href="logout.php" class="block px-3 py-2 text-sm text-red-600 hover:bg-red-50">Logout</a>
+                    </div>
+                </div>
             </div>
         </div>
     </nav>
 
-    <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+    <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-10">
         <div class="bg-white rounded-2xl shadow-lg overflow-hidden">
             <!-- Profile Header -->
             <div class="profile-section">
@@ -387,5 +420,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($error) && !isset($_POST['act
         </div>
         </div>
     </div>
+    <script>
+        (function () {
+            const btn = document.getElementById('profileMenuButton');
+            const menu = document.getElementById('profileMenu');
+            if (!btn || !menu) return;
+            btn.addEventListener('click', function (e) {
+                e.stopPropagation();
+                menu.classList.toggle('hidden');
+            });
+            document.addEventListener('click', function () { menu.classList.add('hidden'); });
+        })();
+    </script>
 </body>
 </html>

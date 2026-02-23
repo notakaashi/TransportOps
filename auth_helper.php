@@ -34,9 +34,14 @@ function checkUserActive() {
 
 /**
  * Check if user is admin and active
+ * Redirects non-admins to user login; unauthenticated users to admin login
  */
 function checkAdminActive() {
-    if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'Admin') {
+    if (!isset($_SESSION['user_id'])) {
+        header('Location: admin_login.php');
+        exit;
+    }
+    if ($_SESSION['role'] !== 'Admin') {
         header('Location: login.php');
         exit;
     }
