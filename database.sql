@@ -173,6 +173,3 @@ CREATE TABLE IF NOT EXISTS `report_verifications` (
     UNIQUE KEY `uniq_report_verifier` (`report_id`, `verifier_user_id`),
     INDEX `idx_report_id` (`report_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-```
-
-Now let me update the actual file:
