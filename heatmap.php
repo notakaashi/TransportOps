@@ -132,7 +132,8 @@ try {
             <div class="flex-1 flex overflow-hidden">
                 <!-- Map -->
                 <div class="flex-1 relative">
-                    <div id="map" class="w-full h-full"></div>
+                    <!-- On small screens give the map a fixed viewport height so Leaflet can render properly -->
+                    <div id="map" class="w-full h-[60vh] md:h-full"></div>
                 </div>
 
                 <!-- Sidebar Legend -->
@@ -294,8 +295,17 @@ try {
                 if (window.innerWidth >= 768) return;
                 links.classList.toggle('hidden');
                 footer.classList.toggle('hidden');
+                // After layout change, let Leaflet recompute container size
+                setTimeout(function () { if (map && typeof map.invalidateSize === 'function') map.invalidateSize(); }, 250);
             });
         })();
+
+        // Ensure map resizes correctly on orientation change / resize
+        window.addEventListener('resize', function () {
+            if (map && typeof map.invalidateSize === 'function') {
+                setTimeout(function () { map.invalidateSize(); }, 150);
+            }
+        });
     </script>
 </body>
 </html>

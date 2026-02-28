@@ -67,9 +67,9 @@ if (!isset($_SESSION['user_id'])) {
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between items-center h-16">
                 <div class="flex items-center space-x-8">
-                    <a href="index.php" class="brand-font text-xl sm:text-2xl font-bold text-white whitespace-nowrap">Transport Ops</a>
+                    <a href="index.php" id="brandLink" class="brand-font text-xl sm:text-2xl font-bold text-white whitespace-nowrap">Transport Ops</a>
                     <div class="hidden md:flex space-x-4">
-                        <a href="index.php" class="text-gray-100 hover:text-white px-3 py-2 rounded-md text-sm font-medium">Home</a>
+                        <a href="user_dashboard.php" class="text-gray-100 hover:text-white px-3 py-2 rounded-md text-sm font-medium">Home</a>
                         <a href="about.php" class="text-gray-100 hover:text-white px-3 py-2 rounded-md text-sm font-medium">About</a>
                         <?php if ($_SESSION['role'] === 'Admin'): ?>
                             <a href="admin_dashboard.php" class="text-gray-100 hover:text-white px-3 py-2 rounded-md text-sm font-medium">Dashboard</a>
@@ -79,6 +79,18 @@ if (!isset($_SESSION['user_id'])) {
                         <a href="report.php" class="text-gray-100 hover:text-white px-3 py-2 rounded-md text-sm font-medium">Submit Report</a>
                         <a href="reports_map.php" class="text-gray-100 hover:text-white px-3 py-2 rounded-md text-sm font-medium">Reports Map</a>
                         <a href="routes.php" class="text-white px-3 py-2 rounded-md text-sm font-medium border-b-2 border-[#10B981]">Routes</a>
+                    </div>
+                    <div id="mobileMenu" class="md:hidden hidden absolute top-16 left-0 right-0 bg-[#1E3A8A] text-white flex flex-col space-y-1 px-4 py-2 z-20">
+                        <a href="user_dashboard.php" class="block px-3 py-2 rounded-md text-sm font-medium">Home</a>
+                        <a href="about.php" class="block px-3 py-2 rounded-md text-sm font-medium">About</a>
+                        <?php if ($_SESSION['role'] === 'Admin'): ?>
+                            <a href="admin_dashboard.php" class="block px-3 py-2 rounded-md text-sm font-medium">Dashboard</a>
+                        <?php else: ?>
+                            <a href="user_dashboard.php" class="block px-3 py-2 rounded-md text-sm font-medium">Dashboard</a>
+                        <?php endif; ?>
+                        <a href="report.php" class="block px-3 py-2 rounded-md text-sm font-medium">Submit Report</a>
+                        <a href="reports_map.php" class="block px-3 py-2 rounded-md text-sm font-medium">Reports Map</a>
+                        <a href="routes.php" class="block px-3 py-2 rounded-md text-sm font-medium">Routes</a>
                     </div>
                 </div>
                 <div class="relative flex items-center gap-2 sm:gap-3">
@@ -217,6 +229,8 @@ if (!isset($_SESSION['user_id'])) {
         const btn = document.getElementById('profileMenuButton');
         const menu = document.getElementById('profileMenu');
         if (!btn || !menu) return;
+        const brand = document.getElementById('brandLink');
+        const mobile = document.getElementById('mobileMenu');
         btn.addEventListener('click', function (e) {
             e.stopPropagation();
             menu.classList.toggle('hidden');
@@ -226,6 +240,19 @@ if (!isset($_SESSION['user_id'])) {
                 menu.classList.add('hidden');
             }
         });
+        if (brand && mobile) {
+            brand.addEventListener('click', function (e) {
+                if (window.innerWidth < 768) {
+                    e.preventDefault();
+                    mobile.classList.toggle('hidden');
+                }
+            });
+            document.addEventListener('click', function (ev) {
+                if (mobile && !mobile.contains(ev.target) && ev.target !== brand) {
+                    mobile.classList.add('hidden');
+                }
+            });
+        }
     })();
 </script>
 </body>

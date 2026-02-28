@@ -71,10 +71,14 @@ if (isset($_SESSION['user_id'])) {
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between items-center h-16">
                 <div class="flex items-center space-x-8">
-                    <a href="index.php" class="brand-font text-xl sm:text-2xl font-bold text-white whitespace-nowrap">Transport Ops</a>
+                    <a href="index.php" id="brandLink" class="brand-font text-xl sm:text-2xl font-bold text-white whitespace-nowrap">Transport Ops</a>
                     <div class="hidden md:flex space-x-4">
                         <a href="index.php" class="bg-blue-500 text-white px-3 py-2 rounded-md text-sm font-medium border-b-2 border-blue-800">Home</a>
                         <a href="about.php" class="text-gray-100 hover:text-white px-3 py-2 rounded-md text-sm font-medium">About</a>
+                    </div>
+                    <div id="mobileMenu" class="md:hidden hidden absolute top-16 left-0 right-0 bg-[#1E3A8A] text-white flex flex-col space-y-1 px-4 py-2 z-20">
+                        <a href="index.php" class="block px-3 py-2 rounded-md text-sm font-medium">Home</a>
+                        <a href="about.php" class="block px-3 py-2 rounded-md text-sm font-medium">About</a>
                     </div>
                 </div>
                 <div class="flex items-center gap-2 sm:gap-4">
@@ -167,5 +171,23 @@ if (isset($_SESSION['user_id'])) {
             </div>
         </div>
     </footer>
+    <script>
+        (function () {
+            const brand = document.getElementById('brandLink');
+            const mobile = document.getElementById('mobileMenu');
+            if (!brand || !mobile) return;
+            brand.addEventListener('click', function (e) {
+                if (window.innerWidth < 768) {
+                    e.preventDefault();
+                    mobile.classList.toggle('hidden');
+                }
+            });
+            document.addEventListener('click', function (ev) {
+                if (mobile && !mobile.contains(ev.target) && ev.target !== brand) {
+                    mobile.classList.add('hidden');
+                }
+            });
+        })();
+    </script>
 </body>
 </html>
