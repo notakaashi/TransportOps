@@ -588,6 +588,15 @@ try {
 
         if (enableLocationBtn) {
             enableLocationBtn.addEventListener('click', () => {
+                // Check for secure connection requirement
+                if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
+                    if (locationStatus) {
+                        locationStatus.textContent = 'Location requires HTTPS. Please use a secure connection or access via localhost.';
+                        locationStatus.classList.add('text-red-600');
+                    }
+                    return;
+                }
+                
                 if (!navigator.geolocation) {
                     locationStatus.textContent = 'Geolocation is not supported by this browser.';
                     locationStatus.classList.add('text-red-600');
