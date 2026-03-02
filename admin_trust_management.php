@@ -44,6 +44,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         } else {
             $error = 'Failed to reset trust score.';
         }
+    } elseif ($_POST['action'] === 'reject_report') {
+        $reportId = (int)$_POST['report_id'];
+        
+        try {
+            $pdo = getDBConnection();
+            
+            // Get report details
+            $stmt = $pdo->prepare("SELECT user_id, status FROM reports WHERE id = ?");
+            $stmt->execute([$reportId]);
+            $report = $stmt->fetch();
+            
+            if (!$report) {
+                $error = 'Report not found.';
+            } elseif ($report['status'] !== 'pending') {
+                $error = 'Only pending reports can be rejected.';
+            } else {
+                // Update report status to rejected
+                $stmt = $pdo->prepare("UPDATE reports SET status = 'rejected' WHERE id = ?");
+                $stmt->execute([$reportId]);
+                
+                // Apply trust score penalty
+                $reporterId = $report['user_id'];
+                if (updateUserTrustScore($reporterId, 'Report rejected by admin')) {
+                    $success = 'Report rejected successfully and trust score updated.';
+                } else {
+                    $error = 'Report rejected but failed to update trust score.';
+                }
+            }
+        } catch (PDOException $e) {
+            error_log("Error rejecting report: " . $e->getMessage());
+            $error = 'Failed to reject report.';
+        }
     }
 }
 
@@ -65,6 +97,25 @@ if ($selectedUserId > 0) {
     
     if ($selectedUser) {
         $trustLogs = getTrustScoreLogs($selectedUserId);
+        
+        // Get user's reports for verification management
+        try {
+            $pdo = getDBConnection();
+            $stmt = $pdo->prepare("
+                SELECT r.*, rd.name as route_name, u.name as user_name
+                FROM reports r
+                LEFT JOIN route_definitions rd ON r.route_definition_id = rd.id
+                LEFT JOIN users u ON r.user_id = u.id
+                WHERE r.user_id = ?
+                ORDER BY r.timestamp DESC
+                LIMIT 20
+            ");
+            $stmt->execute([$selectedUserId]);
+            $userReports = $stmt->fetchAll();
+        } catch (PDOException $e) {
+            error_log("Error fetching user reports: " . $e->getMessage());
+            $userReports = [];
+        }
     }
 }
 ?>
@@ -178,7 +229,7 @@ if ($selectedUserId > 0) {
                 <!-- Page Header -->
                 <div class="mb-6">
                     <h1 class="text-2xl sm:text-3xl font-bold text-gray-900">Trust Management</h1>
-                    <p class="text-gray-600 mt-2">Manage user trust scores and view credibility statistics</p>
+                    <p class="text-gray-600 mt-2">Manage user trust scores, view credibility statistics, and reject invalid reports</p>
                 </div>
 
                 <!-- Success/Error Messages -->
@@ -343,6 +394,85 @@ if ($selectedUserId > 0) {
                                                     </td>
                                                     <td class="px-4 py-3 text-sm text-gray-900"><?php echo htmlspecialchars($log['reason']); ?></td>
                                                     <td class="px-4 py-3 text-sm text-gray-900"><?php echo htmlspecialchars($log['adjusted_by_name']); ?></td>
+                                                </tr>
+                                            <?php endforeach; ?>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+
+                        <!-- Report Verification Management -->
+                        <div>
+                            <h3 class="text-lg font-medium text-gray-800 mb-4">Report Verification Management</h3>
+                            <?php if (empty($userReports)): ?>
+                                <p class="text-gray-600">No reports found for this user.</p>
+                            <?php else: ?>
+                                <div class="overflow-x-auto">
+                                    <table class="min-w-full divide-y divide-gray-200">
+                                        <thead class="bg-gray-50">
+                                            <tr>
+                                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Report ID</th>
+                                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Route</th>
+                                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Crowd Level</th>
+                                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Verifications</th>
+                                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody class="bg-white divide-y divide-gray-200">
+                                            <?php foreach ($userReports as $report): ?>
+                                                <tr class="<?php echo $report['status'] === 'rejected' ? 'bg-red-50' : ''; ?>">
+                                                    <td class="px-4 py-3 text-sm text-gray-900">#<?php echo $report['id']; ?></td>
+                                                    <td class="px-4 py-3 text-sm text-gray-900"><?php echo htmlspecialchars($report['route_name'] ?: 'N/A'); ?></td>
+                                                    <td class="px-4 py-3 text-sm">
+                                                        <span class="px-2 py-1 rounded-full text-xs font-medium 
+                                                            <?php 
+                                                            $crowdColors = [
+                                                                'Light' => 'bg-green-100 text-green-800',
+                                                                'Moderate' => 'bg-yellow-100 text-yellow-800', 
+                                                                'Heavy' => 'bg-red-100 text-red-800'
+                                                            ];
+                                                            echo $crowdColors[$report['crowd_level']] ?? 'bg-gray-100 text-gray-800';
+                                                            ?>">
+                                                            <?php echo htmlspecialchars($report['crowd_level']); ?>
+                                                        </span>
+                                                    </td>
+                                                    <td class="px-4 py-3 text-sm text-gray-900"><?php echo date('M j, Y g:i A', strtotime($report['timestamp'])); ?></td>
+                                                    <td class="px-4 py-3 text-sm">
+                                                        <span class="px-2 py-1 rounded-full text-xs font-medium 
+                                                            <?php 
+                                                            $statusColors = [
+                                                                'pending' => 'bg-yellow-100 text-yellow-800',
+                                                                'verified' => 'bg-green-100 text-green-800',
+                                                                'rejected' => 'bg-red-100 text-red-800'
+                                                            ];
+                                                            echo $statusColors[$report['status']] ?? 'bg-gray-100 text-gray-800';
+                                                            ?>">
+                                                            <?php echo ucfirst($report['status'] ?: 'Unknown'); ?>
+                                                        </span>
+                                                    </td>
+                                                    <td class="px-4 py-3 text-sm text-gray-900"><?php echo $report['peer_verifications'] ?: 0; ?>/3</td>
+                                                    <td class="px-4 py-3 text-sm">
+                                                        <?php if ($report['status'] === 'pending'): ?>
+                                                            <form method="POST" style="display: inline;" onsubmit="return confirm('Are you sure you want to reject this report?');">
+                                                                <input type="hidden" name="action" value="reject_report">
+                                                                <input type="hidden" name="report_id" value="<?php echo $report['id']; ?>">
+                                                                <button type="submit" class="px-3 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700">
+                                                                    Reject
+                                                                </button>
+                                                            </form>
+                                                        <?php elseif ($report['status'] === 'rejected'): ?>
+                                                            <button onclick="confirm('This report is already rejected.')" class="px-3 py-1 text-xs bg-gray-400 text-white rounded cursor-not-allowed" disabled>
+                                                                Already Rejected
+                                                            </button>
+                                                        <?php else: ?>
+                                                            <button onclick="confirm('This report is verified and cannot be rejected.')" class="px-3 py-1 text-xs bg-gray-400 text-white rounded cursor-not-allowed" disabled>
+                                                                Verified
+                                                            </button>
+                                                        <?php endif; ?>
+                                                    </td>
                                                 </tr>
                                             <?php endforeach; ?>
                                         </tbody>
