@@ -2,6 +2,8 @@
 require_once 'auth_helper.php';
 secureSessionStart();
 require_once 'db.php';
+require_once 'trust_helper.php';
+require_once 'trust_badge_helper.php';
 
 if (!isset($_SESSION['user_id'])) {
     header('Location: login.php');
@@ -14,7 +16,7 @@ try {
     $stmt = $pdo->query("
         SELECT r.id, r.crowd_level, r.delay_reason, r.timestamp, r.latitude, r.longitude,
                r.is_verified, r.peer_verifications,
-               u.name as user_name,
+               u.id as user_id, u.name as user_name, u.trust_score,
                COALESCE(rd.name, p.current_route) AS route_name
         FROM reports r
         LEFT JOIN users u ON r.user_id = u.id
@@ -25,6 +27,17 @@ try {
         LIMIT 100
     ");
     $reports = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    
+    // Enhance reports with trust badge information
+    foreach ($reports as &$report) {
+        if ($report['user_id']) {
+            $report['trust_score'] = $report['trust_score'] ?? 50.0;
+            $report['trust_badge'] = getTrustBadge($report['trust_score']);
+        } else {
+            $report['trust_score'] = 50.0;
+            $report['trust_badge'] = getTrustBadge(50.0);
+        }
+    }
     // Fetch profile image for nav
     $stmt = $pdo->prepare("SELECT profile_image FROM users WHERE id = ?");
     $stmt->execute([$_SESSION['user_id']]);
@@ -216,7 +229,8 @@ try {
                     <div class="text-sm">
                         <strong>Route:</strong> ${r.route_name || 'N/A'}<br>
                         Crowd: ${r.crowd_level}<br>
-                        Reported by: ${r.user_name || 'Unknown'}<br>
+                        <strong>Reported by:</strong> ${r.user_id ? `<a href="public_profile.php?id=${r.user_id}" class="text-blue-600 hover:text-blue-800 underline">${r.user_name || 'Unknown'}</a>` : (r.user_name || 'Unknown')}<br>
+                        ${r.user_id ? `<span class="inline-block ${r.trust_badge.bg_color} ${r.trust_badge.text_color} ${r.trust_badge.border_color} px-2 py-1 rounded-full text-xs font-medium border">${r.trust_badge.label} (${r.trust_score})</span><br>` : ''}
                         Time: ${timestamp}<br>
                         Verified: ${isVerified ? 'Yes' : 'No'} (${r.peer_verifications || 0}/3)<br>
                         ${r.delay_reason ? 'Delay: ' + r.delay_reason + '<br>' : ''}
