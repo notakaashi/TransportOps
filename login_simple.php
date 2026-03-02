@@ -1,7 +1,6 @@
 <?php
 /**
- * User Login Page
- * Handles user authentication and session management
+ * Simple Login Page - No session regeneration for mobile testing
  */
 
 require_once 'auth_helper.php';
@@ -13,7 +12,7 @@ if (isset($_SESSION['user_id'])) {
     if ($_SESSION['role'] === 'Admin') {
         header('Location: admin_dashboard.php');
     } else {
-        header('Location: index.php');
+        header('Location: user_dashboard.php');
     }
     exit;
 }
@@ -27,9 +26,8 @@ if (isset($_GET['error']) && $_GET['error'] === 'deactivated') {
 
 // Process login form submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    // Debug: Log the login attempt
-    error_log("Login attempt from: " . ($_SERVER['HTTP_USER_AGENT'] ?? 'Unknown'));
-    error_log("Session ID before login: " . session_id());
+    error_log("SIMPLE LOGIN - Attempt from: " . ($_SERVER['HTTP_USER_AGENT'] ?? 'Unknown'));
+    error_log("SIMPLE LOGIN - Session ID: " . session_id());
     
     $email = trim($_POST['email'] ?? '');
     $password = $_POST['password'] ?? '';
@@ -49,8 +47,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 } elseif (!$user['is_active']) {
                     $error = 'Your account has been deactivated. Please contact an administrator.';
                 } else {
-                    // Regenerate session to prevent fixation and create fresh session
-                    regenerateSession();
+                    // NO SESSION REGENERATION - Just set session data directly
+                    error_log("SIMPLE LOGIN - Authentication successful for: " . $user['email']);
                     
                     // Set session variables including profile image
                     $_SESSION['user_id'] = $user['id'];
@@ -59,15 +57,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $_SESSION['role'] = $user['role'];
                     $_SESSION['profile_image'] = $user['profile_image'];
                     
+                    error_log("SIMPLE LOGIN - Session data after setting: " . print_r($_SESSION, true));
+                    error_log("SIMPLE LOGIN - Redirecting to dashboard...");
+                    
                     header('Location: user_dashboard.php');
                     exit;
                 }
             } else {
                 $error = 'Invalid email or password.';
-                error_log("Authentication failed for email: " . $email);
+                error_log("SIMPLE LOGIN - Authentication failed for: " . $email);
             }
         } catch (PDOException $e) {
-            error_log("Login error: " . $e->getMessage());
+            error_log("SIMPLE LOGIN - Database error: " . $e->getMessage());
             $error = 'Login failed. Please try again.';
         }
     }
@@ -78,7 +79,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login - Transport Operations System</title>
+    <title>Simple Login Test - Transport Operations System</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -92,7 +93,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 </head>
 <body class="bg-[#F3F4F6] min-h-screen flex items-center justify-center px-4">
     <div class="bg-white p-6 sm:p-8 rounded-2xl shadow-md w-full max-w-md">
-        <h2 class="auth-title text-2xl font-semibold text-gray-900 mb-6 text-center">Login</h2>
+        <h2 class="auth-title text-2xl font-semibold text-gray-900 mb-6 text-center">Simple Login Test (No Session Regeneration)</h2>
         
         <?php if ($error): ?>
             <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
@@ -128,14 +129,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             
             <button type="submit" 
                     class="w-full bg-[#10B981] text-white py-3 px-4 rounded-lg hover:bg-[#059669] focus:outline-none focus:ring-2 focus:ring-[#10B981] focus:ring-offset-2 transition duration-150 font-medium min-h-[48px]">
-                Login
+                Test Login (No Regeneration)
             </button>
         </form>
         
         <p class="mt-4 text-center text-sm text-gray-600">
-            Don't have an account? 
-            <a href="register.php" class="text-blue-600 hover:text-blue-800 font-medium">Register here</a><br>
-            <a href="admin_login.php" class="text-gray-500 hover:text-gray-700 text-xs mt-2 inline-block">Admin login</a>
+            <a href="login.php" class="text-blue-600 hover:text-blue-800 font-medium">← Back to normal login</a>
         </p>
     </div>
     
@@ -158,4 +157,3 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </script>
 </body>
 </html>
-

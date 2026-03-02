@@ -1,11 +1,9 @@
 <?php
 /**
- * User Login Page
- * Handles user authentication and session management
+ * Basic Login Test - Using standard session_start()
  */
 
-require_once 'auth_helper.php';
-secureSessionStart();
+session_start();
 require_once 'db.php';
 
 // Redirect if already logged in
@@ -13,24 +11,15 @@ if (isset($_SESSION['user_id'])) {
     if ($_SESSION['role'] === 'Admin') {
         header('Location: admin_dashboard.php');
     } else {
-        header('Location: index.php');
+        header('Location: user_dashboard.php');
     }
     exit;
 }
 
 $error = '';
 
-// Check for deactivated account error
-if (isset($_GET['error']) && $_GET['error'] === 'deactivated') {
-    $error = 'Your account has been deactivated. Please contact an administrator.';
-}
-
 // Process login form submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    // Debug: Log the login attempt
-    error_log("Login attempt from: " . ($_SERVER['HTTP_USER_AGENT'] ?? 'Unknown'));
-    error_log("Session ID before login: " . session_id());
-    
     $email = trim($_POST['email'] ?? '');
     $password = $_POST['password'] ?? '';
     
@@ -49,10 +38,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 } elseif (!$user['is_active']) {
                     $error = 'Your account has been deactivated. Please contact an administrator.';
                 } else {
-                    // Regenerate session to prevent fixation and create fresh session
-                    regenerateSession();
-                    
-                    // Set session variables including profile image
+                    // Set session variables directly
                     $_SESSION['user_id'] = $user['id'];
                     $_SESSION['user_name'] = $user['name'];
                     $_SESSION['user_email'] = $user['email'];
@@ -64,10 +50,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             } else {
                 $error = 'Invalid email or password.';
-                error_log("Authentication failed for email: " . $email);
             }
         } catch (PDOException $e) {
-            error_log("Login error: " . $e->getMessage());
             $error = 'Login failed. Please try again.';
         }
     }
@@ -78,7 +62,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login - Transport Operations System</title>
+    <title>Basic Login Test - Transport Operations System</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -92,7 +76,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 </head>
 <body class="bg-[#F3F4F6] min-h-screen flex items-center justify-center px-4">
     <div class="bg-white p-6 sm:p-8 rounded-2xl shadow-md w-full max-w-md">
-        <h2 class="auth-title text-2xl font-semibold text-gray-900 mb-6 text-center">Login</h2>
+        <h2 class="auth-title text-2xl font-semibold text-gray-900 mb-6 text-center">Basic Login Test (Standard Session)</h2>
         
         <?php if ($error): ?>
             <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
@@ -128,14 +112,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             
             <button type="submit" 
                     class="w-full bg-[#10B981] text-white py-3 px-4 rounded-lg hover:bg-[#059669] focus:outline-none focus:ring-2 focus:ring-[#10B981] focus:ring-offset-2 transition duration-150 font-medium min-h-[48px]">
-                Login
+                Test Basic Login
             </button>
         </form>
         
         <p class="mt-4 text-center text-sm text-gray-600">
-            Don't have an account? 
-            <a href="register.php" class="text-blue-600 hover:text-blue-800 font-medium">Register here</a><br>
-            <a href="admin_login.php" class="text-gray-500 hover:text-gray-700 text-xs mt-2 inline-block">Admin login</a>
+            <a href="login.php" class="text-blue-600 hover:text-blue-800 font-medium">← Back to normal login</a><br>
+            <a href="session_test.php" class="text-gray-500 hover:text-gray-700 text-xs mt-2 inline-block">Test basic session</a>
         </p>
     </div>
     
@@ -158,4 +141,3 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </script>
 </body>
 </html>
-

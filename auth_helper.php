@@ -8,17 +8,8 @@
  * Must be called before any output
  */
 function secureSessionStart() {
-    // Set secure session cookie parameters
-    $isLocalhost = in_array($_SERVER['HTTP_HOST'] ?? '', ['localhost', '127.0.0.1'], true);
-    
-    session_set_cookie_params([
-        'lifetime' => 0,
-        'path' => '/',
-        'secure' => !$isLocalhost,       // false for localhost, true for production
-        'httponly' => true,
-        'samesite' => 'Lax'
-    ]);
-    
+    // Use basic session_start() for maximum compatibility
+    // Mobile browsers can be picky about custom cookie parameters
     session_start();
 }
 
@@ -27,9 +18,6 @@ function secureSessionStart() {
  * Used during login to prevent session fixation
  */
 function regenerateSession() {
-    // Unset all session variables
-    session_unset();
-    
     // Regenerate session ID and delete old session
     session_regenerate_id(true);
 }
