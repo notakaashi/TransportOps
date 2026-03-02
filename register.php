@@ -4,7 +4,8 @@
  * Handles new user registration with role assignment
  */
 
-session_start();
+require_once 'auth_helper.php';
+secureSessionStart();
 require_once 'db.php';
 
 $error = '';

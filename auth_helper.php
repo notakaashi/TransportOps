@@ -4,6 +4,57 @@
  */
 
 /**
+ * Configure secure session parameters and start session
+ * Must be called before any output
+ */
+function secureSessionStart() {
+    // Set secure session cookie parameters
+    $isLocalhost = in_array($_SERVER['HTTP_HOST'] ?? '', ['localhost', '127.0.0.1'], true);
+    
+    session_set_cookie_params([
+        'lifetime' => 0,
+        'path' => '/',
+        'secure' => !$isLocalhost,       // false for localhost, true for production
+        'httponly' => true,
+        'samesite' => 'Lax'
+    ]);
+    
+    session_start();
+}
+
+/**
+ * Regenerate session ID and destroy old session data
+ * Used during login to prevent session fixation
+ */
+function regenerateSession() {
+    // Unset all session variables
+    session_unset();
+    
+    // Regenerate session ID and delete old session
+    session_regenerate_id(true);
+}
+
+/**
+ * Complete session destruction for logout
+ */
+function destroySessionCompletely() {
+    // Unset all session variables
+    session_unset();
+    
+    // Get session cookie parameters
+    $params = session_get_cookie_params();
+    
+    // Clear session cookie
+    setcookie(session_name(), '', time() - 42000,
+        $params["path"], $params["domain"],
+        $params["secure"], $params["httponly"]
+    );
+    
+    // Destroy session
+    session_destroy();
+}
+
+/**
  * Check if current user is active
  * Redirects to login with error message if user is not active
  */

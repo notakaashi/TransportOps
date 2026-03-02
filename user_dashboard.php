@@ -4,9 +4,9 @@
  * Dashboard for logged-in non-admin users (Driver/Commuter)
  */
 
-session_start();
-require_once 'db.php';
 require_once 'auth_helper.php';
+secureSessionStart();
+require_once 'db.php';
 
 // Redirect to login if not logged in
 if (!isset($_SESSION['user_id'])) {

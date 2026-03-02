@@ -4,7 +4,8 @@
  * Allows logged-in users to view and edit their profile details and profile picture
  */
 
-session_start();
+require_once 'auth_helper.php';
+secureSessionStart();
 require_once 'db.php';
 
 if (!isset($_SESSION['user_id'])) {

@@ -11,7 +11,8 @@
         <h1 class="text-2xl font-bold text-gray-800 mb-6">Simple Profile Image Upload Test</h1>
         
         <?php
-        session_start();
+        require_once 'auth_helper.php';
+secureSessionStart();
         require_once 'db.php';
         
         if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'upload_image') {

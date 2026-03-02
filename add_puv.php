@@ -4,7 +4,8 @@
  * Allows admin to add new PUV units to the fleet
  */
 
-session_start();
+require_once 'auth_helper.php';
+secureSessionStart();
 require_once 'db.php';
 
 // Check if user is logged in and is an Admin

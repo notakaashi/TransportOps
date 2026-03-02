@@ -5,7 +5,8 @@
  * Restricted to Admin role only
  */
 
-session_start();
+require_once 'auth_helper.php';
+secureSessionStart();
 require_once 'db.php';
 
 // Check if user is logged in and is an Admin

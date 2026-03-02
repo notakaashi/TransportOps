@@ -1,5 +1,6 @@
 <?php
-session_start();
+require_once 'auth_helper.php';
+secureSessionStart();
 require_once 'db.php';
 
 header('Content-Type: application/json');

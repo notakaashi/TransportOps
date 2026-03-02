@@ -4,7 +4,8 @@
  * Displays routes from route_definitions with report counts. Select a route to edit or delete.
  */
 
-session_start();
+require_once 'auth_helper.php';
+secureSessionStart();
 require_once 'db.php';
 
 if (!isset($_SESSION['user_id'])) {

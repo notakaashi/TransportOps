@@ -4,7 +4,8 @@
  * Admin-only authentication. Only users with Admin role can successfully log in here.
  */
 
-session_start();
+require_once 'auth_helper.php';
+secureSessionStart();
 require_once 'db.php';
 
 // Redirect if already logged in as admin
@@ -47,6 +48,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 } elseif (!$user['is_active']) {
                     $error = 'Your account has been deactivated. Please contact an administrator.';
                 } else {
+                    // Regenerate session to prevent fixation and create fresh session
+                    regenerateSession();
+                    
                     $_SESSION['user_id'] = $user['id'];
                     $_SESSION['user_name'] = $user['name'];
                     $_SESSION['user_email'] = $user['email'];

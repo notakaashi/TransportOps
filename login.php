@@ -4,7 +4,8 @@
  * Handles user authentication and session management
  */
 
-session_start();
+require_once 'auth_helper.php';
+secureSessionStart();
 require_once 'db.php';
 
 // Redirect if already logged in
@@ -44,6 +45,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 } elseif (!$user['is_active']) {
                     $error = 'Your account has been deactivated. Please contact an administrator.';
                 } else {
+                    // Regenerate session to prevent fixation and create fresh session
+                    regenerateSession();
+                    
                     // Set session variables including profile image
                     $_SESSION['user_id'] = $user['id'];
                     $_SESSION['user_name'] = $user['name'];

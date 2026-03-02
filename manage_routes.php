@@ -3,7 +3,8 @@
  * Manage Routes - Define routes with stops for map display
  * Admin can add a route (e.g. Guadalupe - FTI Tenement) and add stops in order; stops are connected on the map.
  */
-session_start();
+require_once 'auth_helper.php';
+secureSessionStart();
 require_once "db.php";
 
 if (!isset($_SESSION["user_id"])) {

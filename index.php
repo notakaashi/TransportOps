@@ -4,7 +4,8 @@
  * Public homepage for non-logged-in users
  */
 
-session_start();
+require_once 'auth_helper.php';
+secureSessionStart();
 
 // Redirect logged-in users to appropriate dashboard
 if (isset($_SESSION['user_id'])) {
