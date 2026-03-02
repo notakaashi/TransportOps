@@ -66,7 +66,7 @@ $user_id = (int)$_SESSION['user_id'];
                     COUNT(*) as total_reports,
                     SUM(CASE WHEN verification_count >= 3 THEN 1 ELSE 0 END) as verified_reports,
                     SUM(CASE WHEN status = 'rejected' THEN 1 ELSE 0 END) as rejected_reports,
-                    SUM(CASE WHEN verification_count = 0 AND created_at < DATE_SUB(NOW(), INTERVAL 24 HOUR) THEN 1 ELSE 0 END) as expired_reports
+                    SUM(CASE WHEN is_verified = 0 AND timestamp < DATE_SUB(NOW(), INTERVAL 24 HOUR) THEN 1 ELSE 0 END) as expired_reports
                 FROM (
                     SELECT 
                         r.*,
@@ -82,7 +82,7 @@ $user_id = (int)$_SESSION['user_id'];
             $stmt = $pdo->prepare("
                 SELECT COUNT(*) as verification_count
                 FROM report_verifications rv
-                WHERE rv.user_id = ? 
+                WHERE rv.verifier_user_id = ? 
             ");
             $stmt->execute([$user_id]);
             $verificationStats = $stmt->fetch();

@@ -27,11 +27,11 @@ try {
     $calculated = calculateTrustScore($user_id);
     echo "Calculated trust score: " . $calculated . "\n";
     
-    // Test verification count query
+    // Get verification count
     $stmt = $pdo->prepare("
         SELECT COUNT(*) as verification_count
         FROM report_verifications rv
-        WHERE rv.user_id = ? 
+        WHERE rv.verifier_user_id = ? 
     ");
     $stmt->execute([$user_id]);
     $verificationStats = $stmt->fetch();
@@ -41,7 +41,8 @@ try {
     $stmt = $pdo->prepare("
         SELECT 
             COUNT(*) as total_reports,
-            SUM(CASE WHEN verification_count >= 3 THEN 1 ELSE 0 END) as verified_reports
+            SUM(CASE WHEN verification_count >= 3 THEN 1 ELSE 0 END) as verified_reports,
+            SUM(CASE WHEN status = 'rejected' THEN 1 ELSE 0 END) as rejected_reports
         FROM (
             SELECT 
                 r.*,
@@ -54,6 +55,7 @@ try {
     $stats = $stmt->fetch();
     echo "Your reports submitted: " . $stats['total_reports'] . "\n";
     echo "Your reports with 3+ verifications: " . $stats['verified_reports'] . "\n";
+    echo "Your rejected reports: " . $stats['rejected_reports'] . "\n";
     
     echo "\n✅ Trust scoring system working correctly!\n";
     

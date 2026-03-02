@@ -65,7 +65,7 @@ function calculateTrustScore($userId) {
                 COUNT(*) as total_reports,
                 SUM(CASE WHEN verification_count >= 3 THEN 1 ELSE 0 END) as verified_reports,
                 SUM(CASE WHEN status = 'rejected' THEN 1 ELSE 0 END) as rejected_reports,
-                SUM(CASE WHEN verification_count = 0 AND created_at < DATE_SUB(NOW(), INTERVAL 24 HOUR) THEN 1 ELSE 0 END) as expired_reports
+                SUM(CASE WHEN is_verified = 0 AND timestamp < DATE_SUB(NOW(), INTERVAL 24 HOUR) THEN 1 ELSE 0 END) as expired_reports
             FROM (
                 SELECT 
                     r.*,
@@ -87,7 +87,7 @@ function calculateTrustScore($userId) {
         $stmt = $pdo->prepare("
             SELECT COUNT(*) as verification_count
             FROM report_verifications rv
-            WHERE rv.user_id = ? 
+            WHERE rv.verifier_user_id = ? 
         ");
         $stmt->execute([$userId]);
         $verificationStats = $stmt->fetch();
@@ -180,7 +180,8 @@ function getUserPublicProfile($userId) {
                 SELECT 
                     COUNT(*) as total_reports,
                     SUM(CASE WHEN verification_count >= 3 THEN 1 ELSE 0 END) as verified_reports,
-                    SUM(CASE WHEN status = 'rejected' THEN 1 ELSE 0 END) as rejected_reports
+                    SUM(CASE WHEN status = 'rejected' THEN 1 ELSE 0 END) as rejected_reports,
+                    SUM(CASE WHEN is_verified = 0 AND timestamp < DATE_SUB(NOW(), INTERVAL 24 HOUR) THEN 1 ELSE 0 END) as expired_reports
                 FROM (
                     SELECT 
                         r.*,
@@ -200,6 +201,7 @@ function getUserPublicProfile($userId) {
                 $stats = $stmt->fetch();
                 $stats['verified_reports'] = 0;
                 $stats['rejected_reports'] = 0;
+                $stats['expired_reports'] = 0;
             } catch (PDOException $e2) {
                 error_log("Simple reports query also failed: " . $e2->getMessage());
                 return false;
