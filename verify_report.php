@@ -122,6 +122,24 @@ try {
 
     $pdo->commit();
 
+    // Update trust scores after commit
+    require_once 'trust_helper.php';
+    
+    // Update verifier's score (+1 point for verification)
+    updateUserTrustScore($_SESSION['user_id'], 'Verified report: +1 point');
+    
+    // Check if this verification brought the report to 3+ verifications
+    if ((int)$updated['peer_verifications'] >= 3 && (int)$updated['is_verified'] === 1) {
+        // Get the original reporter's ID to give them the 10-point bonus
+        $stmt = $pdo->prepare("SELECT user_id FROM reports WHERE id = ?");
+        $stmt->execute([$reportId]);
+        $report = $stmt->fetch();
+        
+        if ($report && $report['user_id']) {
+            updateUserTrustScore($report['user_id'], 'Report reached 3+ verifications: +10 bonus points');
+        }
+    }
+
     echo json_encode([
         'success' => true,
         'peer_verifications' => (int)$updated['peer_verifications'],

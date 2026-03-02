@@ -69,7 +69,7 @@ function calculateTrustScore($userId) {
             FROM (
                 SELECT 
                     r.*,
-                    (SELECT COUNT(*) FROM report_verifications rv WHERE rv.report_id = r.id AND rv.is_verified = 1) as verification_count
+                    (SELECT COUNT(*) FROM report_verifications rv WHERE rv.report_id = r.id) as verification_count
                 FROM reports r 
                 WHERE r.user_id = ?
             ) as user_reports
@@ -78,24 +78,21 @@ function calculateTrustScore($userId) {
         $stats = $stmt->fetch();
         
         // Apply scoring logic
-        $score += ($stats['verified_reports'] * 5);   // +5 for each verified report
+        $score += ($stats['total_reports'] * 5);      // +5 for each report submitted
+        $score += ($stats['verified_reports'] * 10);   // +10 bonus for each report that reached 3+ verifications
         $score -= ($stats['rejected_reports'] * 10);  // -10 for each rejected report
         $score -= ($stats['expired_reports'] * 2);    // -2 for each expired report
         
-        // Bonus for accurate verifications of others' reports
+        // Points for verifying other people's reports
         $stmt = $pdo->prepare("
-            SELECT COUNT(*) as accurate_verifications
+            SELECT COUNT(*) as verification_count
             FROM report_verifications rv
-            JOIN reports r ON rv.report_id = r.id
             WHERE rv.user_id = ? 
-            AND rv.is_verified = 1
-            AND r.verification_count >= 3
-            AND r.user_id != ?
         ");
-        $stmt->execute([$userId, $userId]);
+        $stmt->execute([$userId]);
         $verificationStats = $stmt->fetch();
         
-        $score += ($verificationStats['accurate_verifications'] * 1); // +1 for each accurate verification
+        $score += ($verificationStats['verification_count'] * 1); // +1 for each verification made
         
         return $score;
     } catch (PDOException $e) {
@@ -187,7 +184,7 @@ function getUserPublicProfile($userId) {
                 FROM (
                     SELECT 
                         r.*,
-                        (SELECT COUNT(*) FROM report_verifications rv WHERE rv.report_id = r.id AND rv.is_verified = 1) as verification_count
+                        (SELECT COUNT(*) FROM report_verifications rv WHERE rv.report_id = r.id) as verification_count
                     FROM reports r 
                     WHERE r.user_id = ?
                 ) as user_reports
@@ -217,11 +214,11 @@ function getUserPublicProfile($userId) {
                     r.crowd_level,
                     r.created_at,
                     rd.route_name,
-                    (SELECT COUNT(*) FROM report_verifications rv WHERE rv.report_id = r.id AND rv.is_verified = 1) as verification_count
+                    (SELECT COUNT(*) FROM report_verifications rv WHERE rv.report_id = r.id) as verification_count
                 FROM reports r
                 LEFT JOIN route_definitions rd ON r.route_id = rd.id
                 WHERE r.user_id = ? 
-                AND (SELECT COUNT(*) FROM report_verifications rv WHERE rv.report_id = r.id AND rv.is_verified = 1) >= 3
+                AND (SELECT COUNT(*) FROM report_verifications rv WHERE rv.report_id = r.id) >= 3
                 ORDER BY r.created_at DESC
                 LIMIT 10
             ");

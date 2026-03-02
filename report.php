@@ -114,6 +114,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             $trust_score
                         ]);
                         
+                        // Update user's trust score for submitting a report
+                        require_once 'trust_helper.php';
+                        updateUserTrustScore($_SESSION['user_id'], 'Report submitted: +5 points');
+                        
                         $success = 'Report submitted successfully! Thank you for your contribution.';
                         $_POST = [];
                     }

@@ -32,7 +32,7 @@ try {
             u.name as user_name,
             u.trust_score,
             rd.route_name,
-            (SELECT COUNT(*) FROM report_verifications rv WHERE rv.report_id = r.id AND rv.is_verified = 1) as verification_count
+            (SELECT COUNT(*) FROM report_verifications rv WHERE rv.report_id = r.id) as verification_count
         FROM reports r
         JOIN users u ON r.user_id = u.id
         LEFT JOIN route_definitions rd ON r.route_id = rd.id
