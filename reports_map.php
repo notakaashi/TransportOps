@@ -212,10 +212,13 @@ try {
                 </div>
                 
                 <div class="border-t pt-4">
-                    <h3 class="text-sm font-semibold text-gray-800 mb-2">Verification</h3>
+                    <h3 class="text-sm font-semibold text-gray-800 mb-2">Report Verification</h3>
                     <p class="text-xs text-gray-600 mb-3">
-                        When you are near a reported location, you can help verify it. 
-                        A report becomes fully verified after 3 independent verifications.
+                        <strong>How to verify reports:</strong><br>
+                        1. Click "Enable My Location" below<br>
+                        2. Be physically within 500m of the report location<br>
+                        3. Click the verify button on the map popup<br>
+                        <em>Note: Only commuter accounts can verify reports (not admins)</em>
                     </p>
                     <button id="enableLocationBtn"
                             class="w-full bg-blue-600 text-white px-3 py-2 rounded-md hover:bg-blue-700 transition text-xs font-medium">
@@ -494,12 +497,11 @@ try {
         function updateReportMarkersWithDistance() {
             if (!userLocation) return;
 
-            // Clear existing markers
-            map.eachLayer(layer => {
-                if (layer instanceof L.Marker && layer !== userLocationMarker) {
-                    map.removeLayer(layer);
-                }
+            // Clear existing report markers (but keep user location marker and verification circle)
+            reportMarkers.forEach(marker => {
+                map.removeLayer(marker);
             });
+            reportMarkers.clear();
 
             const bounds = [];
             reports.forEach(r => {
@@ -519,7 +521,7 @@ try {
 
                 const marker = L.marker([lat, lng], {
                     icon: L.divIcon({
-                        className: canVerify ? 'verifiable-marker' : 'custom-marker',
+                        className: 'custom-marker',
                         html: `
                             <div style="
                                 background-color: ${color};
@@ -534,13 +536,22 @@ try {
                     })
                 }).addTo(map);
 
+                // Store marker in the reportMarkers Map
+                reportMarkers.set(r.id, marker);
+
                 const timestamp = new Date(r.timestamp).toLocaleString();
 
-                const verifyButton = (userRole === 'Commuter' && canVerify)
-                    ? `<button data-report-id="${r.id}" class="verify-btn mt-2 px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700">
-                            Verify this report (${distance.toFixed(1)}km away)
-                       </button>`
-                    : (canVerify ? `<span class="text-xs text-blue-600 font-medium mt-2 block">${distance.toFixed(1)}km away</span>` : '');
+                const verifyButton = (userRole === 'Commuter')
+                    ? (canVerify 
+                        ? `<button data-report-id="${r.id}" class="verify-btn mt-2 px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700">
+                                Verify this report (${distance.toFixed(1)}km away)
+                           </button>`
+                        : (userLocation 
+                            ? `<span class="text-xs text-gray-500 mt-2 block">Too far to verify (${distance.toFixed(1)}km away - must be within 0.5km)</span>`
+                            : `<span class="text-xs text-orange-600 mt-2 block">Enable location to verify reports</span>`))
+                    : (userRole === 'Admin' 
+                        ? `<span class="text-xs text-gray-500 mt-2 block">Admin accounts cannot verify reports</span>`
+                        : `<span class="text-xs text-gray-500 mt-2 block">Login as commuter to verify reports</span>`);
 
                 marker.bindPopup(`
                     <div class="text-sm">
@@ -551,7 +562,9 @@ try {
                         Time: ${timestamp}<br>
                         Verified: ${isVerified ? 'Yes' : 'No'} (${r.peer_verifications || 0}/3)<br>
                         ${r.delay_reason ? 'Delay: ' + r.delay_reason + '<br>' : ''}
-                        ${canVerify ? '<span class="text-green-600 font-medium">✓ You can verify this report (within 500m)</span>' : ''}
+                        ${canVerify ? '<span class="text-green-600 font-medium">✓ You can verify this report (within 500m)</span>' : 
+                          (userLocation ? '<span class="text-orange-600 font-medium">✗ Too far to verify (must be within 500m)</span>' : 
+                           '<span class="text-orange-600 font-medium">⚠ Enable location to verify reports</span>')}
                         ${verifyButton}
                     </div>
                 `);
@@ -559,9 +572,8 @@ try {
                 bounds.push([lat, lng]);
             });
 
-            if (bounds.length > 0) {
-                map.fitBounds(bounds, { padding: [40, 40] });
-            }
+            // Don't reset map view when updating markers with distance
+            // User should control their own map zoom/pan
         }
 
         // Initialize the page
@@ -610,7 +622,7 @@ try {
                             longitude: pos.coords.longitude
                         };
                         updateUserLocationOnMap(userLocation.latitude, userLocation.longitude);
-                        locationStatus.textContent = 'Location enabled. Blue circle shows 500m verification radius.';
+                        locationStatus.textContent = '✅ Location enabled! Blue circle shows 500m verification radius. Click on map reports to verify.';
                         locationStatus.classList.remove('text-red-600');
                         locationStatus.classList.add('text-green-600');
                     },
