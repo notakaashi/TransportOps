@@ -246,6 +246,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                            class="block px-3 py-2 text-sm hover:bg-gray-50">
                             View &amp; Edit Profile
                         </a>
+                        <a href="public_profile.php?id=<?php echo $_SESSION['user_id']; ?>" class="block px-3 py-2 text-sm hover:bg-gray-50">View Public Profile</a>
                         <div class="my-1 border-t border-gray-100"></div>
                         <a href="logout.php"
                            class="block px-3 py-2 text-sm text-red-600 hover:bg-red-50">
