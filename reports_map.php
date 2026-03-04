@@ -94,6 +94,16 @@ try {
         }
         .verifiable-marker { animation: pulse 2s infinite; }
         .selected-marker { animation: pulse 2s infinite; }
+        
+        /* Fix map positioning to prevent header overlap */
+        #map {
+            position: relative !important;
+            z-index: 1 !important;
+        }
+        .leaflet-container {
+            position: relative !important;
+            z-index: 1 !important;
+        }
     </style>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -158,12 +168,12 @@ try {
 
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-6">
         <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
-            <div class="lg:col-span-3 bg-white rounded-2xl shadow-md overflow-hidden">
+            <div class="lg:col-span-3 bg-white rounded-2xl shadow-md overflow-hidden relative">
                 <div class="px-6 py-4 border-b border-gray-200">
                     <h2 class="text-2xl font-semibold text-gray-800">Reports Map</h2>
                     <p class="text-sm text-gray-600">Tap a marker to see report details. Green border = verified report. Blue circle = your 500m verification radius.</p>
                 </div>
-                <div class="h-[500px] lg:h-[600px]" id="map"></div>
+                <div class="h-[500px] lg:h-[600px] relative" id="map"></div>
             </div>
 
             <div class="bg-white rounded-2xl shadow-md p-4 space-y-4">

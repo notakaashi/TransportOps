@@ -177,6 +177,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             background-color: var(--transit-info);
             color: #1f2933;
         }
+        
+        /* Fix map positioning to prevent header overlap */
+        #report-route-map {
+            position: relative !important;
+            z-index: 1 !important;
+        }
+        .leaflet-container {
+            position: relative !important;
+            z-index: 1 !important;
+        }
     </style>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -349,7 +359,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <h3 class="text-lg font-semibold text-gray-800">Pin your report location</h3>
                 <p class="text-sm text-gray-500">Select a route to see it on the map. Pin your location (click map or use GPS)—reports are only accepted when you're on or near the route.</p>
             </div>
-            <div class="h-[400px] lg:h-[500px]" id="report-route-map"></div>
+            <div class="h-[400px] lg:h-[500px] relative" id="report-route-map"></div>
         </div>
         </div>
     </div>
