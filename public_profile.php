@@ -99,14 +99,8 @@ $badge = $profile["badge"];
         }
         .nav-link-mobile {
             display: block;
-            padding: 0.5rem 1rem;
-            border-radius: 0.5rem;
-            font-size: 0.875rem;
-            font-weight: 500;
-            color: #e5e7eb;
-            border: 1px solid transparent;
-            transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
-            text-decoration: none;
+            width: 100%;
+            text-align: center;
         }
         .nav-link-mobile:hover {
             background: rgba(255, 255, 255, 0.15);
@@ -117,6 +111,124 @@ $badge = $profile["badge"];
             background: rgba(255, 255, 255, 0.25);
             border-color: rgba(255, 255, 255, 0.3);
             color: #ffffff;
+        }
+
+        /* Mobile-specific compact styles */
+        @media (max-width: 768px) {
+            .bg-white.rounded-2xl {
+                padding: 1rem !important;
+            }
+            
+            .bg-white.rounded-2xl .flex {
+                flex-direction: column !important;
+                gap: 1rem !important;
+                text-align: center;
+                align-items: center;
+                justify-content: center;
+            }
+            
+            .bg-white.rounded-2xl img,
+            .bg-white.rounded-2xl .h-24 {
+                width: 5rem !important;
+                height: 5rem !important;
+                margin: 0 auto 1rem auto;
+                display: block;
+                margin-left: auto !important;
+                margin-right: auto !important;
+            }
+            
+            .bg-white.rounded-2xl .flex-shrink-0 {
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                width: 100%;
+            }
+            
+            .bg-white.rounded-2xl h1 {
+                font-size: 1.5rem !important;
+                margin-bottom: 0.5rem !important;
+            }
+            
+            .bg-white.rounded-2xl .flex.items-center.space-x-4 {
+                flex-direction: row !important;
+                gap: 0.75rem !important;
+                space-x: 0 !important;
+                align-items: center;
+                justify-content: center;
+                text-align: center;
+                flex-wrap: wrap;
+            }
+            
+            .bg-white.rounded-2xl .flex.items-center.space-x-4 span:first-child {
+                margin-right: 0.25rem;
+            }
+            
+            .bg-white.rounded-2xl .flex.items-center.space-x-4 span:last-child {
+                margin-left: 0.25rem;
+            }
+            
+            .bg-white.rounded-2xl .text-2xl {
+                font-size: 1.25rem !important;
+            }
+            
+            .bg-white.rounded-2xl .text-gray-600 {
+                font-size: 0.875rem !important;
+            }
+            
+            .grid.grid-cols-1.md\:grid-cols-3 {
+                grid-template-columns: 1fr !important;
+                gap: 0.75rem !important;
+            }
+            
+            .grid.grid-cols-1.md\:grid-cols-3 .bg-white {
+                padding: 1rem !important;
+            }
+            
+            .grid.grid-cols-1.md\:grid-cols-3 h3 {
+                font-size: 1rem !important;
+                margin-bottom: 0.75rem !important;
+            }
+            
+            .grid.grid-cols-1.md\:grid-cols-3 .text-3xl {
+                font-size: 1.5rem !important;
+            }
+            
+            .grid.grid-cols-1.md\:grid-cols-3 .text-sm {
+                font-size: 0.75rem !important;
+            }
+            
+            .bg-white.rounded-2xl.shadow-md h2 {
+                font-size: 1.25rem !important;
+                margin-bottom: 1rem !important;
+            }
+            
+            .bg-white.rounded-2xl.shadow-md .border {
+                padding: 0.75rem !important;
+                margin-bottom: 0.75rem !important;
+            }
+            
+            .bg-white.rounded-2xl.shadow-md h4 {
+                font-size: 0.875rem !important;
+            }
+            
+            .bg-white.rounded-2xl.shadow-md p {
+                font-size: 0.75rem !important;
+            }
+            
+            .bg-white.rounded-2xl.shadow-md .flex.items-center {
+                font-size: 0.75rem !important;
+            }
+            
+            /* Mobile dropdown menu left alignment */
+            #mobileMenu {
+                align-items: flex-start !important;
+                text-align: left !important;
+            }
+            
+            #mobileMenu .nav-link-mobile {
+                text-align: left !important;
+                align-self: flex-start !important;
+            }
         }
     </style>
 </head>
@@ -139,7 +251,7 @@ $badge = $profile["badge"];
                             <a href="routes.php" class="nav-link">Routes</a>
                         <?php endif; ?>
                     </div>
-                    <div id="mobileMenu" class="md:hidden hidden absolute top-full left-0 right-0 mt-2 text-white flex flex-col space-y-1 px-4 py-3 z-20 rounded-2xl" style="background: rgba(34,51,92,0.95); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid rgba(255,255,255,0.15); box-shadow: 0 8px 32px 0 rgba(31,38,135,0.4);">
+                    <div id="mobileMenu" class="md:hidden hidden absolute top-full left-0 w-[90vw] max-w-xs text-white flex flex-col items-start space-y-2 px-6 py-5 z-40 rounded-2xl shadow-2xl border border-white/20" style="background: #3b4668; background: rgba(34,51,92,0.97); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);">
                         <?php if (isset($_SESSION["user_id"])): ?>
                             <a href="user_dashboard.php" class="nav-link-mobile">Home</a>
                         <?php endif; ?>
@@ -168,11 +280,9 @@ $badge = $profile["badge"];
                                 </span>
                             </div>
                             <div class="flex items-center gap-1">
-                                <?php if (
-                                    !empty($user_profile_data["profile_image"])
-                                ): ?>
+                                <?php if (!empty($user["profile_image"])): ?>
                                     <img src="uploads/<?php echo htmlspecialchars(
-                                        $user_profile_data["profile_image"],
+                                        $user["profile_image"],
                                     ); ?>"
                                          alt="Profile"
                                          class="h-8 w-8 rounded-full object-cover border-2 border-white">
@@ -180,7 +290,7 @@ $badge = $profile["badge"];
                                     <div class="h-8 w-8 rounded-full bg-[#10B981] flex items-center justify-center text-white text-sm font-semibold">
                                         <?php echo strtoupper(
                                             substr(
-                                                $_SESSION["user_name"] ?? "U",
+                                                $user["name"] ?? "U",
                                                 0,
                                                 1,
                                             ),
@@ -224,57 +334,37 @@ $badge = $profile["badge"];
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 <?php echo $fromAdmin ? 'pt-8' : 'pt-24 sm:pt-28'; ?> pb-12">
         <!-- Profile Header -->
         <div class="bg-white rounded-2xl shadow-md p-6 mb-6">
-            <div class="flex items-center space-x-6">
+            <div class="flex flex-col items-center justify-center text-center gap-4 sm:flex-row sm:items-center sm:justify-start sm:text-left sm:gap-6">
                 <!-- Profile Image -->
-                <div class="flex-shrink-0">
+                <div class="flex-shrink-0 flex items-center justify-center w-full sm:w-auto">
                     <?php if (!empty($user["profile_image"])): ?>
-                        <img src="uploads/<?php echo htmlspecialchars(
-                            $user["profile_image"],
-                        ); ?>"
-                             alt="<?php echo htmlspecialchars(
-                                 $user["name"],
-                             ); ?>"
-                             class="h-24 w-24 rounded-full object-cover border-4 border-gray-200">
+                        <img src="uploads/<?php echo htmlspecialchars($user["profile_image"]); ?>"
+                             alt="<?php echo htmlspecialchars($user["name"]); ?>"
+                             class="h-24 w-24 rounded-full object-cover border-4 border-gray-200 mx-auto">
                     <?php else: ?>
-                        <div class="h-24 w-24 rounded-full bg-[#10B981] flex items-center justify-center text-white text-3xl font-bold border-4 border-gray-200">
-                            <?php echo strtoupper(
-                                substr($user["name"], 0, 1),
-                            ); ?>
+                        <div class="h-24 w-24 rounded-full bg-[#10B981] flex items-center justify-center text-white text-3xl font-bold border-4 border-gray-200 mx-auto">
+                            <?php echo strtoupper(substr($user["name"], 0, 1)); ?>
                         </div>
                     <?php endif; ?>
                 </div>
 
                 <!-- User Info -->
-                <div class="flex-1">
-                    <h1 class="text-3xl font-bold text-gray-900 mb-2"><?php echo htmlspecialchars(
-                        $user["name"],
-                    ); ?></h1>
+                <div class="w-full sm:w-auto">
+                    <h1 class="text-3xl font-bold text-gray-900 mb-2"><?php echo htmlspecialchars($user["name"]); ?></h1>
 
-                    <!-- Trust Badge -->
-                    <div class="flex items-center space-x-4 mb-3">
-                        <span class="<?php echo $badge[
-                            "bg_color"
-                        ]; ?> <?php echo $badge[
-     "text_color"
- ]; ?> <?php echo $badge[
-     "border_color"
- ]; ?> px-3 py-1 rounded-full text-sm font-medium border">
+                    <!-- Trust Badge and Score -->
+                    <div class="flex flex-col items-center justify-center gap-2 sm:flex-row sm:items-center sm:justify-start sm:gap-4 mb-3">
+                        <span class="<?php echo $badge["bg_color"] . ' ' . $badge["text_color"] . ' ' . $badge["border_color"] ?> px-3 py-1 rounded-full text-sm font-medium border">
                             <?php echo $badge["label"]; ?>
                         </span>
                         <span class="text-2xl font-bold text-gray-700">
-                            <?php echo number_format(
-                                $user["trust_score"],
-                                1,
-                            ); ?>/100
+                            <?php echo number_format($user["trust_score"], 1); ?>/100
                         </span>
                     </div>
 
                     <!-- Member Since -->
                     <p class="text-gray-600 text-sm">
-                        Member since <?php echo date(
-                            "F j, Y",
-                            strtotime($user["created_at"]),
-                        ); ?>
+                        Member since <?php echo date("F j, Y", strtotime($user["created_at"])); ?>
                     </p>
                 </div>
             </div>

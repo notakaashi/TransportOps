@@ -242,20 +242,6 @@ try {
             }
         }
 
-        (function () {
-            const toggle = document.getElementById('adminNavToggle');
-            const links = document.getElementById('adminNavLinks');
-            const footer = document.getElementById('adminNavFooter');
-            if (!toggle || !links || !footer) return;
-            toggle.addEventListener('click', function () {
-                if (window.innerWidth >= 768) return;
-                links.classList.toggle('hidden');
-                footer.classList.toggle('hidden');
-                // After layout change, let Leaflet recompute container size
-                setTimeout(function () { if (map && typeof map.invalidateSize === 'function') map.invalidateSize(); }, 250);
-            });
-        })();
-
         // Ensure map resizes correctly on orientation change / resize
         window.addEventListener('resize', function () {
             if (map && typeof map.invalidateSize === 'function') {
@@ -263,6 +249,7 @@ try {
             }
         });
     </script>
+    <?php include "admin_sidebar_js.php"; ?>
 </body>
 </html>
 

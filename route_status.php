@@ -238,6 +238,6 @@ try {
             });
         })();
     </script>
-    <script src="admin_sidebar_js.php"></script>
+    <?php include "admin_sidebar_js.php"; ?>
 </body>
 </html>

@@ -852,19 +852,8 @@ if (!$error) {
             var el = document.getElementById('route-' + highlightId);
             if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
-
-        (function () {
-            const toggle = document.getElementById('adminNavToggle');
-            const links = document.getElementById('adminNavLinks');
-            const footer = document.getElementById('adminNavFooter');
-            if (!toggle || !links || !footer) return;
-            toggle.addEventListener('click', function () {
-                if (window.innerWidth >= 768) return;
-                links.classList.toggle('hidden');
-                footer.classList.toggle('hidden');
-            });
-        })();
     </script>
+    <?php include "admin_sidebar_js.php"; ?>
 </body>
 </html>
 
