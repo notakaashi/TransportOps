@@ -5,18 +5,18 @@
  * Restricted to Admin role only
  */
 
-require_once 'auth_helper.php';
+require_once "auth_helper.php";
 secureSessionStart();
-require_once 'db.php';
+require_once "db.php";
 
 // Check if user is logged in and is an Admin
-if (!isset($_SESSION['user_id'])) {
-    header('Location: admin_login.php');
-    exit;
+if (!isset($_SESSION["user_id"])) {
+    header("Location: admin_login.php");
+    exit();
 }
-if ($_SESSION['role'] !== 'Admin') {
-    header('Location: login.php');
-    exit;
+if ($_SESSION["role"] !== "Admin") {
+    header("Location: login.php");
+    exit();
 }
 
 // Check if admin is still active
@@ -34,31 +34,33 @@ $peak_hours = [];
 
 try {
     $pdo = getDBConnection();
-    
+
     // Get total reports count
     $stmt = $pdo->query("SELECT COUNT(*) as count FROM reports");
     $result = $stmt->fetch(PDO::FETCH_ASSOC);
-    $total_reports = isset($result['count']) ? (int)$result['count'] : 0;
-    
+    $total_reports = isset($result["count"]) ? (int) $result["count"] : 0;
+
     // Get active delays count (reports with delay_reason)
-    $stmt = $pdo->query("SELECT COUNT(*) as count FROM reports WHERE delay_reason IS NOT NULL AND delay_reason != ''");
+    $stmt = $pdo->query(
+        "SELECT COUNT(*) as count FROM reports WHERE delay_reason IS NOT NULL AND delay_reason != ''",
+    );
     $result = $stmt->fetch(PDO::FETCH_ASSOC);
-    $active_delays = isset($result['count']) ? (int)$result['count'] : 0;
-    
+    $active_delays = isset($result["count"]) ? (int) $result["count"] : 0;
+
     // Get total users count
     $stmt = $pdo->query("SELECT COUNT(*) as count FROM users");
     $result = $stmt->fetch(PDO::FETCH_ASSOC);
-    $total_users = isset($result['count']) ? (int)$result['count'] : 0;
-    
+    $total_users = isset($result["count"]) ? (int) $result["count"] : 0;
+
     // Get routes count from route_definitions
     try {
         $stmt = $pdo->query("SELECT COUNT(*) as count FROM route_definitions");
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
-        $total_routes = isset($result['count']) ? (int)$result['count'] : 0;
+        $total_routes = isset($result["count"]) ? (int) $result["count"] : 0;
     } catch (PDOException $e) {
         $total_routes = 0;
     }
-    
+
     // Get recent reports (last 10)
     $stmt = $pdo->query("
         SELECT r.id, r.crowd_level, r.delay_reason, r.timestamp, r.latitude, r.longitude,
@@ -72,11 +74,13 @@ try {
         LIMIT 10
     ");
     $recent_reports = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    
+
     // Get all users for management
-    $stmt = $pdo->query("SELECT id, name, email, role, created_at FROM users ORDER BY created_at DESC");
+    $stmt = $pdo->query(
+        "SELECT id, name, email, role, created_at FROM users ORDER BY created_at DESC",
+    );
     $users_data = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    
+
     // Delay trend analysis - get delay reasons count for last 7 days
     $stmt = $pdo->query("
         SELECT delay_reason, COUNT(*) as count
@@ -88,10 +92,10 @@ try {
         LIMIT 5
     ");
     $delay_trends = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    
+
     // Peak hour analysis - crowding by hour
     $stmt = $pdo->query("
-        SELECT HOUR(timestamp) as hour, 
+        SELECT HOUR(timestamp) as hour,
                SUM(CASE WHEN crowd_level = 'Heavy' THEN 1 ELSE 0 END) as heavy_count,
                COUNT(*) as total_reports
         FROM reports
@@ -100,7 +104,6 @@ try {
         ORDER BY hour
     ");
     $peak_hours = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    
 } catch (PDOException $e) {
     error_log("Dashboard error: " . $e->getMessage());
     // Variables already initialized above with default values
@@ -109,16 +112,17 @@ try {
 /**
  * Get status badge color based on crowd status
  */
-function getStatusBadge($status) {
+function getStatusBadge($status)
+{
     switch ($status) {
-        case 'Light':
-            return 'bg-green-100 text-green-800 border-green-300';
-        case 'Moderate':
-            return 'bg-yellow-100 text-yellow-800 border-yellow-300';
-        case 'Heavy':
-            return 'bg-red-100 text-red-800 border-red-300';
+        case "Light":
+            return "bg-green-100 text-green-800 border-green-300";
+        case "Moderate":
+            return "bg-yellow-100 text-yellow-800 border-yellow-300";
+        case "Heavy":
+            return "bg-red-100 text-red-800 border-red-300";
         default:
-            return 'bg-gray-100 text-gray-800 border-gray-300';
+            return "bg-gray-100 text-gray-800 border-gray-300";
     }
 }
 ?>
@@ -153,17 +157,22 @@ function getStatusBadge($status) {
             box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.18);
         }
         .glass-sidebar {
-            background: linear-gradient(to bottom, rgba(30, 58, 138, 0.92), rgba(30, 41, 59, 0.92));
-            backdrop-filter: blur(14px);
-            -webkit-backdrop-filter: blur(14px);
-            border-right: 1px solid rgba(255, 255, 255, 0.12);
+            background: rgba(34, 51, 92, 0.75);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.35), 0 2px 8px 0 rgba(0,0,0,0.15);
+            transition: box-shadow 0.3s ease;
+        }
+        .glass-sidebar.scrolled {
+            box-shadow: 0 12px 40px 0 rgba(31, 38, 135, 0.55), 0 4px 12px 0 rgba(0,0,0,0.3);
         }
     </style>
 </head>
 <body class="bg-[var(--transit-foundation)]">
-    <div class="flex flex-col md:flex-row min-h-screen">
+    <div class="min-h-screen">
         <!-- Sidebar -->
-        <aside class="w-full md:w-64 glass-sidebar text-white flex flex-col shadow-2xl">
+        <aside id="adminSidebar" class="fixed top-4 inset-x-4 md:inset-x-auto md:left-4 md:w-64 md:h-[calc(100vh-2rem)] glass-sidebar text-white flex flex-col z-30 rounded-2xl shadow-2xl">
             <div class="px-4 py-4 sm:p-6 flex-shrink-0 border-b border-[#475569] md:border-b-0">
                 <div id="adminNavToggle" class="flex items-center justify-between md:justify-start mb-4 md:mb-8 cursor-pointer md:cursor-default">
                     <div class="bg-[#fbbf24] p-2 rounded-lg mr-3">
@@ -177,49 +186,49 @@ function getStatusBadge($status) {
                     </svg>
                 </div>
                 <nav id="adminNavLinks" class="space-y-1 md:space-y-2 text-sm sm:text-base hidden md:block">
-                    <a href="admin_dashboard.php" 
+                    <a href="admin_dashboard.php"
                        class="flex items-center px-4 py-3 bg-[#fbbf24] text-[#1e3a8a] rounded-lg hover:bg-[#f59e0b] transition duration-150 shadow-lg">
                         <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
                         </svg>
                         Dashboard
                     </a>
-                    <a href="admin_reports.php" 
+                    <a href="admin_reports.php"
                        class="flex items-center px-4 py-3 hover:bg-[#475569] rounded-lg transition duration-150 group">
                         <svg class="w-5 h-5 mr-3 group-hover:text-[#fbbf24]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-6a2 2 0 012-2h6m-4-4l4 4-4 4"></path>
                         </svg>
                         Reports
                     </a>
-                    <a href="admin_trust_management.php" 
+                    <a href="admin_trust_management.php"
                        class="flex items-center px-4 py-3 hover:bg-[#475569] rounded-lg transition duration-150 group">
                         <svg class="w-5 h-5 mr-3 group-hover:text-[#fbbf24]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                         </svg>
                         Trust Management
                     </a>
-                    <a href="route_status.php" 
+                    <a href="route_status.php"
                        class="flex items-center px-4 py-3 hover:bg-[#475569] rounded-lg transition duration-150 group">
                         <svg class="w-5 h-5 mr-3 group-hover:text-[#fbbf24]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"></path>
                         </svg>
                         Route Status
                     </a>
-                    <a href="manage_routes.php" 
+                    <a href="manage_routes.php"
                        class="flex items-center px-4 py-3 hover:bg-[#475569] rounded-lg transition duration-150 group">
                         <svg class="w-5 h-5 mr-3 group-hover:text-[#fbbf24]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"></path>
                         </svg>
                         Manage Routes
                     </a>
-                    <a href="heatmap.php" 
+                    <a href="heatmap.php"
                        class="flex items-center px-4 py-3 hover:bg-[#475569] rounded-lg transition duration-150 group">
                         <svg class="w-5 h-5 mr-3 group-hover:text-[#fbbf24]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
                         </svg>
                         Crowdsourcing Heatmap
                     </a>
-                    <a href="user_management.php" 
+                    <a href="user_management.php"
                        class="flex items-center px-4 py-3 hover:bg-[#475569] rounded-lg transition duration-150 group">
                         <svg class="w-5 h-5 mr-3 group-hover:text-[#fbbf24]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path>
@@ -232,7 +241,9 @@ function getStatusBadge($status) {
                 <div class="bg-[#475569] rounded-lg p-3 sm:p-4 mb-4">
                     <p class="text-xs text-gray-400 mb-1">Logged in as</p>
                     <div class="flex items-center justify-between">
-                        <p class="text-sm font-semibold"><?php echo htmlspecialchars($_SESSION['user_name']); ?></p>
+                        <p class="text-sm font-semibold"><?php echo htmlspecialchars(
+                            $_SESSION["user_name"],
+                        ); ?></p>
                         <div class="flex items-center gap-2">
                             <button id="adminProfileMenuButton"
                                     class="flex items-center gap-2 px-2 py-1.5 rounded-full hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-white/60">
@@ -242,7 +253,9 @@ function getStatusBadge($status) {
                             </button>
                         </div>
                     </div>
-                    <p class="text-xs text-[#fbbf24] mt-1"><?php echo htmlspecialchars($_SESSION['role']); ?></p>
+                    <p class="text-xs text-[#fbbf24] mt-1"><?php echo htmlspecialchars(
+                        $_SESSION["role"],
+                    ); ?></p>
                 </div>
                 <div id="adminProfileMenu"
                      class="hidden absolute right-0 bottom-full mb-2 w-48 bg-white text-gray-800 rounded-lg shadow-lg border border-gray-100 py-1 z-40">
@@ -261,7 +274,7 @@ function getStatusBadge($status) {
                         Logout
                     </a>
                 </div>
-                <a href="logout.php" 
+                <a href="logout.php"
                    class="block w-full text-center bg-gradient-to-r from-red-600 to-red-700 text-white py-2 px-4 rounded-md hover:from-red-700 hover:to-red-800 transition duration-150 font-medium shadow-lg">
                     Logout
                 </a>
@@ -269,7 +282,7 @@ function getStatusBadge($status) {
         </aside>
 
         <!-- Main Content -->
-        <main class="flex-1 w-full">
+        <main class="w-full md:ml-72 pt-24 md:pt-0">
             <div class="p-4 sm:p-6 lg:p-8">
                 <!-- Page Header -->
                 <div class="mb-8">
@@ -284,7 +297,9 @@ function getStatusBadge($status) {
                         <div class="flex items-center justify-between">
                             <div>
                                 <p class="text-gray-600 text-sm font-medium">Total Reports</p>
-                                <p class="text-3xl font-bold text-gray-800 mt-2"><?php echo number_format($total_reports); ?></p>
+                                <p class="text-3xl font-bold text-gray-800 mt-2"><?php echo number_format(
+                                    $total_reports,
+                                ); ?></p>
                             </div>
                             <div class="bg-green-100 p-3 rounded-full">
                                 <svg class="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -299,7 +314,9 @@ function getStatusBadge($status) {
                         <div class="flex items-center justify-between">
                             <div>
                                 <p class="text-gray-600 text-sm font-medium">Active Delays</p>
-                                <p class="text-3xl font-bold text-gray-800 mt-2"><?php echo number_format($active_delays); ?></p>
+                                <p class="text-3xl font-bold text-gray-800 mt-2"><?php echo number_format(
+                                    $active_delays,
+                                ); ?></p>
                             </div>
                             <div class="bg-red-100 p-3 rounded-full">
                                 <svg class="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -314,7 +331,9 @@ function getStatusBadge($status) {
                         <div class="flex items-center justify-between">
                             <div>
                                 <p class="text-gray-600 text-sm font-medium">Total Users</p>
-                                <p class="text-3xl font-bold text-gray-800 mt-2"><?php echo number_format($total_users); ?></p>
+                                <p class="text-3xl font-bold text-gray-800 mt-2"><?php echo number_format(
+                                    $total_users,
+                                ); ?></p>
                             </div>
                             <div class="bg-purple-100 p-3 rounded-full">
                                 <svg class="w-8 h-8 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -329,7 +348,9 @@ function getStatusBadge($status) {
                         <div class="flex items-center justify-between">
                             <div>
                                 <p class="text-gray-600 text-sm font-medium">Routes</p>
-                                <p class="text-3xl font-bold text-gray-800 mt-2"><?php echo number_format($total_routes); ?></p>
+                                <p class="text-3xl font-bold text-gray-800 mt-2"><?php echo number_format(
+                                    $total_routes,
+                                ); ?></p>
                             </div>
                             <div class="bg-indigo-100 p-3 rounded-full">
                                 <svg class="w-8 h-8 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -370,38 +391,79 @@ function getStatusBadge($status) {
                                         </td>
                                     </tr>
                                 <?php else: ?>
-                                    <?php foreach ($recent_reports as $report): ?>
+                                    <?php foreach (
+                                        $recent_reports
+                                        as $report
+                                    ): ?>
                                         <tr class="hover:bg-gray-50 cursor-pointer transition duration-150 report-row"
-                                            data-report="<?php echo htmlspecialchars(json_encode($report)); ?>"
+                                            data-report="<?php echo htmlspecialchars(
+                                                json_encode($report),
+                                            ); ?>"
                                             title="Click to view details">
                                             <td class="px-6 py-4 whitespace-nowrap">
                                                 <div class="text-sm text-gray-900">
-                                                    <?php echo date('M d, Y H:i', strtotime($report['timestamp'])); ?>
+                                                    <?php echo date(
+                                                        "M d, Y H:i",
+                                                        strtotime(
+                                                            $report[
+                                                                "timestamp"
+                                                            ],
+                                                        ),
+                                                    ); ?>
                                                 </div>
                                             </td>
                                             <td class="px-6 py-4 whitespace-nowrap">
                                                 <div class="text-sm text-gray-900">
-                                                    <?php echo htmlspecialchars($report['user_name'] ?? 'N/A'); ?>
+                                                    <?php echo htmlspecialchars(
+                                                        $report["user_name"] ??
+                                                            "N/A",
+                                                    ); ?>
                                                 </div>
                                                 <div class="text-xs text-gray-500">
-                                                    <?php echo htmlspecialchars($report['user_role'] ?? ''); ?>
+                                                    <?php echo htmlspecialchars(
+                                                        $report["user_role"] ??
+                                                            "",
+                                                    ); ?>
                                                 </div>
                                             </td>
                                             <td class="px-6 py-4 whitespace-nowrap">
                                                 <div class="text-sm font-medium text-gray-900">
-                                                    <?php echo htmlspecialchars($report['route_name'] ?? 'N/A'); ?>
+                                                    <?php echo htmlspecialchars(
+                                                        $report["route_name"] ??
+                                                            "N/A",
+                                                    ); ?>
                                                 </div>
                                             </td>
                                             <td class="px-6 py-4 whitespace-nowrap">
-                                                <span class="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full border <?php echo getStatusBadge($report['crowd_level']); ?>">
-                                                    <?php echo htmlspecialchars($report['crowd_level']); ?>
+                                                <span class="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full border <?php echo getStatusBadge(
+                                                    $report["crowd_level"],
+                                                ); ?>">
+                                                    <?php echo htmlspecialchars(
+                                                        $report["crowd_level"],
+                                                    ); ?>
                                                 </span>
                                             </td>
                                             <td class="px-6 py-4">
                                                 <div class="text-sm text-gray-600">
-                                                    <?php if ($report['delay_reason']): ?>
-                                                        <?php echo htmlspecialchars(substr($report['delay_reason'], 0, 50)); ?>
-                                                        <?php if (strlen($report['delay_reason']) > 50): ?>...<?php endif; ?>
+                                                    <?php if (
+                                                        $report["delay_reason"]
+                                                    ): ?>
+                                                        <?php echo htmlspecialchars(
+                                                            substr(
+                                                                $report[
+                                                                    "delay_reason"
+                                                                ],
+                                                                0,
+                                                                50,
+                                                            ),
+                                                        ); ?>
+                                                        <?php if (
+                                                            strlen(
+                                                                $report[
+                                                                    "delay_reason"
+                                                                ],
+                                                            ) > 50
+                                                        ): ?>...<?php endif; ?>
                                                     <?php else: ?>
                                                         <span class="text-gray-400">None</span>
                                                     <?php endif; ?>
@@ -430,11 +492,25 @@ function getStatusBadge($status) {
                                     <?php foreach ($delay_trends as $trend): ?>
                                         <div>
                                             <div class="flex justify-between items-center mb-1">
-                                                <span class="text-sm font-medium text-gray-700"><?php echo htmlspecialchars($trend['delay_reason']); ?></span>
-                                                <span class="text-sm font-semibold text-gray-900"><?php echo $trend['count']; ?> occurrences</span>
+                                                <span class="text-sm font-medium text-gray-700"><?php echo htmlspecialchars(
+                                                    $trend["delay_reason"],
+                                                ); ?></span>
+                                                <span class="text-sm font-semibold text-gray-900"><?php echo $trend[
+                                                    "count"
+                                                ]; ?> occurrences</span>
                                             </div>
                                             <div class="w-full bg-gray-200 rounded-full h-2">
-                                                <div class="bg-red-600 h-2 rounded-full" style="width: <?php echo min(100, ($trend['count'] / max(array_column($delay_trends, 'count'))) * 100); ?>%"></div>
+                                                <div class="bg-red-600 h-2 rounded-full" style="width: <?php echo min(
+                                                    100,
+                                                    ($trend["count"] /
+                                                        max(
+                                                            array_column(
+                                                                $delay_trends,
+                                                                "count",
+                                                            ),
+                                                        )) *
+                                                        100,
+                                                ); ?>%"></div>
                                             </div>
                                         </div>
                                     <?php endforeach; ?>
@@ -456,11 +532,26 @@ function getStatusBadge($status) {
                                     <?php foreach ($peak_hours as $hour): ?>
                                         <div>
                                             <div class="flex justify-between items-center mb-1">
-                                                <span class="text-sm font-medium text-gray-700"><?php echo date('g A', mktime($hour['hour'], 0, 0)); ?></span>
-                                                <span class="text-sm text-gray-600"><?php echo $hour['heavy_count']; ?> / <?php echo $hour['total_reports']; ?> heavy</span>
+                                                <span class="text-sm font-medium text-gray-700"><?php echo date(
+                                                    "g A",
+                                                    mktime($hour["hour"], 0, 0),
+                                                ); ?></span>
+                                                <span class="text-sm text-gray-600"><?php echo $hour[
+                                                    "heavy_count"
+                                                ]; ?> / <?php echo $hour[
+     "total_reports"
+ ]; ?> heavy</span>
                                             </div>
                                             <div class="w-full bg-gray-200 rounded-full h-2">
-                                                <div class="bg-orange-600 h-2 rounded-full" style="width: <?php echo $hour['total_reports'] > 0 ? ($hour['heavy_count'] / $hour['total_reports']) * 100 : 0; ?>%"></div>
+                                                <div class="bg-orange-600 h-2 rounded-full" style="width: <?php echo $hour[
+                                                    "total_reports"
+                                                ] > 0
+                                                    ? ($hour["heavy_count"] /
+                                                            $hour[
+                                                                "total_reports"
+                                                            ]) *
+                                                        100
+                                                    : 0; ?>%"></div>
                                             </div>
                                         </div>
                                     <?php endforeach; ?>
@@ -500,30 +591,48 @@ function getStatusBadge($status) {
                                         <tr class="hover:bg-gray-50">
                                             <td class="px-6 py-4 whitespace-nowrap">
                                                 <div class="text-sm font-medium text-gray-900">
-                                                    <?php echo htmlspecialchars($user['name']); ?>
+                                                    <?php echo htmlspecialchars(
+                                                        $user["name"],
+                                                    ); ?>
                                                 </div>
                                             </td>
                                             <td class="px-6 py-4 whitespace-nowrap">
                                                 <div class="text-sm text-gray-600">
-                                                    <?php echo htmlspecialchars($user['email']); ?>
+                                                    <?php echo htmlspecialchars(
+                                                        $user["email"],
+                                                    ); ?>
                                                 </div>
                                             </td>
                                             <td class="px-6 py-4 whitespace-nowrap">
                                                 <?php
                                                 $roleColors = [
-                                                    'Admin' => 'bg-red-100 text-red-800 border-red-300',
-                                                    'Driver' => 'bg-blue-100 text-blue-800 border-blue-300',
-                                                    'Commuter' => 'bg-gray-100 text-gray-800 border-gray-300'
+                                                    "Admin" =>
+                                                        "bg-red-100 text-red-800 border-red-300",
+                                                    "Driver" =>
+                                                        "bg-blue-100 text-blue-800 border-blue-300",
+                                                    "Commuter" =>
+                                                        "bg-gray-100 text-gray-800 border-gray-300",
                                                 ];
-                                                $roleColor = $roleColors[$user['role']] ?? 'bg-gray-100 text-gray-800 border-gray-300';
+                                                $roleColor =
+                                                    $roleColors[
+                                                        $user["role"]
+                                                    ] ??
+                                                    "bg-gray-100 text-gray-800 border-gray-300";
                                                 ?>
                                                 <span class="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full border <?php echo $roleColor; ?>">
-                                                    <?php echo htmlspecialchars($user['role']); ?>
+                                                    <?php echo htmlspecialchars(
+                                                        $user["role"],
+                                                    ); ?>
                                                 </span>
                                             </td>
                                             <td class="px-6 py-4 whitespace-nowrap">
                                                 <div class="text-sm text-gray-600">
-                                                    <?php echo date('M d, Y', strtotime($user['created_at'])); ?>
+                                                    <?php echo date(
+                                                        "M d, Y",
+                                                        strtotime(
+                                                            $user["created_at"],
+                                                        ),
+                                                    ); ?>
                                                 </div>
                                             </td>
                                         </tr>
@@ -559,8 +668,10 @@ function getStatusBadge($status) {
 <script>
     (function () {
         let lastReportTimestamp = <?php
-            $latest = !empty($recent_reports) ? $recent_reports[0]['timestamp'] : null;
-            echo $latest ? json_encode($latest) : 'null';
+        $latest = !empty($recent_reports)
+            ? $recent_reports[0]["timestamp"]
+            : null;
+        echo $latest ? json_encode($latest) : "null";
         ?>;
         let notificationAudio;
 
@@ -691,4 +802,3 @@ function getStatusBadge($status) {
     })();
 </script>
 </html>
-

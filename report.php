@@ -4,18 +4,20 @@
  * Allows users to submit real-time crowding and delay reports
  */
 
-require_once 'auth_helper.php';
+require_once "auth_helper.php";
 secureSessionStart();
-require_once 'db.php';
+require_once "db.php";
 
-// Check if user is logged in
-if (!isset($_SESSION['user_id'])) {
-    header('Location: login.php');
-    exit;
+// Check if user is logged in - redirect guests with a message
+if (!isset($_SESSION["user_id"])) {
+    $_SESSION["redirect_after_login"] = "report.php";
+    $_SESSION["login_message"] = "You need to be logged in to submit a report.";
+    header("Location: login.php");
+    exit();
 }
 
-$error = '';
-$success = '';
+$error = "";
+$success = "";
 $routes_list = [];
 
 // Fetch available routes (from route_definitions with at least one stop)
@@ -29,103 +31,138 @@ try {
     ");
     $routes_list = $stmt->fetchAll(PDO::FETCH_ASSOC);
     // Fetch profile image for nav
-    if (isset($_SESSION['user_id'])) {
+    if (isset($_SESSION["user_id"])) {
         $stmt = $pdo->prepare("SELECT profile_image FROM users WHERE id = ?");
-        $stmt->execute([$_SESSION['user_id']]);
+        $stmt->execute([$_SESSION["user_id"]]);
         $user_profile_row = $stmt->fetch(PDO::FETCH_ASSOC);
-        $user_profile_data = $user_profile_row ?: ['profile_image' => null];
-        if ($user_profile_data['profile_image']) {
-            $_SESSION['profile_image'] = $user_profile_data['profile_image'];
+        $user_profile_data = $user_profile_row ?: ["profile_image" => null];
+        if ($user_profile_data["profile_image"]) {
+            $_SESSION["profile_image"] = $user_profile_data["profile_image"];
         }
     } else {
-        $user_profile_data = ['profile_image' => null];
+        $user_profile_data = ["profile_image" => null];
     }
 } catch (PDOException $e) {
     error_log("Error fetching routes: " . $e->getMessage());
-    $user_profile_data = ['profile_image' => null];
+    $user_profile_data = ["profile_image" => null];
 }
 
 // Haversine distance in km
-function distanceKm($lat1, $lng1, $lat2, $lng2) {
+function distanceKm($lat1, $lng1, $lat2, $lng2)
+{
     $earthRadius = 6371;
     $dLat = deg2rad($lat2 - $lat1);
     $dLng = deg2rad($lng2 - $lng1);
-    $a = sin($dLat/2)*sin($dLat/2) + cos(deg2rad($lat1))*cos(deg2rad($lat2))*sin($dLng/2)*sin($dLng/2);
-    $c = 2 * atan2(sqrt($a), sqrt(1-$a));
+    $a =
+        sin($dLat / 2) * sin($dLat / 2) +
+        cos(deg2rad($lat1)) *
+            cos(deg2rad($lat2)) *
+            sin($dLng / 2) *
+            sin($dLng / 2);
+    $c = 2 * atan2(sqrt($a), sqrt(1 - $a));
     return $earthRadius * $c;
 }
 
 // Process report submission
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $route_definition_id = isset($_POST['route_definition_id']) ? (int)$_POST['route_definition_id'] : 0;
-    $crowd_level = $_POST['crowd_level'] ?? '';
-    $delay_reason = trim($_POST['delay_reason'] ?? '');
-    $latitude = isset($_POST['latitude']) && $_POST['latitude'] !== '' ? (float)$_POST['latitude'] : null;
-    $longitude = isset($_POST['longitude']) && $_POST['longitude'] !== '' ? (float)$_POST['longitude'] : null;
-    
+if ($_SERVER["REQUEST_METHOD"] === "POST") {
+    $route_definition_id = isset($_POST["route_definition_id"])
+        ? (int) $_POST["route_definition_id"]
+        : 0;
+    $crowd_level = $_POST["crowd_level"] ?? "";
+    $delay_reason = trim($_POST["delay_reason"] ?? "");
+    $latitude =
+        isset($_POST["latitude"]) && $_POST["latitude"] !== ""
+            ? (float) $_POST["latitude"]
+            : null;
+    $longitude =
+        isset($_POST["longitude"]) && $_POST["longitude"] !== ""
+            ? (float) $_POST["longitude"]
+            : null;
+
     if ($route_definition_id <= 0 || empty($crowd_level)) {
-        $error = 'Please select a route and crowd level.';
-    } elseif (!in_array($crowd_level, ['Light', 'Moderate', 'Heavy'])) {
-        $error = 'Invalid crowd level selected.';
+        $error = "Please select a route and crowd level.";
+    } elseif (!in_array($crowd_level, ["Light", "Moderate", "Heavy"])) {
+        $error = "Invalid crowd level selected.";
     } elseif ($latitude === null || $longitude === null) {
-        $error = 'Please set your location on the map or use GPS so we can confirm you are on or near the route.';
+        $error =
+            "Please set your location on the map or use GPS so we can confirm you are on or near the route.";
     } else {
         try {
             $pdo = getDBConnection();
-            
-            $stmt = $pdo->prepare("SELECT id, name FROM route_definitions WHERE id = ?");
+
+            $stmt = $pdo->prepare(
+                "SELECT id, name FROM route_definitions WHERE id = ?",
+            );
             $stmt->execute([$route_definition_id]);
             $route = $stmt->fetch(PDO::FETCH_ASSOC);
-            
+
             if (!$route) {
-                $error = 'Selected route not found. Please select a valid route.';
+                $error =
+                    "Selected route not found. Please select a valid route.";
             } else {
-                $stmt = $pdo->prepare("SELECT latitude, longitude FROM route_stops WHERE route_definition_id = ? ORDER BY stop_order");
+                $stmt = $pdo->prepare(
+                    "SELECT latitude, longitude FROM route_stops WHERE route_definition_id = ? ORDER BY stop_order",
+                );
                 $stmt->execute([$route_definition_id]);
                 $stops = $stmt->fetchAll(PDO::FETCH_ASSOC);
-                
+
                 if (empty($stops)) {
-                    $error = 'This route has no stops defined. Report cannot be validated.';
+                    $error =
+                        "This route has no stops defined. Report cannot be validated.";
                 } else {
                     $minDist = null;
                     foreach ($stops as $stop) {
-                        $d = distanceKm($latitude, $longitude, (float)$stop['latitude'], (float)$stop['longitude']);
-                        if ($minDist === null || $d < $minDist) $minDist = $d;
+                        $d = distanceKm(
+                            $latitude,
+                            $longitude,
+                            (float) $stop["latitude"],
+                            (float) $stop["longitude"],
+                        );
+                        if ($minDist === null || $d < $minDist) {
+                            $minDist = $d;
+                        }
                     }
                     $thresholdKm = 0.5;
                     if ($minDist > $thresholdKm) {
-                        $error = 'Your location must be on or near the selected route (within about 500 m of a stop) to submit a report. Current distance to nearest stop: ' . number_format($minDist * 1000, 0) . ' m.';
+                        $error =
+                            "Your location must be on or near the selected route (within about 500 m of a stop) to submit a report. Current distance to nearest stop: " .
+                            number_format($minDist * 1000, 0) .
+                            " m.";
                     } else {
                         $geofence_validated = 1;
-                        $trust_score = 1.00;
-                        
+                        $trust_score = 1.0;
+
                         $stmt = $pdo->prepare("
                             INSERT INTO reports (user_id, route_definition_id, puv_id, crowd_level, delay_reason, latitude, longitude, geofence_validated, trust_score)
                             VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?)
                         ");
                         $stmt->execute([
-                            $_SESSION['user_id'],
+                            $_SESSION["user_id"],
                             $route_definition_id,
                             $crowd_level,
                             $delay_reason ?: null,
                             $latitude,
                             $longitude,
                             $geofence_validated,
-                            $trust_score
+                            $trust_score,
                         ]);
-                        
+
                         // Update user's trust score for submitting a report
-                        require_once 'trust_helper.php';
-                        updateUserTrustScore($_SESSION['user_id'], 'Report submitted: +5 points');
-                        
-                        $success = 'Report submitted successfully! Thank you for your contribution.';
+                        require_once "trust_helper.php";
+                        updateUserTrustScore(
+                            $_SESSION["user_id"],
+                            "Report submitted: +5 points",
+                        );
+
+                        $success =
+                            "Report submitted successfully! Thank you for your contribution.";
                         $_POST = [];
                     }
                 }
             }
         } catch (PDOException $e) {
             error_log("Report submission error: " . $e->getMessage());
-            $error = 'Failed to submit report. Please try again.';
+            $error = "Failed to submit report. Please try again.";
         }
     }
 }
@@ -177,24 +214,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             background-color: var(--transit-info);
             color: #1f2933;
         }
-        
+
         /* Glassmorphism styles */
-        .glass {
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
-            -webkit-backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
-        }
-        
         .glass-nav {
-            background: rgba(34, 51, 92, 0.8);
-            backdrop-filter: blur(10px);
-            -webkit-backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            box-shadow: 0 4px 16px 0 rgba(31, 38, 135, 0.3);
+            background: rgba(34, 51, 92, 0.75);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.35), 0 2px 8px 0 rgba(0,0,0,0.15);
+            transition: background 0.3s ease, box-shadow 0.3s ease, top 0.3s ease;
         }
-        
+        .glass-nav.scrolled {
+            background: rgba(34, 51, 92, 0.92);
+            box-shadow: 0 12px 40px 0 rgba(31, 38, 135, 0.5), 0 4px 12px 0 rgba(0,0,0,0.25);
+        }
+
         .glass-card {
             background: rgba(255, 255, 255, 0.15);
             backdrop-filter: blur(15px);
@@ -202,7 +236,55 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             border: 1px solid rgba(255, 255, 255, 0.3);
             box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.25);
         }
-        
+
+        /* Nav link: box only shows on hover or when active (current page) */
+        .nav-link {
+            display: inline-block;
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: #e5e7eb;
+            border: 1px solid transparent;
+            transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+            text-decoration: none;
+        }
+        .nav-link:hover {
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-color: rgba(255, 255, 255, 0.25);
+            color: #ffffff;
+        }
+        .nav-link.active {
+            background: rgba(255, 255, 255, 0.25);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-color: rgba(255, 255, 255, 0.3);
+            color: #ffffff;
+        }
+        .nav-link-mobile {
+            display: block;
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: #e5e7eb;
+            border: 1px solid transparent;
+            transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+            text-decoration: none;
+        }
+        .nav-link-mobile:hover {
+            background: rgba(255, 255, 255, 0.15);
+            border-color: rgba(255, 255, 255, 0.25);
+            color: #ffffff;
+        }
+        .nav-link-mobile.active {
+            background: rgba(255, 255, 255, 0.25);
+            border-color: rgba(255, 255, 255, 0.3);
+            color: #ffffff;
+        }
+
         .glass-input {
             background: rgba(255, 255, 255, 0.1);
             backdrop-filter: blur(10px);
@@ -210,13 +292,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             border: 1px solid rgba(255, 255, 255, 0.2);
             color: white;
         }
-        
+
         .glass-input:focus {
             background: rgba(255, 255, 255, 0.2);
             border-color: var(--transit-info);
             box-shadow: 0 0 0 3px rgba(251, 191, 36, 0.3);
         }
-        
+
         /* Fix map positioning to prevent header overlap */
         #report-route-map {
             position: relative !important;
@@ -233,24 +315,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 </head>
 <body class="bg-[var(--transit-foundation)]">
     <!-- Navigation Bar -->
-    <nav class="fixed top-0 inset-x-0 z-30 glass-nav text-white shadow-lg">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex justify-between items-center h-16">
+    <nav id="floatingNav" class="fixed top-4 left-1/2 -translate-x-1/2 z-30 glass-nav text-white rounded-2xl w-[calc(100%-2rem)] max-w-7xl">
+        <div class="px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-14">
                 <div class="flex items-center space-x-8">
                     <a href="index.php" id="brandLink" class="brand-font text-xl sm:text-2xl font-bold text-white whitespace-nowrap">Transport Ops</a>
                     <div class="hidden md:flex space-x-4">
-                        <a href="user_dashboard.php" class="text-gray-100 hover:text-white px-3 py-2 rounded-md text-sm font-medium">Home</a>
-                        <a href="about.php" class="text-gray-100 hover:text-white px-3 py-2 rounded-md text-sm font-medium">About</a>
-                        <a href="report.php" class="bg-blue-500 text-white px-3 py-2 rounded-md text-sm font-medium border-b-2 border-blue-800">Submit Report</a>
-                        <a href="reports_map.php" class="text-gray-100 hover:text-white px-3 py-2 rounded-md text-sm font-medium">Reports Map</a>
-                        <a href="routes.php" class="text-gray-100 hover:text-white px-3 py-2 rounded-md text-sm font-medium">Routes</a>
+                        <a href="user_dashboard.php" class="nav-link">Home</a>
+                        <a href="about.php" class="nav-link">About</a>
+                        <a href="report.php" class="nav-link active">Submit Report</a>
+                        <a href="reports_map.php" class="nav-link">Reports Map</a>
+                        <a href="routes.php" class="nav-link">Routes</a>
                     </div>
-                    <div id="mobileMenu" class="md:hidden hidden absolute top-16 left-0 right-0 bg-[#1E3A8A] text-white flex flex-col space-y-1 px-4 py-2 z-20">
-                        <a href="user_dashboard.php" class="block px-3 py-2 rounded-md text-sm font-medium">Home</a>
-                        <a href="about.php" class="block px-3 py-2 rounded-md text-sm font-medium">About</a>
-                        <a href="report.php" class="block px-3 py-2 rounded-md text-sm font-medium">Submit Report</a>
-                        <a href="reports_map.php" class="block px-3 py-2 rounded-md text-sm font-medium">Reports Map</a>
-                        <a href="routes.php" class="block px-3 py-2 rounded-md text-sm font-medium">Routes</a>
+                    <div id="mobileMenu" class="md:hidden hidden absolute top-full left-0 right-0 mt-2 text-white flex flex-col space-y-1 px-4 py-3 z-20 rounded-2xl" style="background: rgba(34,51,92,0.95); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid rgba(255,255,255,0.15); box-shadow: 0 8px 32px 0 rgba(31,38,135,0.4);">
+                        <a href="user_dashboard.php" class="nav-link-mobile">Home</a>
+                        <a href="about.php" class="nav-link-mobile">About</a>
+                        <a href="report.php" class="nav-link-mobile active">Submit Report</a>
+                        <a href="reports_map.php" class="nav-link-mobile">Reports Map</a>
+                        <a href="routes.php" class="nav-link-mobile">Routes</a>
                     </div>
                 </div>
                 <div class="relative flex items-center gap-2 sm:gap-3">
@@ -258,20 +340,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             class="flex items-center gap-2 px-2 py-1.5 rounded-full hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-white/60">
                         <div class="hidden sm:flex flex-col items-end leading-tight">
                             <span class="text-xs sm:text-sm text-white font-medium">
-                                <?php echo htmlspecialchars($_SESSION['user_name']); ?>
+                                <?php echo htmlspecialchars(
+                                    $_SESSION["user_name"],
+                                ); ?>
                             </span>
                             <span class="text-[11px] text-blue-100">
-                                <?php echo htmlspecialchars($_SESSION['role']); ?>
+                                <?php echo htmlspecialchars(
+                                    $_SESSION["role"],
+                                ); ?>
                             </span>
                         </div>
                         <div class="flex items-center gap-1">
-                            <?php if (!empty($user_profile_data['profile_image'])): ?>
-                                <img src="uploads/<?php echo htmlspecialchars($user_profile_data['profile_image']); ?>"
+                            <?php if (
+                                !empty($user_profile_data["profile_image"])
+                            ): ?>
+                                <img src="uploads/<?php echo htmlspecialchars(
+                                    $user_profile_data["profile_image"],
+                                ); ?>"
                                      alt="Profile"
                                      class="h-8 w-8 rounded-full object-cover border-2 border-white">
                             <?php else: ?>
                                 <div class="h-8 w-8 rounded-full bg-[#10B981] flex items-center justify-center text-white text-sm font-semibold">
-                                    <?php echo strtoupper(substr($_SESSION['user_name'] ?? 'U', 0, 1)); ?>
+                                    <?php echo strtoupper(
+                                        substr(
+                                            $_SESSION["user_name"] ?? "U",
+                                            0,
+                                            1,
+                                        ),
+                                    ); ?>
                                 </div>
                             <?php endif; ?>
                             <svg class="w-4 h-4 text-blue-100" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -280,15 +376,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         </div>
                     </button>
                     <div id="profileMenu"
-                         class="hidden absolute right-0 top-11 w-44 bg-white text-gray-800 rounded-lg shadow-lg border border-gray-100 py-1 z-40">
+                         class="hidden absolute right-0 top-11 w-48 rounded-lg shadow-lg py-1 z-40"
+                         style="background: rgba(34,51,92,0.92); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid rgba(255,255,255,0.15); box-shadow: 0 8px 32px 0 rgba(31,38,135,0.4);">
                         <a href="profile.php"
-                           class="block px-3 py-2 text-sm hover:bg-gray-50">
+                           class="block px-3 py-2 text-sm text-white hover:bg-white/10 rounded-sm mx-1">
                             View &amp; Edit Profile
                         </a>
-                        <a href="public_profile.php?id=<?php echo $_SESSION['user_id']; ?>" class="block px-3 py-2 text-sm hover:bg-gray-50">View Public Profile</a>
-                        <div class="my-1 border-t border-gray-100"></div>
+                        <a href="public_profile.php?id=<?php echo $_SESSION[
+                            "user_id"
+                        ]; ?>" class="block px-3 py-2 text-sm text-white hover:bg-white/10 rounded-sm mx-1">View Public Profile</a>
+                        <div class="my-1 border-t border-white/20"></div>
                         <a href="logout.php"
-                           class="block px-3 py-2 text-sm text-red-600 hover:bg-red-50">
+                           class="block px-3 py-2 text-sm text-red-300 hover:bg-white/10 rounded-sm mx-1">
                             Logout
                         </a>
                     </div>
@@ -298,33 +397,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </nav>
 
     <!-- Main Content -->
-    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-8">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 sm:pt-28 pb-8">
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8 items-start">
         <div class="glass-card rounded-2xl shadow-md p-6 sm:p-8">
             <h2 class="text-3xl font-bold text-gray-800 mb-6">Submit Report</h2>
             <p class="text-gray-600 mb-6">Help improve transportation services by reporting crowding levels and delays in real-time.</p>
-            
+
             <?php if ($error): ?>
                 <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
                     <?php echo htmlspecialchars($error); ?>
                 </div>
             <?php endif; ?>
-            
+
             <?php if ($success): ?>
                 <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">
                     <?php echo htmlspecialchars($success); ?>
                 </div>
             <?php endif; ?>
-            
+
             <form method="POST" action="" id="reportForm" class="space-y-6" onsubmit="return validateForm()">
                 <div>
-                    <label for="route_definition_id" class="block text-sm font-medium text-gray-700 mb-2">Select Route</label>
-                    <select id="route_definition_id" name="route_definition_id" required
-                            class="w-full px-4 py-2 glass-input rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
-                        <option value="">-- Select a Route --</option>
+                    <label for="route_definition_id" class="block text-sm font-medium text-gray-700 mb-2">Choose a Route <span class="text-gray-400">(required)</span></label>
+                            <select id="route_definition_id" name="route_definition_id" required
+                                class="w-full px-4 py-2 glass-input rounded-md focus:outline-none focus:ring-2 focus:ring-blue-300 text-[var(--transit-primary-route)] bg-[var(--transit-foundation)] font-semibold placeholder-gray-400">
+                        <option value="">Please choose a route...</option>
                         <?php foreach ($routes_list as $r): ?>
-                            <option value="<?php echo (int)$r['id']; ?>" data-route="<?php echo htmlspecialchars($r['name']); ?>">
-                                <?php echo htmlspecialchars($r['name']); ?>
+                            <option value="<?php echo (int) $r[
+                                "id"
+                            ]; ?>" data-route="<?php echo htmlspecialchars(
+    $r["name"],
+); ?>">
+                                <?php echo htmlspecialchars($r["name"]); ?>
                             </option>
                         <?php endforeach; ?>
                     </select>
@@ -332,7 +435,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         <p class="text-sm text-amber-600 mt-1">No routes available. Ask an admin to add routes in Manage Routes.</p>
                     <?php endif; ?>
                 </div>
-                
+
                 <div>
                     <label for="crowd_level" class="block text-sm font-medium text-gray-700 mb-2">Crowd Level</label>
                     <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
@@ -359,37 +462,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         </label>
                     </div>
                 </div>
-                
+
                 <div>
-                    <label for="delay_reason" class="block text-sm font-medium text-gray-700 mb-2">Delay Reason (Optional)</label>
-                    <select id="delay_reason" name="delay_reason"
-                            class="w-full px-4 py-2 glass-input rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
-                        <option value="">-- No delay --</option>
-                        <option value="Traffic jam">Traffic jam</option>
-                        <option value="Mechanical issues">Mechanical issues</option>
-                        <option value="Large number of passengers">Large number of passengers</option>
-                        <option value="Weather conditions">Weather conditions</option>
-                        <option value="Accident">Accident</option>
-                        <option value="Other">Other</option>
+                    <label for="delay_reason" class="block text-sm font-medium text-gray-700 mb-2">Reason for Delay <span class="text-gray-400">(optional)</span></label>
+                            <select id="delay_reason" name="delay_reason"
+                                class="w-full px-4 py-2 glass-input rounded-md focus:outline-none focus:ring-2 focus:ring-blue-300 text-[var(--transit-primary-route)] bg-[var(--transit-foundation)] font-semibold placeholder-gray-400">
+                        <option value="">No delay</option>
+                        <option value="Traffic jam">Traffic jam / Road congestion</option>
+                        <option value="Mechanical issues">Mechanical or vehicle issues</option>
+                        <option value="Large number of passengers">Too many passengers</option>
+                        <option value="Weather conditions">Bad weather</option>
+                        <option value="Accident">Accident on route</option>
+                        <option value="Other">Other (please specify below)</option>
                     </select>
                 </div>
-                
+
                 <div class="glass-card p-4 rounded-xl">
                     <p class="text-sm text-gray-700 mb-2">
                         <strong>Report location:</strong> Click on the map to pin where you are (pins snap to the nearest road). Or use GPS below.
                     </p>
-                    <button type="button" onclick="getLocation()" 
-                            class="glass glass-input px-4 py-2 rounded-lg hover:bg-white/20 transition duration-150 font-medium text-sm min-h-[48px]">
-                        Use my current location (GPS)
+                    <button type="button" onclick="getLocation()"
+                            class="glass glass-input px-4 py-2 rounded-lg bg-[var(--transit-info)] text-[var(--transit-primary-route)] font-semibold hover:bg-yellow-100 hover:text-[var(--transit-primary-route)] transition duration-150 min-h-[48px] shadow-md border border-yellow-300">
+                        Use My Current Location
                     </button>
                     <input type="hidden" id="latitude" name="latitude">
                     <input type="hidden" id="longitude" name="longitude">
                     <p id="locationStatus" class="text-xs text-gray-600 mt-2"></p>
                 </div>
-                
-                <button type="submit" 
-                        class="w-full glass glass-input py-3 px-4 rounded-lg hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition duration-150 font-medium min-h-[48px]">
-                    Submit Report
+
+                <button type="submit"
+                        class="w-full glass glass-input py-3 px-4 rounded-lg bg-[var(--transit-secondary-route)] text-white font-bold hover:bg-[var(--transit-info)] hover:text-[var(--transit-primary-route)] focus:outline-none focus:ring-2 focus:ring-yellow-200 focus:ring-offset-2 transition duration-150 min-h-[48px] shadow-md border border-[var(--transit-secondary-route)]">
+                    Send My Report
                 </button>
             </form>
         </div>
@@ -440,13 +543,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             document.getElementById('locationStatus').textContent = message;
             document.getElementById('locationStatus').classList.add('text-red-600');
         }
-        
+
         function validateForm() {
             const routeId = document.getElementById('route_definition_id').value;
             const crowdLevel = document.querySelector('input[name="crowd_level"]:checked');
             const lat = document.getElementById('latitude').value;
             const lng = document.getElementById('longitude').value;
-            
+
             if (!routeId) {
                 alert('Please select a route.');
                 return false;
@@ -567,35 +670,52 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </script>
 <script>
     (function () {
+        // Floating nav scroll effect
+        const floatingNav = document.getElementById('floatingNav');
+        if (floatingNav) {
+            window.addEventListener('scroll', function () {
+                if (window.scrollY > 20) {
+                    floatingNav.classList.add('scrolled');
+                    floatingNav.style.top = '0.5rem';
+                } else {
+                    floatingNav.classList.remove('scrolled');
+                    floatingNav.style.top = '1rem';
+                }
+            });
+        }
+
+        // Profile menu toggle
         const btn = document.getElementById('profileMenuButton');
         const menu = document.getElementById('profileMenu');
-        if (!btn || !menu) return;
-        btn.addEventListener('click', function (e) {
-            e.stopPropagation();
-            menu.classList.toggle('hidden');
-        });
-        document.addEventListener('click', function () {
-            if (!menu.classList.contains('hidden')) {
-                menu.classList.add('hidden');
-            }
-        });
-            const brand = document.getElementById('brandLink');
-            const mobile = document.getElementById('mobileMenu');
-            if (brand && mobile) {
-                brand.addEventListener('click', function (e) {
-                    if (window.innerWidth < 768) {
-                        e.preventDefault();
-                        mobile.classList.toggle('hidden');
-                    }
-                });
-                document.addEventListener('click', function (ev) {
-                    if (mobile && !mobile.contains(ev.target) && ev.target !== brand) {
-                        mobile.classList.add('hidden');
-                    }
-                });
-            }
+        if (btn && menu) {
+            btn.addEventListener('click', function (e) {
+                e.stopPropagation();
+                menu.classList.toggle('hidden');
+            });
+            document.addEventListener('click', function () {
+                if (!menu.classList.contains('hidden')) {
+                    menu.classList.add('hidden');
+                }
+            });
+        }
+
+        // Mobile menu toggle
+        const brand = document.getElementById('brandLink');
+        const mobile = document.getElementById('mobileMenu');
+        if (brand && mobile) {
+            brand.addEventListener('click', function (e) {
+                if (window.innerWidth < 768) {
+                    e.preventDefault();
+                    mobile.classList.toggle('hidden');
+                }
+            });
+            document.addEventListener('click', function (ev) {
+                if (mobile && !mobile.contains(ev.target) && ev.target !== brand) {
+                    mobile.classList.add('hidden');
+                }
+            });
+        }
     })();
 </script>
 </body>
 </html>
-

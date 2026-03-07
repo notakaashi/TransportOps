@@ -4,154 +4,193 @@
  * Allows logged-in users to view and edit their profile details and profile picture
  */
 
-require_once 'auth_helper.php';
+require_once "auth_helper.php";
 secureSessionStart();
-require_once 'db.php';
+require_once "db.php";
 
-if (!isset($_SESSION['user_id'])) {
-    header('Location: login.php');
-    exit;
+if (!isset($_SESSION["user_id"])) {
+    header("Location: login.php");
+    exit();
 }
 
-$user_id = (int)$_SESSION['user_id'];
-$error = '';
-$success = '';
+$user_id = (int) $_SESSION["user_id"];
+$error = "";
+$success = "";
 
 try {
     $pdo = getDBConnection();
 
     // Load current user
-    $stmt = $pdo->prepare("SELECT id, name, email, profile_image FROM users WHERE id = ?");
+    $stmt = $pdo->prepare(
+        "SELECT id, name, email, profile_image FROM users WHERE id = ?",
+    );
     $stmt->execute([$user_id]);
     $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
     if (!$user) {
-        $error = 'User not found.';
+        $error = "User not found.";
     }
 } catch (PDOException $e) {
     error_log("Profile load error: " . $e->getMessage());
-    $error = 'Failed to load profile.';
+    $error = "Failed to load profile.";
 }
 
 // Handle profile image upload - SIMPLIFIED VERSION
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+if ($_SERVER["REQUEST_METHOD"] === "POST") {
     // Debug: Log everything for troubleshooting
     error_log("POST received: " . print_r($_POST, true));
     error_log("FILES received: " . print_r($_FILES, true));
-    
-    if (isset($_POST['action'])) {
-        if ($_POST['action'] === 'upload_image') {
+
+    if (isset($_POST["action"])) {
+        if ($_POST["action"] === "upload_image") {
             // Check if file was uploaded
-            if (!isset($_FILES['profile_image']) || $_FILES['profile_image']['error'] !== UPLOAD_ERR_OK) {
-                $error = 'Please select a file to upload. Error: ' . ($_FILES['profile_image']['error'] ?? 'unknown');
+            if (
+                !isset($_FILES["profile_image"]) ||
+                $_FILES["profile_image"]["error"] !== UPLOAD_ERR_OK
+            ) {
+                $error =
+                    "Please select a file to upload. Error: " .
+                    ($_FILES["profile_image"]["error"] ?? "unknown");
             } else {
-                $file = $_FILES['profile_image'];
-                
+                $file = $_FILES["profile_image"];
+
                 // Validate file
-                $allowed_types = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
+                $allowed_types = [
+                    "image/jpeg",
+                    "image/jpg",
+                    "image/png",
+                    "image/gif",
+                ];
                 $max_size = 5 * 1024 * 1024; // 5MB
-                
-                if (!in_array($file['type'], $allowed_types)) {
-                    $error = 'Invalid file type. Please upload JPG, PNG, or GIF images.';
-                } elseif ($file['size'] > $max_size) {
-                    $error = 'File too large. Maximum size is 5MB.';
+
+                if (!in_array($file["type"], $allowed_types)) {
+                    $error =
+                        "Invalid file type. Please upload JPG, PNG, or GIF images.";
+                } elseif ($file["size"] > $max_size) {
+                    $error = "File too large. Maximum size is 5MB.";
                 } else {
                     // Generate unique filename
-                    $extension = pathinfo($file['name'], PATHINFO_EXTENSION);
-                    $filename = 'profile_' . $user_id . '_' . time() . '.' . $extension;
-                    $upload_path = 'uploads/' . $filename;
-                    
+                    $extension = pathinfo($file["name"], PATHINFO_EXTENSION);
+                    $filename =
+                        "profile_" . $user_id . "_" . time() . "." . $extension;
+                    $upload_path = "uploads/" . $filename;
+
                     // Create uploads directory if it doesn't exist
-                    if (!is_dir('uploads')) {
-                        mkdir('uploads', 0755, true);
+                    if (!is_dir("uploads")) {
+                        mkdir("uploads", 0755, true);
                     }
-                    
+
                     // Move uploaded file
-                    if (move_uploaded_file($file['tmp_name'], $upload_path)) {
+                    if (move_uploaded_file($file["tmp_name"], $upload_path)) {
                         // Delete old profile image if exists
-                        if ($user['profile_image'] && file_exists('uploads/' . $user['profile_image'])) {
-                            unlink('uploads/' . $user['profile_image']);
+                        if (
+                            $user["profile_image"] &&
+                            file_exists("uploads/" . $user["profile_image"])
+                        ) {
+                            unlink("uploads/" . $user["profile_image"]);
                         }
-                        
+
                         // Update database
-                        $stmt = $pdo->prepare("UPDATE users SET profile_image = ? WHERE id = ?");
+                        $stmt = $pdo->prepare(
+                            "UPDATE users SET profile_image = ? WHERE id = ?",
+                        );
                         $stmt->execute([$filename, $user_id]);
-                        
-                        $user['profile_image'] = $filename;
-                        $_SESSION['profile_image'] = $filename;  // Update session for site-wide reflection
-                        $success = 'Profile picture updated successfully! Your image is now visible across the site.';
-                        
+
+                        $user["profile_image"] = $filename;
+                        $_SESSION["profile_image"] = $filename; // Update session for site-wide reflection
+                        $success =
+                            "Profile picture updated successfully! Your image is now visible across the site.";
+
                         // Debug: Log success
-                        error_log("Upload successful: filename=$filename, path=$upload_path");
+                        error_log(
+                            "Upload successful: filename=$filename, path=$upload_path",
+                        );
                     } else {
-                        $error = 'Failed to upload image. Please try again.';
-                        error_log("Upload failed: move_uploaded_file returned false");
+                        $error = "Failed to upload image. Please try again.";
+                        error_log(
+                            "Upload failed: move_uploaded_file returned false",
+                        );
                     }
                 }
             }
-        } elseif ($_POST['action'] === 'delete_image') {
+        } elseif ($_POST["action"] === "delete_image") {
             // Delete profile image
-            if ($user['profile_image'] && file_exists('uploads/' . $user['profile_image'])) {
-                unlink('uploads/' . $user['profile_image']);
+            if (
+                $user["profile_image"] &&
+                file_exists("uploads/" . $user["profile_image"])
+            ) {
+                unlink("uploads/" . $user["profile_image"]);
             }
-            
+
             // Update database
-            $stmt = $pdo->prepare("UPDATE users SET profile_image = NULL WHERE id = ?");
+            $stmt = $pdo->prepare(
+                "UPDATE users SET profile_image = NULL WHERE id = ?",
+            );
             $stmt->execute([$user_id]);
-            
-            $user['profile_image'] = null;
-            $_SESSION['profile_image'] = null;  // Update session for site-wide reflection
-            $success = 'Profile picture removed successfully!';
+
+            $user["profile_image"] = null;
+            $_SESSION["profile_image"] = null; // Update session for site-wide reflection
+            $success = "Profile picture removed successfully!";
         }
     }
 }
 
 // Handle profile update
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($error) && !isset($_POST['action'])) {
-    $name = trim($_POST['name'] ?? '');
-    $email = trim($_POST['email'] ?? '');
-    $new_password = $_POST['new_password'] ?? '';
-    $confirm_password = $_POST['confirm_password'] ?? '';
+if (
+    $_SERVER["REQUEST_METHOD"] === "POST" &&
+    empty($error) &&
+    !isset($_POST["action"])
+) {
+    $name = trim($_POST["name"] ?? "");
+    $email = trim($_POST["email"] ?? "");
+    $new_password = $_POST["new_password"] ?? "";
+    $confirm_password = $_POST["confirm_password"] ?? "";
 
-    if ($name === '' || $email === '') {
-        $error = 'Name and email are required.';
+    if ($name === "" || $email === "") {
+        $error = "Name and email are required.";
     } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        $error = 'Please enter a valid email address.';
-    } elseif ($new_password !== '' && strlen($new_password) < 6) {
-        $error = 'New password must be at least 6 characters.';
+        $error = "Please enter a valid email address.";
+    } elseif ($new_password !== "" && strlen($new_password) < 6) {
+        $error = "New password must be at least 6 characters.";
     } elseif ($new_password !== $confirm_password) {
-        $error = 'New password and confirmation do not match.';
+        $error = "New password and confirmation do not match.";
     } else {
         try {
             // Check email uniqueness (excluding current user)
-            $stmt = $pdo->prepare("SELECT id FROM users WHERE email = ? AND id != ?");
+            $stmt = $pdo->prepare(
+                "SELECT id FROM users WHERE email = ? AND id != ?",
+            );
             $stmt->execute([$email, $user_id]);
             if ($stmt->fetch()) {
-                $error = 'That email is already in use.';
+                $error = "That email is already in use.";
             } else {
                 // Build update query
-                if ($new_password !== '') {
+                if ($new_password !== "") {
                     $hashed = password_hash($new_password, PASSWORD_DEFAULT);
-                    $stmt = $pdo->prepare("UPDATE users SET name = ?, email = ?, password = ? WHERE id = ?");
+                    $stmt = $pdo->prepare(
+                        "UPDATE users SET name = ?, email = ?, password = ? WHERE id = ?",
+                    );
                     $stmt->execute([$name, $email, $hashed, $user_id]);
                 } else {
-                    $stmt = $pdo->prepare("UPDATE users SET name = ?, email = ? WHERE id = ?");
+                    $stmt = $pdo->prepare(
+                        "UPDATE users SET name = ?, email = ? WHERE id = ?",
+                    );
                     $stmt->execute([$name, $email, $user_id]);
                 }
 
                 // Update session
-                $_SESSION['user_name'] = $name;
-                $_SESSION['user_email'] = $email;
+                $_SESSION["user_name"] = $name;
+                $_SESSION["user_email"] = $email;
 
-                $success = 'Profile updated successfully.';
+                $success = "Profile updated successfully.";
 
                 // Refresh local user data
-                $user['name'] = $name;
-                $user['email'] = $email;
+                $user["name"] = $name;
+                $user["email"] = $email;
             }
         } catch (PDOException $e) {
             error_log("Profile update error: " . $e->getMessage());
-            $error = 'Failed to update profile. Please try again.';
+            $error = "Failed to update profile. Please try again.";
         }
     }
 }
@@ -177,6 +216,69 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($error) && !isset($_POST['act
             font-family: 'Poppins', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
             letter-spacing: 0.02em;
         }
+
+        /* Glassmorphism styles */
+        .glass-nav {
+            background: rgba(34, 51, 92, 0.75);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.35), 0 2px 8px 0 rgba(0,0,0,0.15);
+            transition: background 0.3s ease, box-shadow 0.3s ease, top 0.3s ease;
+        }
+        .glass-nav.scrolled {
+            background: rgba(34, 51, 92, 0.92);
+            box-shadow: 0 12px 40px 0 rgba(31, 38, 135, 0.5), 0 4px 12px 0 rgba(0,0,0,0.25);
+        }
+
+        /* Nav link: box only shows on hover or when active */
+        .nav-link {
+            display: inline-block;
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: #e5e7eb;
+            border: 1px solid transparent;
+            transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+            text-decoration: none;
+        }
+        .nav-link:hover {
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-color: rgba(255, 255, 255, 0.25);
+            color: #ffffff;
+        }
+        .nav-link.active {
+            background: rgba(255, 255, 255, 0.25);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-color: rgba(255, 255, 255, 0.3);
+            color: #ffffff;
+        }
+        .nav-link-mobile {
+            display: block;
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: #e5e7eb;
+            border: 1px solid transparent;
+            transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+            text-decoration: none;
+        }
+        .nav-link-mobile:hover {
+            background: rgba(255, 255, 255, 0.15);
+            border-color: rgba(255, 255, 255, 0.25);
+            color: #ffffff;
+        }
+        .nav-link-mobile.active {
+            background: rgba(255, 255, 255, 0.25);
+            border-color: rgba(255, 255, 255, 0.3);
+            color: #ffffff;
+        }
+
         .profile-image-preview {
             width: 120px;
             height: 120px;
@@ -229,25 +331,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($error) && !isset($_POST['act
 </head>
 <body class="bg-[var(--transit-foundation)] min-h-screen">
     <!-- Navigation Bar -->
-    <nav class="fixed top-0 inset-x-0 z-30 bg-[var(--transit-primary-route)] text-white shadow-sm">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex justify-between items-center h-16">
+    <nav id="floatingNav" class="fixed top-4 left-1/2 -translate-x-1/2 z-30 glass-nav text-white rounded-2xl w-[calc(100%-2rem)] max-w-7xl">
+        <div class="px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-14">
                 <div class="flex items-center space-x-8">
                     <a href="index.php" id="brandLink" class="brand-font text-xl sm:text-2xl font-bold text-white whitespace-nowrap">Transport Ops</a>
                     <div class="hidden md:flex space-x-4">
-                        <a href="user_dashboard.php" class="text-gray-100 hover:text-white px-3 py-2 rounded-md text-sm font-medium">Home</a>
-                        <a href="about.php" class="text-gray-100 hover:text-white px-3 py-2 rounded-md text-sm font-medium">About</a>
-                        <a href="user_dashboard.php" class="text-gray-100 hover:text-white px-3 py-2 rounded-md text-sm font-medium">Home</a>
-                        <a href="report.php" class="text-gray-100 hover:text-white px-3 py-2 rounded-md text-sm font-medium">Submit Report</a>
-                        <a href="reports_map.php" class="text-gray-100 hover:text-white px-3 py-2 rounded-md text-sm font-medium">Reports Map</a>
-                        <a href="routes.php" class="text-gray-100 hover:text-white px-3 py-2 rounded-md text-sm font-medium">Routes</a>
+                        <a href="user_dashboard.php" class="nav-link">Home</a>
+                        <a href="about.php" class="nav-link">About</a>
+                        <a href="report.php" class="nav-link">Submit Report</a>
+                        <a href="reports_map.php" class="nav-link">Reports Map</a>
+                        <a href="routes.php" class="nav-link">Routes</a>
                     </div>
-                    <div id="mobileMenu" class="md:hidden hidden absolute top-16 left-0 right-0 bg-[#1E3A8A] text-white flex flex-col space-y-1 px-4 py-2 z-20">
-                        <a href="user_dashboard.php" class="block px-3 py-2 rounded-md text-sm font-medium">Home</a>
-                        <a href="about.php" class="block px-3 py-2 rounded-md text-sm font-medium">About</a>
-                        <a href="report.php" class="block px-3 py-2 rounded-md text-sm font-medium">Submit Report</a>
-                        <a href="reports_map.php" class="block px-3 py-2 rounded-md text-sm font-medium">Reports Map</a>
-                        <a href="routes.php" class="block px-3 py-2 rounded-md text-sm font-medium">Routes</a>
+                    <div id="mobileMenu" class="md:hidden hidden absolute top-full left-0 right-0 mt-2 text-white flex flex-col space-y-1 px-4 py-3 z-20 rounded-2xl" style="background: rgba(34,51,92,0.95); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid rgba(255,255,255,0.15); box-shadow: 0 8px 32px 0 rgba(31,38,135,0.4);">
+                        <a href="user_dashboard.php" class="nav-link-mobile">Home</a>
+                        <a href="about.php" class="nav-link-mobile">About</a>
+                        <a href="report.php" class="nav-link-mobile">Submit Report</a>
+                        <a href="reports_map.php" class="nav-link-mobile">Reports Map</a>
+                        <a href="routes.php" class="nav-link-mobile">Routes</a>
                     </div>
                 </div>
                 <div class="relative flex items-center gap-2 sm:gap-3">
@@ -255,20 +356,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($error) && !isset($_POST['act
                             class="flex items-center gap-2 px-2 py-1.5 rounded-full hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-white/60">
                         <div class="hidden sm:flex flex-col items-end leading-tight">
                             <span class="text-xs sm:text-sm text-white font-medium">
-                                <?php echo htmlspecialchars($_SESSION['user_name']); ?>
+                                <?php echo htmlspecialchars(
+                                    $_SESSION["user_name"],
+                                ); ?>
                             </span>
                             <span class="text-[11px] text-blue-100">
-                                <?php echo htmlspecialchars($_SESSION['role'] ?? 'User'); ?>
+                                <?php echo htmlspecialchars(
+                                    $_SESSION["role"] ?? "User",
+                                ); ?>
                             </span>
                         </div>
                         <div class="flex items-center gap-1">
-                            <?php if ($user['profile_image']): ?>
-                                <img src="uploads/<?php echo htmlspecialchars($user['profile_image']); ?>"
+                            <?php if ($user["profile_image"]): ?>
+                                <img src="uploads/<?php echo htmlspecialchars(
+                                    $user["profile_image"],
+                                ); ?>"
                                      alt="Profile"
                                      class="h-8 w-8 rounded-full object-cover border-2 border-white">
                             <?php else: ?>
                                 <div class="h-8 w-8 rounded-full bg-[#10B981] flex items-center justify-center text-white text-sm font-semibold">
-                                    <?php echo strtoupper(substr($_SESSION['user_name'] ?? 'U', 0, 1)); ?>
+                                    <?php echo strtoupper(
+                                        substr(
+                                            $_SESSION["user_name"] ?? "U",
+                                            0,
+                                            1,
+                                        ),
+                                    ); ?>
                                 </div>
                             <?php endif; ?>
                             <svg class="w-4 h-4 text-blue-100" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -277,18 +390,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($error) && !isset($_POST['act
                         </div>
                     </button>
                     <div id="profileMenu"
-                         class="hidden absolute right-0 top-11 w-44 bg-white text-gray-800 rounded-lg shadow-lg border border-gray-100 py-1 z-40">
-                        <a href="profile.php" class="block px-3 py-2 text-sm hover:bg-gray-50<?php if (basename($_SERVER['PHP_SELF']) == 'profile.php') echo ' font-bold bg-gray-100'; ?>">View &amp; Edit Profile</a>
-                        <a href="public_profile.php?id=<?php echo $_SESSION['user_id']; ?>" class="block px-3 py-2 text-sm hover:bg-gray-50<?php if (basename($_SERVER['PHP_SELF']) == 'public_profile.php' && isset($_GET['id']) && $_GET['id'] == $_SESSION['user_id']) echo ' font-bold bg-gray-100'; ?>">View Public Profile</a>
-                        <div class="my-1 border-t border-gray-100"></div>
-                        <a href="logout.php" class="block px-3 py-2 text-sm text-red-600 hover:bg-red-50">Logout</a>
+                         class="hidden absolute right-0 top-11 w-48 rounded-lg shadow-lg py-1 z-40"
+                         style="background: rgba(34,51,92,0.92); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid rgba(255,255,255,0.15); box-shadow: 0 8px 32px 0 rgba(31,38,135,0.4);">
+                        <a href="profile.php" class="block px-3 py-2 text-sm text-white hover:bg-white/10 rounded-sm mx-1 bg-white/20 font-semibold">View &amp; Edit Profile</a>
+                        <a href="public_profile.php?id=<?php echo $_SESSION[
+                            "user_id"
+                        ]; ?>" class="block px-3 py-2 text-sm text-white hover:bg-white/10 rounded-sm mx-1">View Public Profile</a>
+                        <div class="my-1 border-t border-white/20"></div>
+                        <a href="logout.php" class="block px-3 py-2 text-sm text-red-300 hover:bg-white/10 rounded-sm mx-1">Logout</a>
                     </div>
                 </div>
             </div>
         </div>
     </nav>
 
-    <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-10">
+    <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 sm:pt-28 pb-12">
         <div class="bg-white rounded-2xl shadow-lg overflow-hidden">
             <!-- Profile Header -->
             <div class="profile-section">
@@ -296,30 +412,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($error) && !isset($_POST['act
                     <!-- Profile Image -->
                     <div class="relative group">
                         <div class="relative">
-                            <?php if ($user['profile_image']): ?>
-                                <img src="uploads/<?php echo htmlspecialchars($user['profile_image']); ?>" 
-                                     alt="Profile" 
+                            <?php if ($user["profile_image"]): ?>
+                                <img src="uploads/<?php echo htmlspecialchars(
+                                    $user["profile_image"],
+                                ); ?>"
+                                     alt="Profile"
                                      class="profile-image-preview">
                                 <div class="absolute inset-0 bg-black bg-opacity-0 rounded-full opacity-0 group-hover:opacity-10 transition-opacity duration-300"></div>
                             <?php else: ?>
                                 <div class="profile-image-placeholder">
-                                    <?php echo strtoupper(substr($user['name'] ?? 'U', 0, 1)); ?>
+                                    <?php echo strtoupper(
+                                        substr($user["name"] ?? "U", 0, 1),
+                                    ); ?>
                                     <div class="absolute inset-0 bg-black bg-opacity-0 rounded-full opacity-0 group-hover:opacity-10 transition-opacity duration-300"></div>
                                 </div>
                             <?php endif; ?>
-                            
+
                             <!-- Upload Button -->
                             <div class="relative">
                                 <form id="upload_form" method="POST" action="" enctype="multipart/form-data" class="hidden">
                                     <input type="hidden" name="action" value="upload_image">
-                                    <input type="file" 
-                                           id="profile_image" 
-                                           name="profile_image" 
-                                           accept="image/*" 
+                                    <input type="file"
+                                           id="profile_image"
+                                           name="profile_image"
+                                           accept="image/*"
                                            class="hidden"
                                            onchange="document.getElementById('upload_form').submit();">
                                 </form>
-                                <button type="button" 
+                                <button type="button"
                                         onclick="document.getElementById('profile_image').click();"
                                         class="absolute bottom-0 right-0 bg-blue-500 hover:bg-blue-600 text-white p-3 rounded-full shadow-lg transition-all duration-300 cursor-pointer hover:scale-105 upload-btn"
                                         title="Upload new picture">
@@ -331,10 +451,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($error) && !isset($_POST['act
                                 </button>
                             </div>
                             <!-- Delete Button (only if image exists) -->
-                            <?php if ($user['profile_image']): ?>
+                            <?php if ($user["profile_image"]): ?>
                                 <form method="POST" onsubmit="return confirm('Remove your profile picture? This action cannot be undone.');" class="inline">
                                     <input type="hidden" name="action" value="delete_image">
-                                    <button type="submit" 
+                                    <button type="submit"
                                             class="absolute top-0 right-0 bg-red-500 hover:bg-red-600 text-white p-2 rounded-full shadow-lg transition-all duration-300 cursor-pointer hover:scale-105 delete-btn"
                                             title="Remove profile picture">
                                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -345,32 +465,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($error) && !isset($_POST['act
                             <?php endif; ?>
                         </div>
                     </div>
-                    
+
                     <!-- User Info -->
                     <div class="flex-1">
                         <div>
                             <h1 class="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">My Profile</h1>
                             <p class="text-sm text-gray-600">Manage your account information and profile picture</p>
                         </div>
-                        
+
                         <?php if ($success): ?>
                             <div class="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg mb-6">
                                 <div class="flex items-center">
                                     <svg class="w-5 h-5 mr-2 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 0 01-2 0l-2 2v6m0 6h6l-2 2v6m0-6h6"></path>
                                     </svg>
-                                    <span><?php echo htmlspecialchars($success); ?></span>
+                                    <span><?php echo htmlspecialchars(
+                                        $success,
+                                    ); ?></span>
                                 </div>
                             </div>
                         <?php endif; ?>
-                        
+
                         <?php if ($error): ?>
                             <div class="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-6">
                                 <div class="flex items-center">
                                     <svg class="w-5 h-5 mr-2 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h8m-4-4h.01M12 8v4m0 4h8m-4-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                                     </svg>
-                                    <span><?php echo htmlspecialchars($error); ?></span>
+                                    <span><?php echo htmlspecialchars(
+                                        $error,
+                                    ); ?></span>
                                 </div>
                             </div>
                         <?php endif; ?>
@@ -387,7 +511,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($error) && !isset($_POST['act
                                 Full Name
                             </label>
                             <input type="text" id="name" name="name" required
-                                   value="<?php echo htmlspecialchars($user['name'] ?? ''); ?>"
+                                   value="<?php echo htmlspecialchars(
+                                       $user["name"] ?? "",
+                                   ); ?>"
                                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors">
                         </div>
 
@@ -396,7 +522,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($error) && !isset($_POST['act
                                 Email Address
                             </label>
                             <input type="email" id="email" name="email" required
-                                   value="<?php echo htmlspecialchars($user['email'] ?? ''); ?>"
+                                   value="<?php echo htmlspecialchars(
+                                       $user["email"] ?? "",
+                                   ); ?>"
                                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors">
                         </div>
                     </div>
@@ -437,16 +565,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($error) && !isset($_POST['act
     </div>
     <script>
         (function () {
+            // Floating nav scroll effect
+            const floatingNav = document.getElementById('floatingNav');
+            if (floatingNav) {
+                window.addEventListener('scroll', function () {
+                    if (window.scrollY > 20) {
+                        floatingNav.classList.add('scrolled');
+                        floatingNav.style.top = '0.5rem';
+                    } else {
+                        floatingNav.classList.remove('scrolled');
+                        floatingNav.style.top = '1rem';
+                    }
+                });
+            }
+
+            // Profile menu toggle
             const btn = document.getElementById('profileMenuButton');
             const menu = document.getElementById('profileMenu');
-            if (!btn || !menu) return;
+            if (btn && menu) {
+                btn.addEventListener('click', function (e) {
+                    e.stopPropagation();
+                    menu.classList.toggle('hidden');
+                });
+                document.addEventListener('click', function () { menu.classList.add('hidden'); });
+            }
+
+            // Mobile menu toggle
             const brand = document.getElementById('brandLink');
             const mobile = document.getElementById('mobileMenu');
-            btn.addEventListener('click', function (e) {
-                e.stopPropagation();
-                menu.classList.toggle('hidden');
-            });
-            document.addEventListener('click', function () { menu.classList.add('hidden'); });
             if (brand && mobile) {
                 brand.addEventListener('click', function (e) {
                     if (window.innerWidth < 768) {

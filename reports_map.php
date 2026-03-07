@@ -1,20 +1,16 @@
 <?php
-require_once 'auth_helper.php';
+require_once "auth_helper.php";
 secureSessionStart();
-require_once 'db.php';
-require_once 'trust_helper.php';
-require_once 'trust_badge_helper.php';
+require_once "db.php";
+require_once "trust_helper.php";
+require_once "trust_badge_helper.php";
 
-if (!isset($_SESSION['user_id'])) {
-    header('Location: login.php');
-    exit;
-}
-
-$user_profile_data = ['profile_image' => null];
-$selectedRoute = isset($_GET['route']) ? $_GET['route'] : '';
+$is_logged_in = isset($_SESSION["user_id"]);
+$user_profile_data = ["profile_image" => null];
+$selectedRoute = isset($_GET["route"]) ? $_GET["route"] : "";
 try {
     $pdo = getDBConnection();
-    
+
     // Get all available routes for filtering
     $routesStmt = $pdo->query("
         SELECT DISTINCT COALESCE(rd.name, p.current_route) as route_name
@@ -26,17 +22,17 @@ try {
         ORDER BY route_name
     ");
     $availableRoutes = $routesStmt->fetchAll(PDO::FETCH_COLUMN);
-    
+
     // Build reports query with route filter
     $whereClause = "WHERE r.latitude IS NOT NULL AND r.longitude IS NOT NULL";
     $params = [];
-    
+
     if (!empty($selectedRoute)) {
         $whereClause .= " AND (rd.name = ? OR p.current_route = ?)";
         $params[] = $selectedRoute;
         $params[] = $selectedRoute;
     }
-    
+
     $stmt = $pdo->prepare("
         SELECT r.id, r.crowd_level, r.delay_reason, r.timestamp, r.latitude, r.longitude,
                r.is_verified, r.peer_verifications, r.status,
@@ -52,27 +48,30 @@ try {
     ");
     $stmt->execute($params);
     $reports = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    
+
     // Enhance reports with trust badge information
     foreach ($reports as &$report) {
-        if ($report['user_id']) {
-            $report['trust_score'] = $report['trust_score'] ?? 50.0;
-            $report['trust_badge'] = getTrustBadge($report['trust_score']);
+        if ($report["user_id"]) {
+            $report["trust_score"] = $report["trust_score"] ?? 50.0;
+            $report["trust_badge"] = getTrustBadge($report["trust_score"]);
         } else {
-            $report['trust_score'] = 50.0;
-            $report['trust_badge'] = getTrustBadge(50.0);
+            $report["trust_score"] = 50.0;
+            $report["trust_badge"] = getTrustBadge(50.0);
         }
     }
-    // Fetch profile image for nav
-    $stmt = $pdo->prepare("SELECT profile_image FROM users WHERE id = ?");
-    $stmt->execute([$_SESSION['user_id']]);
-    $row = $stmt->fetch(PDO::FETCH_ASSOC);
-    if ($row && $row['profile_image']) {
-        $user_profile_data['profile_image'] = $row['profile_image'];
-        $_SESSION['profile_image'] = $row['profile_image'];
+
+    // Fetch profile image for logged-in users only
+    if ($is_logged_in) {
+        $stmt = $pdo->prepare("SELECT profile_image FROM users WHERE id = ?");
+        $stmt->execute([$_SESSION["user_id"]]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        if ($row && $row["profile_image"]) {
+            $user_profile_data["profile_image"] = $row["profile_image"];
+            $_SESSION["profile_image"] = $row["profile_image"];
+        }
     }
 } catch (PDOException $e) {
-    error_log('Reports map error: ' . $e->getMessage());
+    error_log("Reports map error: " . $e->getMessage());
     $reports = [];
 }
 ?>
@@ -100,7 +99,7 @@ try {
         }
         .verifiable-marker { animation: pulse 2s infinite; }
         .selected-marker { animation: pulse 2s infinite; }
-        
+
         /* Fix map positioning to prevent header overlap */
         #map {
             position: relative !important;
@@ -110,24 +109,21 @@ try {
             position: relative !important;
             z-index: 1 !important;
         }
-        
+
         /* Glassmorphism styles */
-        .glass {
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
-            -webkit-backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
-        }
-        
         .glass-nav {
-            background: rgba(34, 51, 92, 0.8);
-            backdrop-filter: blur(10px);
-            -webkit-backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            box-shadow: 0 4px 16px 0 rgba(31, 38, 135, 0.3);
+            background: rgba(34, 51, 92, 0.75);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.35), 0 2px 8px 0 rgba(0,0,0,0.15);
+            transition: background 0.3s ease, box-shadow 0.3s ease, top 0.3s ease;
         }
-        
+        .glass-nav.scrolled {
+            background: rgba(34, 51, 92, 0.92);
+            box-shadow: 0 12px 40px 0 rgba(31, 38, 135, 0.5), 0 4px 12px 0 rgba(0,0,0,0.25);
+        }
+
         .glass-card {
             background: rgba(255, 255, 255, 0.15);
             backdrop-filter: blur(15px);
@@ -135,7 +131,55 @@ try {
             border: 1px solid rgba(255, 255, 255, 0.3);
             box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.25);
         }
-        
+
+        /* Nav link: box only shows on hover or when active (current page) */
+        .nav-link {
+            display: inline-block;
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: #e5e7eb;
+            border: 1px solid transparent;
+            transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+            text-decoration: none;
+        }
+        .nav-link:hover {
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-color: rgba(255, 255, 255, 0.25);
+            color: #ffffff;
+        }
+        .nav-link.active {
+            background: rgba(255, 255, 255, 0.25);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-color: rgba(255, 255, 255, 0.3);
+            color: #ffffff;
+        }
+        .nav-link-mobile {
+            display: block;
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: #e5e7eb;
+            border: 1px solid transparent;
+            transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+            text-decoration: none;
+        }
+        .nav-link-mobile:hover {
+            background: rgba(255, 255, 255, 0.15);
+            border-color: rgba(255, 255, 255, 0.25);
+            color: #ffffff;
+        }
+        .nav-link-mobile.active {
+            background: rgba(255, 255, 255, 0.25);
+            border-color: rgba(255, 255, 255, 0.3);
+            color: #ffffff;
+        }
+
         .glass-input {
             background: rgba(255, 255, 255, 0.1);
             backdrop-filter: blur(10px);
@@ -143,7 +187,7 @@ try {
             border: 1px solid rgba(255, 255, 255, 0.2);
             color: white;
         }
-        
+
         .glass-input:focus {
             background: rgba(255, 255, 255, 0.2);
             border-color: var(--transit-info);
@@ -154,65 +198,103 @@ try {
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 </head>
 <body class="bg-[var(--transit-foundation)] min-h-screen">
-    <nav class="fixed top-0 inset-x-0 z-30 glass-nav text-white shadow-lg">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex justify-between items-center h-16">
+    <nav id="floatingNav" class="fixed top-4 left-1/2 -translate-x-1/2 z-30 glass-nav text-white rounded-2xl w-[calc(100%-2rem)] max-w-7xl">
+        <div class="px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-14">
                 <div class="flex items-center space-x-8">
                     <a href="index.php" id="brandLink" class="brand-font text-xl sm:text-2xl font-bold text-white whitespace-nowrap">Transport Ops</a>
                     <div class="hidden md:flex space-x-4">
-                        <a href="user_dashboard.php" class="text-gray-100 hover:text-white px-3 py-2 rounded-md text-sm font-medium">Home</a>
-                        <a href="about.php" class="text-gray-100 hover:text-white px-3 py-2 rounded-md text-sm font-medium">About</a>
-                        <a href="report.php" class="text-gray-100 hover:text-white px-3 py-2 rounded-md text-sm font-medium">Submit Report</a>
-                        <a href="reports_map.php" class="glass px-4 py-2 rounded-lg text-sm font-medium border border-white/20">Reports Map</a>
-                        <a href="routes.php" class="text-gray-100 hover:text-white px-3 py-2 rounded-md text-sm font-medium">Routes</a>
+                        <a href="<?php echo $is_logged_in
+                            ? "user_dashboard.php"
+                            : "index.php"; ?>" class="nav-link">Home</a>
+                        <a href="about.php" class="nav-link">About</a>
+                        <?php if ($is_logged_in): ?>
+                            <a href="report.php" class="nav-link">Submit Report</a>
+                        <?php endif; ?>
+                        <a href="reports_map.php" class="nav-link active">Reports Map</a>
+                        <a href="routes.php" class="nav-link">Routes</a>
                     </div>
-                    <div id="mobileMenu" class="md:hidden hidden absolute top-16 left-0 right-0 bg-[#1E3A8A] text-white flex flex-col space-y-1 px-4 py-2 z-20">
-                        <a href="user_dashboard.php" class="block px-3 py-2 rounded-md text-sm font-medium">Home</a>
-                        <a href="about.php" class="block px-3 py-2 rounded-md text-sm font-medium">About</a>
-                        <a href="report.php" class="block px-3 py-2 rounded-md text-sm font-medium">Submit Report</a>
-                        <a href="reports_map.php" class="block px-3 py-2 rounded-md text-sm font-medium">Reports Map</a>
-                        <a href="routes.php" class="block px-3 py-2 rounded-md text-sm font-medium">Routes</a>
+                    <div id="mobileMenu" class="md:hidden hidden absolute top-full left-0 right-0 mt-2 text-white flex flex-col space-y-1 px-4 py-3 z-20 rounded-2xl" style="background: rgba(34,51,92,0.95); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid rgba(255,255,255,0.15); box-shadow: 0 8px 32px 0 rgba(31,38,135,0.4);">
+                        <a href="<?php echo $is_logged_in
+                            ? "user_dashboard.php"
+                            : "index.php"; ?>" class="nav-link-mobile">Home</a>
+                        <a href="about.php" class="nav-link-mobile">About</a>
+                        <?php if ($is_logged_in): ?>
+                            <a href="report.php" class="nav-link-mobile">Submit Report</a>
+                        <?php endif; ?>
+                        <a href="reports_map.php" class="nav-link-mobile active">Reports Map</a>
+                        <a href="routes.php" class="nav-link-mobile">Routes</a>
                     </div>
                 </div>
                 <div class="relative flex items-center gap-2 sm:gap-3">
-                    <button id="profileMenuButton"
-                            class="flex items-center gap-2 px-2 py-1.5 rounded-full hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-white/60">
-                        <div class="hidden sm:flex flex-col items-end leading-tight">
-                            <span class="text-xs sm:text-sm text-white font-medium">
-                                <?php echo htmlspecialchars($_SESSION['user_name']); ?>
-                            </span>
-                            <span class="text-[11px] text-blue-100">
-                                <?php echo htmlspecialchars($_SESSION['role'] ?? 'User'); ?>
-                            </span>
+                    <?php if ($is_logged_in): ?>
+                        <button id="profileMenuButton"
+                                class="flex items-center gap-2 px-2 py-1.5 rounded-full hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-white/60">
+                            <div class="hidden sm:flex flex-col items-end leading-tight">
+                                <span class="text-xs sm:text-sm text-white font-medium">
+                                    <?php echo htmlspecialchars(
+                                        $_SESSION["user_name"],
+                                    ); ?>
+                                </span>
+                                <span class="text-[11px] text-blue-100">
+                                    <?php echo htmlspecialchars(
+                                        $_SESSION["role"] ?? "User",
+                                    ); ?>
+                                </span>
+                            </div>
+                            <div class="flex items-center gap-1">
+                                <?php if (
+                                    $user_profile_data["profile_image"]
+                                ): ?>
+                                    <img src="uploads/<?php echo htmlspecialchars(
+                                        $user_profile_data["profile_image"],
+                                    ); ?>"
+                                         alt="Profile"
+                                         class="h-8 w-8 rounded-full object-cover border-2 border-white">
+                                <?php else: ?>
+                                    <div class="h-8 w-8 rounded-full bg-[#10B981] flex items-center justify-center text-white text-sm font-semibold">
+                                        <?php echo strtoupper(
+                                            substr(
+                                                $_SESSION["user_name"] ?? "U",
+                                                0,
+                                                1,
+                                            ),
+                                        ); ?>
+                                    </div>
+                                <?php endif; ?>
+                                <svg class="w-4 h-4 text-blue-100" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                                </svg>
+                            </div>
+                        </button>
+                        <div id="profileMenu"
+                             class="hidden absolute right-0 top-11 w-48 rounded-lg shadow-lg py-1 z-40"
+                             style="background: rgba(34,51,92,0.92); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid rgba(255,255,255,0.15); box-shadow: 0 8px 32px 0 rgba(31,38,135,0.4);">
+                            <a href="profile.php" class="block px-3 py-2 text-sm text-white hover:bg-white/10 rounded-sm mx-1">View &amp; Edit Profile</a>
+                            <a href="public_profile.php?id=<?php echo $_SESSION[
+                                "user_id"
+                            ]; ?>" class="block px-3 py-2 text-sm text-white hover:bg-white/10 rounded-sm mx-1">View Public Profile</a>
+                            <div class="my-1 border-t border-white/20"></div>
+                            <a href="logout.php" class="block px-3 py-2 text-sm text-red-300 hover:bg-white/10 rounded-sm mx-1">Logout</a>
                         </div>
-                        <div class="flex items-center gap-1">
-                            <?php if ($user_profile_data['profile_image']): ?>
-                                <img src="uploads/<?php echo htmlspecialchars($user_profile_data['profile_image']); ?>"
-                                     alt="Profile"
-                                     class="h-8 w-8 rounded-full object-cover border-2 border-white">
-                            <?php else: ?>
-                                <div class="h-8 w-8 rounded-full bg-[#10B981] flex items-center justify-center text-white text-sm font-semibold">
-                                    <?php echo strtoupper(substr($_SESSION['user_name'] ?? 'U', 0, 1)); ?>
-                                </div>
-                            <?php endif; ?>
-                            <svg class="w-4 h-4 text-blue-100" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-                            </svg>
-                        </div>
-                    </button>
-                    <div id="profileMenu"
-                         class="hidden absolute right-0 top-11 w-44 bg-white text-gray-800 rounded-lg shadow-lg border border-gray-100 py-1 z-40">
-                        <a href="profile.php" class="block px-3 py-2 text-sm hover:bg-gray-50">View &amp; Edit Profile</a>
-                        <a href="public_profile.php?id=<?php echo $_SESSION['user_id']; ?>" class="block px-3 py-2 text-sm hover:bg-gray-50">View Public Profile</a>
-                        <div class="my-1 border-t border-gray-100"></div>
-                        <a href="logout.php" class="block px-3 py-2 text-sm text-red-600 hover:bg-red-50">Logout</a>
-                    </div>
+                    <?php else: ?>
+                        <a href="register.php"
+                           class="text-white px-3 py-2 rounded-md text-sm font-medium whitespace-nowrap transition duration-150"
+                           style="background: rgba(255,255,255,0.1); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.3); box-shadow: 0 4px 16px 0 rgba(31,38,135,0.2);"
+                           onmouseover="this.style.background='rgba(255,255,255,0.2)'"
+                           onmouseout="this.style.background='rgba(255,255,255,0.1)'">Register</a>
+                        <a href="login.php"
+                           class="text-white px-4 py-2 rounded-md font-medium whitespace-nowrap transition duration-150"
+                           style="background: rgba(16,185,129,0.25); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border: 1px solid rgba(16,185,129,0.5); box-shadow: 0 4px 16px 0 rgba(16,185,129,0.2);"
+                           onmouseover="this.style.background='rgba(16,185,129,0.45)'"
+                           onmouseout="this.style.background='rgba(16,185,129,0.25)'">Login</a>
+                    <?php endif; ?>
                 </div>
             </div>
         </div>
     </nav>
 
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-6">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 sm:pt-28 pb-6">
         <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
             <div class="lg:col-span-3 glass-card rounded-2xl shadow-md overflow-hidden relative">
                 <div class="px-6 py-4 border-b border-white/20">
@@ -225,20 +307,24 @@ try {
             <div class="glass-card rounded-2xl shadow-md p-4 space-y-4">
                 <div>
                     <h3 class="text-lg font-semibold text-gray-800 mb-3">Recent Reports</h3>
-                    
+
                     <!-- Route Filter -->
                     <div class="mb-3">
                         <label class="block text-sm font-medium text-gray-700 mb-1">Filter by Route</label>
                         <select id="routeFilter" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
                             <option value="">All Routes</option>
                             <?php foreach ($availableRoutes as $route): ?>
-                                <option value="<?php echo htmlspecialchars($route); ?>" <?php echo $selectedRoute === $route ? 'selected' : ''; ?>>
+                                <option value="<?php echo htmlspecialchars(
+                                    $route,
+                                ); ?>" <?php echo $selectedRoute === $route
+    ? "selected"
+    : ""; ?>>
                                     <?php echo htmlspecialchars($route); ?>
                                 </option>
                             <?php endforeach; ?>
                         </select>
                     </div>
-                    
+
                     <!-- Legend -->
                     <div class="space-y-1 text-xs text-gray-700">
                         <div class="flex items-center">
@@ -259,28 +345,40 @@ try {
                         </div>
                     </div>
                 </div>
-                
+
                 <!-- Reports List -->
                 <div class="flex-1 overflow-y-auto p-4 max-h-96">
                     <div id="reportsList" class="space-y-3">
                         <!-- Reports will be populated by JavaScript -->
                     </div>
                 </div>
-                
+
                 <div class="border-t pt-4">
                     <h3 class="text-sm font-semibold text-gray-800 mb-2">Report Verification</h3>
-                    <p class="text-xs text-gray-600 mb-3">
-                        <strong>How to verify reports:</strong><br>
-                        1. Click "Enable My Location" below<br>
-                        2. Be physically within 500m of the report location<br>
-                        3. Click the verify button on the map popup<br>
-                        <em>Note: Only commuter accounts can verify reports (not admins)</em>
-                    </p>
-                    <button id="enableLocationBtn"
-                            class="w-full bg-blue-600 text-white px-3 py-2 rounded-md hover:bg-blue-700 transition text-xs font-medium">
-                        Enable My Location for Verification
-                    </button>
-                    <p id="locationStatus" class="text-xs text-gray-500 mt-2"></p>
+                    <?php if ($is_logged_in): ?>
+                        <p class="text-xs text-gray-600 mb-3">
+                            <strong>How to verify reports:</strong><br>
+                            1. Click "Enable My Location" below<br>
+                            2. Be physically within 500m of the report location<br>
+                            3. Click the verify button on the map popup<br>
+                            <em>Note: Only commuter accounts can verify reports (not admins)</em>
+                        </p>
+                        <button id="enableLocationBtn"
+                                class="w-full bg-blue-600 text-white px-3 py-2 rounded-md hover:bg-blue-700 transition text-xs font-medium">
+                            Enable My Location for Verification
+                        </button>
+                        <p id="locationStatus" class="text-xs text-gray-500 mt-2"></p>
+                    <?php else: ?>
+                        <p class="text-xs text-gray-600 mb-3">
+                            Want to verify crowd reports and help the community?
+                        </p>
+                        <a href="login.php" class="block w-full text-center bg-[#22335C] text-white px-3 py-2 rounded-md hover:bg-[#1a2847] transition text-xs font-medium mb-2">
+                            Login to Verify Reports
+                        </a>
+                        <a href="register.php" class="block w-full text-center border border-[#22335C] text-[#22335C] px-3 py-2 rounded-md hover:bg-[#22335C] hover:text-white transition text-xs font-medium">
+                            Create a Free Account
+                        </a>
+                    <?php endif; ?>
                 </div>
             </div>
         </div>
@@ -288,7 +386,10 @@ try {
 
     <script>
         const reports = <?php echo json_encode($reports); ?>;
-        const userRole = <?php echo json_encode($_SESSION['role']); ?>;
+        const userRole = <?php echo json_encode(
+            $is_logged_in ? $_SESSION["role"] ?? "" : "guest",
+        ); ?>;
+        const isLoggedIn = <?php echo $is_logged_in ? "true" : "false"; ?>;
         let selectedReportId = null;
         let reportMarkers = new Map(); // Store markers by report ID
 
@@ -323,19 +424,19 @@ try {
             document.querySelectorAll('.report-item').forEach(item => {
                 item.classList.remove('ring-2', 'ring-blue-500', 'bg-blue-50');
             });
-            
+
             // Add highlight to selected report
             const selectedElement = document.querySelector(`[data-report-id="${reportId}"]`);
             if (selectedElement) {
                 selectedElement.classList.add('ring-2', 'ring-blue-500', 'bg-blue-50');
                 selectedElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
             }
-            
+
             // Highlight marker on map
             if (reportMarkers.has(reportId)) {
                 const marker = reportMarkers.get(reportId);
                 marker.openPopup();
-                
+
                 // Pan map to marker
                 const report = reports.find(r => r.id === reportId);
                 if (report && report.latitude && report.longitude) {
@@ -347,22 +448,22 @@ try {
         function renderReportsList() {
             const reportsList = document.getElementById('reportsList');
             reportsList.innerHTML = '';
-            
+
             if (reports.length === 0) {
                 reportsList.innerHTML = '<p class="text-gray-500 text-sm text-center py-4">No reports found.</p>';
                 return;
             }
-            
+
             reports.forEach(report => {
                 const isVerified = parseInt(report.is_verified, 10) === 1;
                 const crowdColor = getIconColor(report.crowd_level);
                 const timestamp = new Date(report.timestamp).toLocaleString();
                 const isSelected = report.id === selectedReportId;
-                
+
                 const reportElement = document.createElement('div');
                 reportElement.className = `report-item bg-white border border-gray-200 rounded-lg p-3 hover:shadow-md transition-shadow cursor-pointer ${isSelected ? 'ring-2 ring-blue-500 bg-blue-50' : ''}`;
                 reportElement.setAttribute('data-report-id', report.id);
-                
+
                 // Expanded view when selected
                 if (isSelected) {
                     reportElement.innerHTML = `
@@ -432,12 +533,12 @@ try {
                         </div>
                     `;
                 }
-                
+
                 reportElement.addEventListener('click', () => {
                     selectedReportId = report.id;
                     highlightReport(report.id);
                 });
-                
+
                 reportsList.appendChild(reportElement);
             });
         }
@@ -448,7 +549,7 @@ try {
                 map.removeLayer(marker);
             });
             reportMarkers.clear();
-            
+
             const bounds = [];
             reports.forEach(r => {
                 if (!r.latitude || !r.longitude) return;
@@ -597,17 +698,19 @@ try {
 
                 const timestamp = new Date(r.timestamp).toLocaleString();
 
-                const verifyButton = (userRole === 'Commuter')
-                    ? (canVerify 
-                        ? `<button data-report-id="${r.id}" class="verify-btn mt-2 px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700">
-                                Verify this report (${distance.toFixed(1)}km away)
-                           </button>`
-                        : (userLocation 
-                            ? `<span class="text-xs text-gray-500 mt-2 block">Too far to verify (${distance.toFixed(1)}km away - must be within 0.5km)</span>`
-                            : `<span class="text-xs text-orange-600 mt-2 block">Enable location to verify reports</span>`))
-                    : (userRole === 'Admin' 
-                        ? `<span class="text-xs text-gray-500 mt-2 block">Admin accounts cannot verify reports</span>`
-                        : `<span class="text-xs text-gray-500 mt-2 block">Login as commuter to verify reports</span>`);
+                const verifyButton = !isLoggedIn
+                    ? `<a href="login.php" class="mt-2 inline-block px-3 py-1 text-xs bg-[#22335C] text-white rounded hover:bg-[#1a2847]">Login to verify this report</a>`
+                    : (userRole === 'Commuter')
+                        ? (canVerify
+                            ? `<button data-report-id="${r.id}" class="verify-btn mt-2 px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700">
+                                    Verify this report (${distance.toFixed(1)}km away)
+                               </button>`
+                            : (userLocation
+                                ? `<span class="text-xs text-gray-500 mt-2 block">Too far to verify (${distance.toFixed(1)}km away - must be within 0.5km)</span>`
+                                : `<span class="text-xs text-orange-600 mt-2 block">Enable location to verify reports</span>`))
+                        : (userRole === 'Admin'
+                            ? `<span class="text-xs text-gray-500 mt-2 block">Admin accounts cannot verify reports</span>`
+                            : `<span class="text-xs text-gray-500 mt-2 block">Login as commuter to verify reports</span>`);
 
                 marker.bindPopup(`
                     <div class="text-sm">
@@ -618,8 +721,8 @@ try {
                         Time: ${timestamp}<br>
                         Verified: ${isVerified ? 'Yes' : 'No'} (${r.peer_verifications || 0}/3)<br>
                         ${r.delay_reason ? 'Delay: ' + r.delay_reason + '<br>' : ''}
-                        ${canVerify ? '<span class="text-green-600 font-medium">✓ You can verify this report (within 500m)</span>' : 
-                          (userLocation ? '<span class="text-orange-600 font-medium">✗ Too far to verify (must be within 500m)</span>' : 
+                        ${canVerify ? '<span class="text-green-600 font-medium">✓ You can verify this report (within 500m)</span>' :
+                          (userLocation ? '<span class="text-orange-600 font-medium">✗ Too far to verify (must be within 500m)</span>' :
                            '<span class="text-orange-600 font-medium">⚠ Enable location to verify reports</span>')}
                         ${verifyButton}
                     </div>
@@ -653,6 +756,9 @@ try {
 
         const enableLocationBtn = document.getElementById('enableLocationBtn');
         const locationStatus = document.getElementById('locationStatus');
+        if (!isLoggedIn && enableLocationBtn) {
+            enableLocationBtn.disabled = true;
+        }
 
         if (enableLocationBtn) {
             enableLocationBtn.addEventListener('click', () => {
@@ -664,7 +770,11 @@ try {
                     }
                     return;
                 }
-                
+
+                if (!isLoggedIn) {
+                    window.location.href = 'login.php';
+                    return;
+                }
                 if (!navigator.geolocation) {
                     locationStatus.textContent = 'Geolocation is not supported by this browser.';
                     locationStatus.classList.add('text-red-600');
@@ -729,20 +839,53 @@ try {
             }
         });
 
-        // Profile menu toggle
+        // Floating nav scroll effect
         (function () {
+            const floatingNav = document.getElementById('floatingNav');
+            if (floatingNav) {
+                window.addEventListener('scroll', function () {
+                    if (window.scrollY > 20) {
+                        floatingNav.classList.add('scrolled');
+                        floatingNav.style.top = '0.5rem';
+                    } else {
+                        floatingNav.classList.remove('scrolled');
+                        floatingNav.style.top = '1rem';
+                    }
+                });
+            }
+
+            // Profile menu toggle
             const btn = document.getElementById('profileMenuButton');
             const menu = document.getElementById('profileMenu');
-            if (!btn || !menu) return;
-            btn.addEventListener('click', function (e) {
-                e.stopPropagation();
-                menu.classList.toggle('hidden');
-            });
-            document.addEventListener('click', function () {
-                menu.classList.add('hidden');
-            });
+            if (btn && menu) {
+                btn.addEventListener('click', function (e) {
+                    e.stopPropagation();
+                    menu.classList.toggle('hidden');
+                });
+                document.addEventListener('click', function () {
+                    if (!menu.classList.contains('hidden')) {
+                        menu.classList.add('hidden');
+                    }
+                });
+            }
+
+            // Mobile menu toggle
+            const brand = document.getElementById('brandLink');
+            const mobile = document.getElementById('mobileMenu');
+            if (brand && mobile) {
+                brand.addEventListener('click', function (e) {
+                    if (window.innerWidth < 768) {
+                        e.preventDefault();
+                        mobile.classList.toggle('hidden');
+                    }
+                });
+                document.addEventListener('click', function (ev) {
+                    if (mobile && !mobile.contains(ev.target) && ev.target !== brand) {
+                        mobile.classList.add('hidden');
+                    }
+                });
+            }
         })();
     </script>
 </body>
 </html>
-

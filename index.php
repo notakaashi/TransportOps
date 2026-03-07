@@ -4,17 +4,32 @@
  * Public homepage for non-logged-in users
  */
 
-require_once 'auth_helper.php';
+require_once "auth_helper.php";
 secureSessionStart();
 
-// Redirect logged-in users to appropriate dashboard
-if (isset($_SESSION['user_id'])) {
-    if ($_SESSION['role'] === 'Admin') {
-        header('Location: admin_dashboard.php');
-    } else {
-        header('Location: user_dashboard.php');
+$is_logged_in = isset($_SESSION["user_id"]);
+$user_profile_data = ["profile_image" => null];
+
+if ($is_logged_in) {
+    // Redirect logged-in users to their dashboard
+    if ($_SESSION["role"] === "Admin") {
+        header("Location: admin_dashboard.php");
+        exit();
     }
-    exit;
+    // Fetch profile image for nav
+    try {
+        require_once "db.php";
+        $pdo = getDBConnection();
+        $stmt = $pdo->prepare("SELECT profile_image FROM users WHERE id = ?");
+        $stmt->execute([$_SESSION["user_id"]]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        if ($row && $row["profile_image"]) {
+            $user_profile_data["profile_image"] = $row["profile_image"];
+            $_SESSION["profile_image"] = $row["profile_image"];
+        }
+    } catch (Exception $e) {
+        // ignore
+    }
 }
 ?>
 <!DOCTYPE html>
@@ -64,7 +79,55 @@ if (isset($_SESSION['user_id'])) {
             background-color: var(--transit-info);
             color: #1f2933;
         }
-        
+
+        /* Nav link: box only shows on hover or when active (current page) */
+        .nav-link {
+            display: inline-block;
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: #e5e7eb;
+            border: 1px solid transparent;
+            transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+            text-decoration: none;
+        }
+        .nav-link:hover {
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-color: rgba(255, 255, 255, 0.25);
+            color: #ffffff;
+        }
+        .nav-link.active {
+            background: rgba(255, 255, 255, 0.25);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-color: rgba(255, 255, 255, 0.3);
+            color: #ffffff;
+        }
+        .nav-link-mobile {
+            display: block;
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: #e5e7eb;
+            border: 1px solid transparent;
+            transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+            text-decoration: none;
+        }
+        .nav-link-mobile:hover {
+            background: rgba(255, 255, 255, 0.15);
+            border-color: rgba(255, 255, 255, 0.25);
+            color: #ffffff;
+        }
+        .nav-link-mobile.active {
+            background: rgba(255, 255, 255, 0.25);
+            border-color: rgba(255, 255, 255, 0.3);
+            color: #ffffff;
+        }
+
         /* Glassmorphism styles */
         .glass {
             background: rgba(255, 255, 255, 0.1);
@@ -73,15 +136,20 @@ if (isset($_SESSION['user_id'])) {
             border: 1px solid rgba(255, 255, 255, 0.2);
             box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
         }
-        
+
         .glass-nav {
-            background: rgba(34, 51, 92, 0.8);
-            backdrop-filter: blur(10px);
-            -webkit-backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            box-shadow: 0 4px 16px 0 rgba(31, 38, 135, 0.3);
+            background: rgba(34, 51, 92, 0.75);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.35), 0 2px 8px 0 rgba(0,0,0,0.15);
+            transition: background 0.3s ease, box-shadow 0.3s ease, top 0.3s ease;
         }
-        
+        .glass-nav.scrolled {
+            background: rgba(34, 51, 92, 0.92);
+            box-shadow: 0 12px 40px 0 rgba(31, 38, 135, 0.5), 0 4px 12px 0 rgba(0,0,0,0.25);
+        }
+
         .glass-card {
             background: rgba(255, 255, 255, 0.15);
             backdrop-filter: blur(15px);
@@ -89,7 +157,7 @@ if (isset($_SESSION['user_id'])) {
             border: 1px solid rgba(255, 255, 255, 0.3);
             box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.25);
         }
-        
+
         .glass-input {
             background: rgba(255, 255, 255, 0.1);
             backdrop-filter: blur(10px);
@@ -97,7 +165,7 @@ if (isset($_SESSION['user_id'])) {
             border: 1px solid rgba(255, 255, 255, 0.2);
             color: white;
         }
-        
+
         .glass-input:focus {
             background: rgba(255, 255, 255, 0.2);
             border-color: var(--transit-info);
@@ -107,56 +175,157 @@ if (isset($_SESSION['user_id'])) {
 </head>
 <body class="bg-[var(--transit-foundation)] min-h-screen">
     <!-- Navigation Bar -->
-    <nav class="fixed top-0 inset-x-0 z-30 glass-nav text-white shadow-lg">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex justify-between items-center h-16">
+    <nav id="floatingNav" class="fixed top-4 left-1/2 -translate-x-1/2 z-30 glass-nav text-white rounded-2xl w-[calc(100%-2rem)] max-w-7xl">
+        <div class="px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-14">
                 <div class="flex items-center space-x-8">
                     <a href="index.php" id="brandLink" class="brand-font text-xl sm:text-2xl font-bold text-white whitespace-nowrap">Transport Ops</a>
                     <div class="hidden md:flex space-x-4">
-                        <a href="index.php" class="glass px-4 py-2 rounded-lg text-sm font-medium border border-white/20">Home</a>
-                        <a href="about.php" class="text-gray-100 hover:text-white px-3 py-2 rounded-md text-sm font-medium">About</a>
+                        <a href="index.php" class="nav-link active">Home</a>
+                        <a href="about.php" class="nav-link">About</a>
+                        <a href="reports_map.php" class="nav-link">Reports Map</a>
+                        <a href="routes.php" class="nav-link">Routes</a>
+                        <?php if ($is_logged_in): ?>
+                            <a href="report.php" class="nav-link">Submit Report</a>
+                        <?php endif; ?>
                     </div>
-                    <div id="mobileMenu" class="md:hidden hidden absolute top-16 left-0 right-0 bg-[#1E3A8A] text-white flex flex-col space-y-1 px-4 py-2 z-20">
-                        <a href="index.php" class="block px-3 py-2 rounded-md text-sm font-medium">Home</a>
-                        <a href="about.php" class="block px-3 py-2 rounded-md text-sm font-medium">About</a>
+                    <div id="mobileMenu" class="md:hidden hidden absolute top-full left-0 right-0 mt-2 text-white flex flex-col space-y-1 px-4 py-3 z-20 rounded-2xl" style="background: rgba(34,51,92,0.95); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid rgba(255,255,255,0.15); box-shadow: 0 8px 32px 0 rgba(31,38,135,0.4);">
+                        <a href="index.php" class="nav-link-mobile active">Home</a>
+                        <a href="about.php" class="nav-link-mobile">About</a>
+                        <a href="reports_map.php" class="nav-link-mobile">Reports Map</a>
+                        <a href="routes.php" class="nav-link-mobile">Routes</a>
+                        <?php if ($is_logged_in): ?>
+                            <a href="report.php" class="nav-link-mobile">Submit Report</a>
+                        <?php endif; ?>
                     </div>
                 </div>
                 <div class="flex items-center gap-2 sm:gap-4">
-                    <a href="register.php" 
-                       class="glass glass-input px-4 py-3 rounded-lg hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-white/60 focus:ring-offset-2 focus:ring-offset-transparent transition duration-150 font-medium whitespace-nowrap">
-                        Register
-                    </a>
-                    <a href="login.php" 
-                       class="glass glass-input px-4 py-3 rounded-lg hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-white/60 focus:ring-offset-2 focus:ring-offset-transparent transition duration-150 font-medium whitespace-nowrap">
-                        Login
-                    </a>
+                    <?php if ($is_logged_in): ?>
+                        <div class="relative">
+                            <button id="profileMenuButton"
+                                    class="flex items-center gap-2 px-2 py-1.5 rounded-full hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-white/60">
+                                <div class="hidden sm:flex flex-col items-end leading-tight">
+                                    <span class="text-xs sm:text-sm text-white font-medium">
+                                        <?php echo htmlspecialchars(
+                                            $_SESSION["user_name"],
+                                        ); ?>
+                                    </span>
+                                    <span class="text-[11px] text-blue-100">
+                                        <?php echo htmlspecialchars(
+                                            $_SESSION["role"] ?? "User",
+                                        ); ?>
+                                    </span>
+                                </div>
+                                <div class="flex items-center gap-1">
+                                    <?php if (
+                                        $user_profile_data["profile_image"]
+                                    ): ?>
+                                        <img src="uploads/<?php echo htmlspecialchars(
+                                            $user_profile_data["profile_image"],
+                                        ); ?>"
+                                             alt="Profile"
+                                             class="h-8 w-8 rounded-full object-cover border-2 border-white">
+                                    <?php else: ?>
+                                        <div class="h-8 w-8 rounded-full bg-[#10B981] flex items-center justify-center text-white text-sm font-semibold">
+                                            <?php echo strtoupper(
+                                                substr(
+                                                    $_SESSION["user_name"] ??
+                                                        "U",
+                                                    0,
+                                                    1,
+                                                ),
+                                            ); ?>
+                                        </div>
+                                    <?php endif; ?>
+                                    <svg class="w-4 h-4 text-blue-100" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                                    </svg>
+                                </div>
+                            </button>
+                            <div id="profileMenu"
+                                 class="hidden absolute right-0 top-11 w-48 rounded-lg shadow-lg py-1 z-40"
+                                 style="background: rgba(34,51,92,0.92); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid rgba(255,255,255,0.15); box-shadow: 0 8px 32px 0 rgba(31,38,135,0.4);">
+                                <a href="user_dashboard.php" class="block px-3 py-2 text-sm text-white hover:bg-white/10 rounded-sm mx-1">Dashboard</a>
+                                <a href="profile.php" class="block px-3 py-2 text-sm text-white hover:bg-white/10 rounded-sm mx-1">View &amp; Edit Profile</a>
+                                <a href="public_profile.php?id=<?php echo $_SESSION[
+                                    "user_id"
+                                ]; ?>" class="block px-3 py-2 text-sm text-white hover:bg-white/10 rounded-sm mx-1">View Public Profile</a>
+                                <div class="my-1 border-t border-white/20"></div>
+                                <a href="logout.php" class="block px-3 py-2 text-sm text-red-300 hover:bg-white/10 rounded-sm mx-1">Logout</a>
+                            </div>
+                        </div>
+                    <?php else: ?>
+                        <a href="register.php"
+                           class="text-white px-3 py-2 rounded-md text-sm font-medium whitespace-nowrap transition duration-150"
+                           style="background: rgba(255,255,255,0.1); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.3); box-shadow: 0 4px 16px 0 rgba(31,38,135,0.2);"
+                           onmouseover="this.style.background='rgba(255,255,255,0.2)'"
+                           onmouseout="this.style.background='rgba(255,255,255,0.1)'">
+                            Register
+                        </a>
+                        <a href="login.php"
+                           class="text-white px-4 py-2 rounded-md font-medium whitespace-nowrap transition duration-150"
+                           style="background: rgba(16,185,129,0.25); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border: 1px solid rgba(16,185,129,0.5); box-shadow: 0 4px 16px 0 rgba(16,185,129,0.2);"
+                           onmouseover="this.style.background='rgba(16,185,129,0.45)'"
+                           onmouseout="this.style.background='rgba(16,185,129,0.25)'">
+                            Login
+                        </a>
+                    <?php endif; ?>
                 </div>
             </div>
         </div>
     </nav>
 
     <!-- Hero Section -->
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 sm:pt-24 py-12 sm:py-16">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 sm:pt-28 py-12 sm:py-16">
         <div class="glass-card rounded-2xl p-8 sm:p-12 text-center">
             <h1 class="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-gray-900 mb-4 sm:mb-6 leading-tight tracking-tight">
                 Public Transportation Operations System
             </h1>
             <p class="text-base sm:text-lg lg:text-xl text-gray-600 mb-6 sm:mb-8 max-w-3xl mx-auto">
-                Digitizing transit activities and managing fleet operations through real-time crowdsourced data. 
+                Digitizing transit activities and managing fleet operations through real-time crowdsourced data.
                 Monitor PUV units, track crowding levels, and optimize transportation services.
             </p>
             <div class="flex flex-col sm:flex-row justify-center gap-3 sm:gap-4 max-w-md sm:max-w-none mx-auto">
-                <a href="login.php" 
-                   class="glass glass-input px-8 py-4 rounded-lg hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-white/60 focus:ring-offset-2 focus:ring-offset-transparent transition duration-150 font-medium text-base sm:text-lg w-full sm:w-auto">
-                    Get Started
+                <a href="reports_map.php"
+                   style="background: rgba(34,51,92,0.75); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.25);"
+                   class="text-white px-8 py-4 rounded-lg hover:bg-[#1a2847] focus:outline-none focus:ring-2 focus:ring-white/60 transition duration-150 font-medium text-base sm:text-lg w-full sm:w-auto shadow-lg">
+                    View Reports Map
                 </a>
-                <a href="login.php" 
-                   class="glass glass-input px-8 py-4 rounded-lg hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-white/60 focus:ring-offset-2 focus:ring-offset-transparent transition duration-150 font-medium text-base sm:text-lg w-full sm:w-auto">
-                    Login
+                <a href="routes.php"
+                   style="background: rgba(34,51,92,0.75); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.25);"
+                   class="text-white px-8 py-4 rounded-lg hover:bg-[#1a2847] focus:outline-none focus:ring-2 focus:ring-white/60 transition duration-150 font-medium text-base sm:text-lg w-full sm:w-auto shadow-lg">
+                    Browse Routes
                 </a>
+                <?php if ($is_logged_in): ?>
+                <a href="user_dashboard.php"
+                   class="bg-[#10B981] text-white px-8 py-4 rounded-lg hover:bg-[#059669] focus:outline-none focus:ring-2 focus:ring-green-400 transition duration-150 font-medium text-base sm:text-lg w-full sm:w-auto">
+                    Go to Dashboard
+                </a>
+                <?php endif; ?>
             </div>
         </div>
     </div>
+
+    <!-- Guest Info Banner (only for non-logged-in users) -->
+    <?php if (!$is_logged_in): ?>
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-4">
+        <div class="bg-[#22335C]/10 border border-[#22335C]/20 rounded-xl px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div class="flex items-start sm:items-center gap-3">
+                <svg class="w-5 h-5 text-[#22335C] flex-shrink-0 mt-0.5 sm:mt-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                <p class="text-sm text-gray-700">
+                    You're browsing as a <strong>guest</strong>. You can view routes and reports freely.
+                    <span class="text-[#22335C] font-medium">Create a free account</span> to submit reports, verify crowd data, and more.
+                </p>
+            </div>
+            <div class="flex gap-2 flex-shrink-0">
+                <a href="login.php" class="text-sm px-4 py-2 border border-[#22335C] text-[#22335C] rounded-lg hover:bg-[#22335C] hover:text-white transition font-medium">Login</a>
+                <a href="register.php" class="text-sm px-4 py-2 bg-[#22335C] text-white rounded-lg hover:bg-[#1a2847] transition font-medium">Register</a>
+            </div>
+        </div>
+    </div>
+    <?php endif; ?>
 
     <!-- Features Section -->
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
@@ -207,26 +376,58 @@ if (isset($_SESSION['user_id'])) {
     <footer class="bg-gray-800 text-white mt-16">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
             <div class="text-center">
-                <p class="text-gray-400">&copy; <?php echo date('Y'); ?> Public Transportation Operations System. All rights reserved.</p>
+                <p class="text-gray-400">&copy; <?php echo date(
+                    "Y",
+                ); ?> Public Transportation Operations System. All rights reserved.</p>
             </div>
         </div>
     </footer>
     <script>
         (function () {
+            // Floating nav scroll effect
+            const floatingNav = document.getElementById('floatingNav');
+            if (floatingNav) {
+                window.addEventListener('scroll', function () {
+                    if (window.scrollY > 20) {
+                        floatingNav.classList.add('scrolled');
+                        floatingNav.style.top = '0.5rem';
+                    } else {
+                        floatingNav.classList.remove('scrolled');
+                        floatingNav.style.top = '1rem';
+                    }
+                });
+            }
+
             const brand = document.getElementById('brandLink');
             const mobile = document.getElementById('mobileMenu');
-            if (!brand || !mobile) return;
-            brand.addEventListener('click', function (e) {
-                if (window.innerWidth < 768) {
-                    e.preventDefault();
-                    mobile.classList.toggle('hidden');
-                }
-            });
-            document.addEventListener('click', function (ev) {
-                if (mobile && !mobile.contains(ev.target) && ev.target !== brand) {
-                    mobile.classList.add('hidden');
-                }
-            });
+            if (brand && mobile) {
+                brand.addEventListener('click', function (e) {
+                    if (window.innerWidth < 768) {
+                        e.preventDefault();
+                        mobile.classList.toggle('hidden');
+                    }
+                });
+                document.addEventListener('click', function (ev) {
+                    if (mobile && !mobile.contains(ev.target) && ev.target !== brand) {
+                        mobile.classList.add('hidden');
+                    }
+                });
+            }
+
+            // Profile dropdown toggle (for logged-in users on landing page)
+            const btn = document.getElementById('profileMenuButton');
+            const menu = document.getElementById('profileMenu');
+            if (btn && menu) {
+                btn.addEventListener('click', function (e) {
+                    e.stopPropagation();
+                    menu.classList.toggle('hidden');
+                });
+                document.addEventListener('click', function (ev) {
+                    if (menu && !menu.contains(ev.target) && ev.target !== btn) {
+                        menu.classList.add('hidden');
+                    }
+                });
+            }
         })();
     </script>
 </body>

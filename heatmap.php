@@ -5,18 +5,18 @@
  * Restricted to Admin role only
  */
 
-require_once 'auth_helper.php';
+require_once "auth_helper.php";
 secureSessionStart();
-require_once 'db.php';
+require_once "db.php";
 
 // Check if user is logged in and is an Admin
-if (!isset($_SESSION['user_id'])) {
-    header('Location: admin_login.php');
-    exit;
+if (!isset($_SESSION["user_id"])) {
+    header("Location: admin_login.php");
+    exit();
 }
-if ($_SESSION['role'] !== 'Admin') {
-    header('Location: login.php');
-    exit;
+if ($_SESSION["role"] !== "Admin") {
+    header("Location: login.php");
+    exit();
 }
 
 // Fetch reports with GPS coordinates for heatmap
@@ -61,17 +61,19 @@ try {
             box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.18);
         }
         .glass-sidebar {
-            background: linear-gradient(to bottom, rgba(30, 58, 138, 0.92), rgba(30, 41, 59, 0.92));
-            backdrop-filter: blur(14px);
-            -webkit-backdrop-filter: blur(14px);
-            border-right: 1px solid rgba(255, 255, 255, 0.12);
+            background: rgba(34, 51, 92, 0.75);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.35), 0 2px 8px 0 rgba(0,0,0,0.15);
+            transition: box-shadow 0.3s ease;
         }
     </style>
 </head>
 <body class="bg-[var(--transit-foundation)]">
-    <div class="flex flex-col md:flex-row min-h-screen">
+    <div class="min-h-screen">
         <!-- Sidebar -->
-        <aside class="w-full md:w-64 glass-sidebar text-white flex flex-col shadow-2xl">
+        <aside id="adminSidebar" class="fixed top-4 inset-x-4 md:inset-x-auto md:left-4 md:w-64 md:h-[calc(100vh-2rem)] glass-sidebar text-white flex flex-col z-30 rounded-2xl shadow-2xl">
             <div class="px-4 py-4 sm:p-6 flex-shrink-0 border-b border-[#475569] md:border-b-0">
                 <div id="adminNavToggle" class="flex items-center justify-between md:justify-start mb-4 md:mb-8 cursor-pointer md:cursor-default">
                     <div class="bg-[#fbbf24] p-2 rounded-lg mr-3">
@@ -85,49 +87,49 @@ try {
                     </svg>
                 </div>
                 <nav id="adminNavLinks" class="space-y-1 md:space-y-2 text-sm sm:text-base hidden md:block">
-                    <a href="admin_dashboard.php" 
+                    <a href="admin_dashboard.php"
                        class="flex items-center px-4 py-3 hover:bg-[#475569] rounded-lg transition duration-150 group">
                         <svg class="w-5 h-5 mr-3 group-hover:text-[#fbbf24]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
                         </svg>
                         Dashboard
                     </a>
-                    <a href="admin_reports.php" 
+                    <a href="admin_reports.php"
                        class="flex items-center px-4 py-3 hover:bg-[#475569] rounded-lg transition duration-150 group">
                         <svg class="w-5 h-5 mr-3 group-hover:text-[#fbbf24]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-6a2 2 0 012-2h6m-4-4l4 4-4 4"></path>
                         </svg>
                         Reports
                     </a>
-                    <a href="admin_trust_management.php" 
+                    <a href="admin_trust_management.php"
                        class="flex items-center px-4 py-3 hover:bg-[#475569] rounded-lg transition duration-150 group">
                         <svg class="w-5 h-5 mr-3 group-hover:text-[#fbbf24]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                         </svg>
                         Trust Management
                     </a>
-                    <a href="route_status.php" 
+                    <a href="route_status.php"
                        class="flex items-center px-4 py-3 hover:bg-[#475569] rounded-lg transition duration-150 group">
                         <svg class="w-5 h-5 mr-3 group-hover:text-[#fbbf24]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"></path>
                         </svg>
                         Route Status
                     </a>
-                    <a href="manage_routes.php" 
+                    <a href="manage_routes.php"
                        class="flex items-center px-4 py-3 hover:bg-[#475569] rounded-lg transition duration-150 group">
                         <svg class="w-5 h-5 mr-3 group-hover:text-[#fbbf24]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"></path>
                         </svg>
                         Manage Routes
                     </a>
-                    <a href="heatmap.php" 
+                    <a href="heatmap.php"
                        class="flex items-center px-4 py-3 bg-[#fbbf24] text-[#1e3a8a] rounded-lg hover:bg-[#f59e0b] transition duration-150 shadow-lg">
                         <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
                         </svg>
                         Crowdsourcing Heatmap
                     </a>
-                    <a href="user_management.php" 
+                    <a href="user_management.php"
                        class="flex items-center px-4 py-3 hover:bg-[#475569] rounded-lg transition duration-150 group">
                         <svg class="w-5 h-5 mr-3 group-hover:text-[#fbbf24]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path>
@@ -140,7 +142,9 @@ try {
                 <div class="bg-[#475569] rounded-lg p-3 sm:p-4 mb-4">
                     <p class="text-xs text-gray-400 mb-1">Logged in as</p>
                     <div class="flex items-center justify-between">
-                        <p class="text-sm font-semibold"><?php echo htmlspecialchars($_SESSION['user_name']); ?></p>
+                        <p class="text-sm font-semibold"><?php echo htmlspecialchars(
+                            $_SESSION["user_name"],
+                        ); ?></p>
                         <div class="flex items-center gap-2">
                             <span class="px-2 py-1 bg-[#fbbf24] text-[#1e3a8a] text-xs rounded-full">Admin</span>
                             <a href="logout.php" class="text-red-400 hover:text-red-300 transition-colors">
@@ -155,7 +159,7 @@ try {
         </aside>
 
         <!-- Main Content -->
-        <main class="flex-1 flex flex-col w-full">
+        <main class="w-full md:ml-72 pt-24 md:pt-0 flex flex-col">
             <!-- Header -->
             <div class="glass-card shadow-sm border-b border-white/20 p-6">
                 <h2 class="text-3xl font-bold text-[#1e3a8a]">Crowdsourcing Heatmap</h2>
@@ -180,7 +184,7 @@ try {
                         </div>
                         <h3 class="text-xl font-bold text-[#1e3a8a]">Crowding Levels</h3>
                     </div>
-                    
+
                     <div class="space-y-4">
                         <!-- Light Crowding -->
                         <div class="border-l-4 border-green-500 pl-4 py-4 bg-gradient-to-r from-green-50 to-green-100 rounded-r-lg shadow-md hover:shadow-lg transition duration-300">
@@ -228,16 +232,18 @@ try {
                         </div>
                         <div class="bg-[#fef9e7] rounded-lg p-4 mb-4 border border-[#fbbf24]">
                             <p class="text-sm text-gray-700 mb-3 leading-relaxed">
-                                This heatmap visualizes real-time crowdsourced data from commuters and drivers, 
+                                This heatmap visualizes real-time crowdsourced data from commuters and drivers,
                                 helping identify high-demand routes and optimize fleet operations.
                             </p>
                             <p class="text-sm text-[#475569] leading-relaxed">
-                                Data is collected from user reports and automatically updated to reflect current 
+                                Data is collected from user reports and automatically updated to reflect current
                                 transportation conditions across the network.
                             </p>
                         </div>
                         <div class="flex items-center justify-between text-xs text-[#475569]">
-                            <span>Last updated: <?php echo date('M d, Y H:i'); ?></span>
+                            <span>Last updated: <?php echo date(
+                                "M d, Y H:i",
+                            ); ?></span>
                             <span class="flex items-center">
                                 <div class="w-2 h-2 bg-green-500 rounded-full mr-2 animate-pulse"></div>
                                 Live
@@ -252,7 +258,7 @@ try {
     <script>
         // Initialize map
         const map = L.map('map').setView([14.5995, 120.9842], 12);
-        
+
         // Add tile layer
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '© OpenStreetMap contributors'
@@ -260,7 +266,7 @@ try {
 
         // Reports data from PHP
         const reports = <?php echo json_encode($reports); ?>;
-        
+
         if (reports.length === 0) {
             // Show message if no reports
             const noDataDiv = document.createElement('div');
@@ -278,12 +284,12 @@ try {
         } else {
             // Add markers for each report
             const bounds = [];
-            
+
             reports.forEach(report => {
                 if (report.latitude && report.longitude) {
                     const lat = parseFloat(report.latitude);
                     const lng = parseFloat(report.longitude);
-                    
+
                     // Determine marker color based on crowd level
                     let markerColor = 'gray';
                     if (report.crowd_level === 'Light') {
@@ -293,7 +299,7 @@ try {
                     } else if (report.crowd_level === 'Heavy') {
                         markerColor = 'red';
                     }
-                    
+
                     const marker = L.marker([lat, lng], {
                         icon: L.divIcon({
                             className: 'custom-marker',
@@ -301,7 +307,7 @@ try {
                             iconSize: [20, 20]
                         })
                     }).addTo(map);
-                    
+
                     const timestamp = new Date(report.timestamp).toLocaleString();
                     marker.bindPopup(`
                         <strong>${report.plate_number || 'Unknown'}</strong><br>
@@ -309,11 +315,11 @@ try {
                         Crowd Level: <strong>${report.crowd_level}</strong><br>
                         Reported: ${timestamp}
                     `);
-                    
+
                     bounds.push([lat, lng]);
                 }
             });
-            
+
             // Fit map to show all markers
             if (bounds.length > 0) {
                 map.fitBounds(bounds, { padding: [50, 50] });
@@ -343,4 +349,3 @@ try {
     </script>
 </body>
 </html>
-

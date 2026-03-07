@@ -3,7 +3,7 @@
  * Manage Routes - Define routes with stops for map display
  * Admin can add a route (e.g. Guadalupe - FTI Tenement) and add stops in order; stops are connected on the map.
  */
-require_once 'auth_helper.php';
+require_once "auth_helper.php";
 secureSessionStart();
 require_once "db.php";
 
@@ -202,10 +202,12 @@ if (!$error) {
             box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.18);
         }
         .glass-sidebar {
-            background: linear-gradient(to bottom, rgba(30, 58, 138, 0.92), rgba(30, 41, 59, 0.92));
-            backdrop-filter: blur(14px);
-            -webkit-backdrop-filter: blur(14px);
-            border-right: 1px solid rgba(255, 255, 255, 0.12);
+            background: rgba(34, 51, 92, 0.75);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.35), 0 2px 8px 0 rgba(0,0,0,0.15);
+            transition: box-shadow 0.3s ease;
         }
     </style>
     <script src="https://cdn.tailwindcss.com"></script>
@@ -214,8 +216,8 @@ if (!$error) {
     <script src="js/osrm-helpers.js"></script>
 </head>
 <body class="bg-[var(--transit-foundation)]">
-    <div class="flex flex-col md:flex-row min-h-screen">
-        <aside class="w-full md:w-64 glass-sidebar text-white flex flex-col shadow-2xl">
+    <div class="min-h-screen">
+        <aside id="adminSidebar" class="fixed top-4 inset-x-4 md:inset-x-auto md:left-4 md:w-64 md:h-[calc(100vh-2rem)] glass-sidebar text-white flex flex-col z-30 rounded-2xl shadow-2xl">
             <div class="px-4 py-4 sm:p-6 flex-shrink-0 border-b border-[#475569] md:border-b-0">
                 <div id="adminNavToggle" class="flex items-center justify-between md:justify-start mb-4 md:mb-8 cursor-pointer md:cursor-default">
                     <div class="bg-[#fbbf24] p-2 rounded-lg mr-3">
@@ -263,7 +265,9 @@ if (!$error) {
                 <div class="bg-[#475569] rounded-lg p-3 sm:p-4 mb-4">
                     <p class="text-xs text-gray-400 mb-1">Logged in as</p>
                     <div class="flex items-center justify-between">
-                        <p class="text-sm font-semibold"><?php echo htmlspecialchars($_SESSION["user_name"]); ?></p>
+                        <p class="text-sm font-semibold"><?php echo htmlspecialchars(
+                            $_SESSION["user_name"],
+                        ); ?></p>
                         <div class="flex items-center gap-2">
                             <span class="px-2 py-1 bg-[#fbbf24] text-[#1e3a8a] text-xs rounded-full">Admin</span>
                             <a href="logout.php" class="text-red-400 hover:text-red-300 transition-colors">
@@ -277,7 +281,7 @@ if (!$error) {
             </div>
         </aside>
 
-        <main class="flex-1 w-full overflow-y-auto">
+        <main class="w-full md:ml-72 pt-24 md:pt-0 overflow-y-auto">
             <div class="p-4 sm:p-6 lg:p-8">
                 <h2 class="text-3xl font-bold text-gray-800">Manage Routes</h2>
                 <p class="text-gray-600 mt-2">Define routes with stops (e.g. Guadalupe → FTI Tenement). Pin the start point, end point, and any waypoints by clicking on the map — no need to enter coordinates. Stops are connected on the map and used in Reports.</p>

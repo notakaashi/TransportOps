@@ -1,20 +1,20 @@
 <?php
-require_once 'auth_helper.php';
+require_once "auth_helper.php";
 secureSessionStart();
-require_once 'db.php';
+require_once "db.php";
 
-if (!isset($_SESSION['user_id'])) {
-    header('Location: admin_login.php');
-    exit;
+if (!isset($_SESSION["user_id"])) {
+    header("Location: admin_login.php");
+    exit();
 }
-if ($_SESSION['role'] !== 'Admin') {
-    header('Location: login.php');
-    exit;
+if ($_SESSION["role"] !== "Admin") {
+    header("Location: login.php");
+    exit();
 }
 
 $reports = [];
 $routes_with_stops = [];
-$focus_report_id = isset($_GET['focus']) ? (int)$_GET['focus'] : 0;
+$focus_report_id = isset($_GET["focus"]) ? (int) $_GET["focus"] : 0;
 
 try {
     $pdo = getDBConnection();
@@ -33,26 +33,39 @@ try {
     $reports = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     try {
-        $stmt = $pdo->query("SELECT id, name FROM route_definitions ORDER BY name");
+        $stmt = $pdo->query(
+            "SELECT id, name FROM route_definitions ORDER BY name",
+        );
         $routeDefs = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        $stmt = $pdo->query("SELECT route_definition_id, stop_name, latitude, longitude, stop_order FROM route_stops ORDER BY route_definition_id, stop_order");
+        $stmt = $pdo->query(
+            "SELECT route_definition_id, stop_name, latitude, longitude, stop_order FROM route_stops ORDER BY route_definition_id, stop_order",
+        );
         $stops = $stmt->fetchAll(PDO::FETCH_ASSOC);
         $stopsByRoute = [];
         foreach ($stops as $s) {
-            $rid = $s['route_definition_id'];
-            if (!isset($stopsByRoute[$rid])) $stopsByRoute[$rid] = [];
-            $stopsByRoute[$rid][] = ['stop_name' => $s['stop_name'], 'latitude' => (float)$s['latitude'], 'longitude' => (float)$s['longitude'], 'stop_order' => (int)$s['stop_order']];
+            $rid = $s["route_definition_id"];
+            if (!isset($stopsByRoute[$rid])) {
+                $stopsByRoute[$rid] = [];
+            }
+            $stopsByRoute[$rid][] = [
+                "stop_name" => $s["stop_name"],
+                "latitude" => (float) $s["latitude"],
+                "longitude" => (float) $s["longitude"],
+                "stop_order" => (int) $s["stop_order"],
+            ];
         }
         foreach ($routeDefs as $r) {
-            $r['stops'] = $stopsByRoute[$r['id']] ?? [];
-            usort($r['stops'], function ($a, $b) { return $a['stop_order'] - $b['stop_order']; });
+            $r["stops"] = $stopsByRoute[$r["id"]] ?? [];
+            usort($r["stops"], function ($a, $b) {
+                return $a["stop_order"] - $b["stop_order"];
+            });
             $routes_with_stops[] = $r;
         }
     } catch (PDOException $e) {
         // route_definitions may not exist yet
     }
 } catch (PDOException $e) {
-    error_log('Admin reports error: ' . $e->getMessage());
+    error_log("Admin reports error: " . $e->getMessage());
     $reports = [];
 }
 ?>
@@ -83,16 +96,18 @@ try {
             box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.18);
         }
         .glass-sidebar {
-            background: linear-gradient(to bottom, rgba(30, 58, 138, 0.92), rgba(30, 41, 59, 0.92));
-            backdrop-filter: blur(14px);
-            -webkit-backdrop-filter: blur(14px);
-            border-right: 1px solid rgba(255, 255, 255, 0.12);
+            background: rgba(34, 51, 92, 0.75);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.35), 0 2px 8px 0 rgba(0,0,0,0.15);
+            transition: box-shadow 0.3s ease;
         }
     </style>
 </head>
 <body class="bg-[var(--transit-foundation)]">
-    <div class="flex flex-col md:flex-row min-h-screen">
-        <aside class="w-full md:w-64 glass-sidebar text-white flex flex-col shadow-2xl">
+    <div class="min-h-screen">
+        <aside id="adminSidebar" class="fixed top-4 inset-x-4 md:inset-x-auto md:left-4 md:w-64 md:h-[calc(100vh-2rem)] glass-sidebar text-white flex flex-col z-30 rounded-2xl shadow-2xl">
             <div class="px-4 py-4 sm:p-6 flex-shrink-0 border-b border-[#475569] md:border-b-0">
                 <div id="adminNavToggle" class="flex items-center justify-between md:justify-start mb-4 md:mb-8 cursor-pointer md:cursor-default">
                     <div class="bg-[#fbbf24] p-2 rounded-lg mr-3">
@@ -106,49 +121,49 @@ try {
                     </svg>
                 </div>
                 <nav id="adminNavLinks" class="space-y-1 md:space-y-2 text-sm sm:text-base hidden md:block">
-                    <a href="admin_dashboard.php" 
+                    <a href="admin_dashboard.php"
                        class="flex items-center px-4 py-3 hover:bg-[#475569] rounded-lg transition duration-150 group">
                         <svg class="w-5 h-5 mr-3 group-hover:text-[#fbbf24]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
                         </svg>
                         Dashboard
                     </a>
-                    <a href="admin_reports.php" 
+                    <a href="admin_reports.php"
                        class="flex items-center px-4 py-3 bg-[#fbbf24] text-[#1e3a8a] rounded-lg hover:bg-[#f59e0b] transition duration-150 shadow-lg">
                         <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-6a2 2 0 012-2h6m-4-4l4 4-4 4"></path>
                         </svg>
                         Reports
                     </a>
-                    <a href="admin_trust_management.php" 
+                    <a href="admin_trust_management.php"
                        class="flex items-center px-4 py-3 hover:bg-[#475569] rounded-lg transition duration-150 group">
                         <svg class="w-5 h-5 mr-3 group-hover:text-[#fbbf24]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                         </svg>
                         Trust Management
                     </a>
-                    <a href="route_status.php" 
+                    <a href="route_status.php"
                        class="flex items-center px-4 py-3 hover:bg-[#475569] rounded-lg transition duration-150 group">
                         <svg class="w-5 h-5 mr-3 group-hover:text-[#fbbf24]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"></path>
                         </svg>
                         Route Status
                     </a>
-                    <a href="manage_routes.php" 
+                    <a href="manage_routes.php"
                        class="flex items-center px-4 py-3 hover:bg-[#475569] rounded-lg transition duration-150 group">
                         <svg class="w-5 h-5 mr-3 group-hover:text-[#fbbf24]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"></path>
                         </svg>
                         Manage Routes
                     </a>
-                    <a href="heatmap.php" 
+                    <a href="heatmap.php"
                        class="flex items-center px-4 py-3 hover:bg-[#475569] rounded-lg transition duration-150 group">
                         <svg class="w-5 h-5 mr-3 group-hover:text-[#fbbf24]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
                         </svg>
                         Crowdsourcing Heatmap
                     </a>
-                    <a href="user_management.php" 
+                    <a href="user_management.php"
                        class="flex items-center px-4 py-3 hover:bg-[#475569] rounded-lg transition duration-150 group">
                         <svg class="w-5 h-5 mr-3 group-hover:text-[#fbbf24]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path>
@@ -161,7 +176,9 @@ try {
                 <div class="bg-[#475569] rounded-lg p-3 sm:p-4 mb-4">
                     <p class="text-xs text-gray-400 mb-1">Logged in as</p>
                     <div class="flex items-center justify-between">
-                        <p class="text-sm font-semibold"><?php echo htmlspecialchars($_SESSION['user_name']); ?></p>
+                        <p class="text-sm font-semibold"><?php echo htmlspecialchars(
+                            $_SESSION["user_name"],
+                        ); ?></p>
                         <div class="flex items-center gap-2">
                             <span class="px-2 py-1 bg-[#fbbf24] text-[#1e3a8a] text-xs rounded-full">Admin</span>
                             <a href="logout.php" class="text-red-400 hover:text-red-300 transition-colors">
@@ -175,7 +192,7 @@ try {
             </div>
         </aside>
 
-        <main class="flex-1 flex flex-col w-full">
+        <main class="w-full md:ml-72 pt-24 md:pt-0 flex flex-col">
             <div class="glass-card shadow-sm p-4 sm:p-6 rounded-b-2xl md:rounded-none border-b border-white/20">
                 <h2 class="text-3xl font-bold text-[#1e3a8a]">Reports</h2>
                 <p class="text-[#475569] mt-2">Browse all reports and inspect a single report on the map. Select a route to see it drawn on the map.</p>
@@ -185,7 +202,11 @@ try {
                     <select id="routeFilter" class="px-3 py-2 border border-[#d1d5db] rounded-md focus:ring-[#fbbf24] focus:border-[#fbbf24] text-sm">
                         <option value="">All reports</option>
                         <?php foreach ($routes_with_stops as $rd): ?>
-                            <option value="<?php echo htmlspecialchars($rd['name']); ?>"><?php echo htmlspecialchars($rd['name']); ?></option>
+                            <option value="<?php echo htmlspecialchars(
+                                $rd["name"],
+                            ); ?>"><?php echo htmlspecialchars(
+    $rd["name"],
+); ?></option>
                         <?php endforeach; ?>
                     </select>
                 </div>
@@ -221,39 +242,76 @@ try {
                                         </tr>
                                     <?php else: ?>
                                         <?php foreach ($reports as $report): ?>
-                                            <tr class="report-row" data-route="<?php echo htmlspecialchars($report['route_name'] ?? ''); ?>">
+                                            <tr class="report-row" data-route="<?php echo htmlspecialchars(
+                                                $report["route_name"] ?? "",
+                                            ); ?>">
                                                 <td class="px-4 py-2 whitespace-nowrap">
-                                                    <?php echo date('M d, Y H:i', strtotime($report['timestamp'])); ?>
+                                                    <?php echo date(
+                                                        "M d, Y H:i",
+                                                        strtotime(
+                                                            $report[
+                                                                "timestamp"
+                                                            ],
+                                                        ),
+                                                    ); ?>
                                                 </td>
                                                 <td class="px-4 py-2 whitespace-nowrap">
                                                     <div class="font-medium text-[#1e3a8a]">
-                                                        <?php echo htmlspecialchars($report['route_name'] ?? 'N/A'); ?>
+                                                        <?php echo htmlspecialchars(
+                                                            $report[
+                                                                "route_name"
+                                                            ] ?? "N/A",
+                                                        ); ?>
                                                     </div>
                                                 </td>
                                                 <td class="px-4 py-2 whitespace-nowrap">
                                                     <span class="px-2 py-1 text-xs rounded-full border
-                                                        <?php 
-                                                            echo $report['crowd_level'] === 'Light' ? 'bg-green-50 text-green-800 border-green-300' :
-                                                                ($report['crowd_level'] === 'Moderate' ? 'bg-yellow-50 text-yellow-800 border-yellow-300' : 'bg-red-50 text-red-800 border-red-300');
-                                                        ?>">
-                                                        <?php echo htmlspecialchars($report['crowd_level']); ?>
+                                                        <?php echo $report[
+                                                            "crowd_level"
+                                                        ] === "Light"
+                                                            ? "bg-green-50 text-green-800 border-green-300"
+                                                            : ($report[
+                                                                "crowd_level"
+                                                            ] === "Moderate"
+                                                                ? "bg-yellow-50 text-yellow-800 border-yellow-300"
+                                                                : "bg-red-50 text-red-800 border-red-300"); ?>">
+                                                        <?php echo htmlspecialchars(
+                                                            $report[
+                                                                "crowd_level"
+                                                            ],
+                                                        ); ?>
                                                     </span>
                                                 </td>
                                                 <td class="px-4 py-2 whitespace-nowrap">
-                                                    <?php $verified = (int)$report['is_verified'] === 1; ?>
-                                                    <span class="px-2 py-1 text-xs font-semibold rounded-full 
-                                                        <?php echo $verified ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'; ?>">
-                                                        <?php echo $verified ? 'Yes' : 'No'; ?>
+                                                    <?php $verified =
+                                                        (int) $report[
+                                                            "is_verified"
+                                                        ] === 1; ?>
+                                                    <span class="px-2 py-1 text-xs font-semibold rounded-full
+                                                        <?php echo $verified
+                                                            ? "bg-green-100 text-green-800"
+                                                            : "bg-yellow-100 text-yellow-800"; ?>">
+                                                        <?php echo $verified
+                                                            ? "Yes"
+                                                            : "No"; ?>
                                                     </span>
                                                     <div class="text-xs text-[#475569]">
-                                                        <?php echo (int)($report['peer_verifications'] ?? 0); ?>/3 verifications
+                                                        <?php echo (int) ($report[
+                                                            "peer_verifications"
+                                                        ] ??
+                                                            0); ?>/3 verifications
                                                     </div>
                                                 </td>
                                                 <td class="px-4 py-2 whitespace-nowrap">
-                                                    <?php if ($report['latitude'] && $report['longitude']): ?>
-                                                        <button 
+                                                    <?php if (
+                                                        $report["latitude"] &&
+                                                        $report["longitude"]
+                                                    ): ?>
+                                                        <button
                                                             class="view-on-map-btn text-[#1e3a8a] hover:text-[#fbbf24] text-xs font-medium"
-                                                            data-report-id="<?php echo $report['id']; ?>">
+                                                            data-report-id="<?php echo $report[
+                                                                "id"
+                                                            ]; ?>">
                                                             View on map
                                                         </button>
                                                     <?php else: ?>
@@ -467,8 +525,16 @@ try {
                 links.classList.toggle('hidden');
                 footer.classList.toggle('hidden');
             });
+            // Close mobile menu when clicking outside
+            document.addEventListener('click', function (ev) {
+                if (window.innerWidth >= 768) return;
+                const sidebar = document.getElementById('adminSidebar');
+                if (sidebar && !sidebar.contains(ev.target)) {
+                    links.classList.add('hidden');
+                    footer.classList.add('hidden');
+                }
+            });
         })();
     </script>
 </body>
 </html>
-

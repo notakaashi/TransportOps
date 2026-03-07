@@ -4,71 +4,89 @@
  * Handles user authentication and session management
  */
 
-require_once 'auth_helper.php';
+require_once "auth_helper.php";
 secureSessionStart();
-require_once 'db.php';
+require_once "db.php";
 
 // Redirect if already logged in
-if (isset($_SESSION['user_id'])) {
-    if ($_SESSION['role'] === 'Admin') {
-        header('Location: admin_dashboard.php');
+if (isset($_SESSION["user_id"])) {
+    if ($_SESSION["role"] === "Admin") {
+        header("Location: admin_dashboard.php");
     } else {
-        header('Location: index.php');
+        header("Location: index.php");
     }
-    exit;
+    exit();
 }
 
-$error = '';
+$error = "";
+$info_message = "";
 
 // Check for deactivated account error
-if (isset($_GET['error']) && $_GET['error'] === 'deactivated') {
-    $error = 'Your account has been deactivated. Please contact an administrator.';
+if (isset($_GET["error"]) && $_GET["error"] === "deactivated") {
+    $error =
+        "Your account has been deactivated. Please contact an administrator.";
+}
+
+// Check for redirect message (e.g. from report.php when guest tries to submit)
+if (isset($_SESSION["login_message"])) {
+    $info_message = $_SESSION["login_message"];
+    unset($_SESSION["login_message"]);
 }
 
 // Process login form submission
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+if ($_SERVER["REQUEST_METHOD"] === "POST") {
     // Debug: Log the login attempt
-    error_log("Login attempt from: " . ($_SERVER['HTTP_USER_AGENT'] ?? 'Unknown'));
+    error_log(
+        "Login attempt from: " . ($_SERVER["HTTP_USER_AGENT"] ?? "Unknown"),
+    );
     error_log("Session ID before login: " . session_id());
-    
-    $email = trim($_POST['email'] ?? '');
-    $password = $_POST['password'] ?? '';
-    
+
+    $email = trim($_POST["email"] ?? "");
+    $password = $_POST["password"] ?? "";
+
     if (empty($email) || empty($password)) {
-        $error = 'Email and password are required.';
+        $error = "Email and password are required.";
     } else {
         try {
             $pdo = getDBConnection();
-            $stmt = $pdo->prepare("SELECT id, name, email, password, role, is_active, profile_image FROM users WHERE LOWER(email) = LOWER(?)");
+            $stmt = $pdo->prepare(
+                "SELECT id, name, email, password, role, is_active, profile_image FROM users WHERE LOWER(email) = LOWER(?)",
+            );
             $stmt->execute([trim($email)]);
             $user = $stmt->fetch();
-            
-            if ($user && password_verify($password, $user['password'])) {
-                if ($user['role'] === 'Admin') {
-                    $error = 'Administrators must use the admin login page.';
-                } elseif (!$user['is_active']) {
-                    $error = 'Your account has been deactivated. Please contact an administrator.';
+
+            if ($user && password_verify($password, $user["password"])) {
+                if ($user["role"] === "Admin") {
+                    $error = "Administrators must use the admin login page.";
+                } elseif (!$user["is_active"]) {
+                    $error =
+                        "Your account has been deactivated. Please contact an administrator.";
                 } else {
                     // Regenerate session to prevent fixation and create fresh session
                     regenerateSession();
-                    
+
                     // Set session variables including profile image
-                    $_SESSION['user_id'] = $user['id'];
-                    $_SESSION['user_name'] = $user['name'];
-                    $_SESSION['user_email'] = $user['email'];
-                    $_SESSION['role'] = $user['role'];
-                    $_SESSION['profile_image'] = $user['profile_image'];
-                    
-                    header('Location: user_dashboard.php');
-                    exit;
+                    $_SESSION["user_id"] = $user["id"];
+                    $_SESSION["user_name"] = $user["name"];
+                    $_SESSION["user_email"] = $user["email"];
+                    $_SESSION["role"] = $user["role"];
+                    $_SESSION["profile_image"] = $user["profile_image"];
+
+                    // Redirect back to the page they were trying to access, or dashboard
+                    $redirect =
+                        $_SESSION["redirect_after_login"] ??
+                        "user_dashboard.php";
+                    unset($_SESSION["redirect_after_login"]);
+                    header("Location: " . $redirect);
+                    exit();
                 }
             } else {
-                $error = 'Invalid email or password.';
+                $error = "Invalid email or password.";
                 error_log("Authentication failed for email: " . $email);
             }
         } catch (PDOException $e) {
             error_log("Login error: " . $e->getMessage());
-            $error = 'Login failed. Please try again.';
+            $error = "Login failed. Please try again.";
         }
     }
 }
@@ -106,27 +124,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <body class="bg-[var(--transit-foundation)] min-h-screen flex items-center justify-center px-4">
     <div class="glass-card p-6 sm:p-8 rounded-2xl w-full max-w-md">
         <h2 class="auth-title text-2xl font-semibold text-gray-900 mb-6 text-center">Login</h2>
-        
+
+        <?php if ($info_message): ?>
+            <div class="bg-blue-50 border border-blue-300 text-blue-800 px-4 py-3 rounded-lg mb-4 flex items-start gap-2">
+                <svg class="w-5 h-5 flex-shrink-0 mt-0.5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                <span class="text-sm"><?php echo htmlspecialchars(
+                    $info_message,
+                ); ?></span>
+            </div>
+        <?php endif; ?>
+
         <?php if ($error): ?>
             <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
                 <?php echo htmlspecialchars($error); ?>
             </div>
         <?php endif; ?>
-        
+
         <form method="POST" action="" class="space-y-4">
             <div>
                 <label for="email" class="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                <input type="email" id="email" name="email" required 
-                       value="<?php echo htmlspecialchars($email ?? ''); ?>"
+                <input type="email" id="email" name="email" required
+                       value="<?php echo htmlspecialchars($email ?? ""); ?>"
                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#10B981]">
             </div>
-            
+
             <div>
                 <label for="password" class="block text-sm font-medium text-gray-700 mb-1">Password</label>
                 <div class="relative">
                     <input type="password" id="password" name="password" required
                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#10B981]">
-                    <button type="button" onclick="togglePassword()" 
+                    <button type="button" onclick="togglePassword()"
                             class="absolute right-3 top-2 text-gray-500 hover:text-gray-700">
                         <svg id="eye-icon" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
@@ -138,26 +167,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     </button>
                 </div>
             </div>
-            
-            <button type="submit" 
+
+            <button type="submit"
                     class="w-full bg-[#10B981] text-white py-3 px-4 rounded-lg hover:bg-[#059669] focus:outline-none focus:ring-2 focus:ring-[#10B981] focus:ring-offset-2 transition duration-150 font-medium min-h-[48px]">
                 Login
             </button>
         </form>
-        
+
         <p class="mt-4 text-center text-sm text-gray-600">
-            Don't have an account? 
+            Don't have an account?
             <a href="register.php" class="text-blue-600 hover:text-blue-800 font-medium">Register here</a><br>
-            <a href="admin_login.php" class="text-gray-500 hover:text-gray-700 text-xs mt-2 inline-block">Admin login</a>
+            <a href="index.php" class="text-gray-500 hover:text-gray-700 text-xs mt-1 inline-block">← Back to home</a>
+            &nbsp;·&nbsp;
+            <a href="admin_login.php" class="text-gray-500 hover:text-gray-700 text-xs mt-1 inline-block">Admin login</a>
         </p>
     </div>
-    
+
     <script>
         function togglePassword() {
             const passwordField = document.getElementById('password');
             const eyeIcon = document.getElementById('eye-icon');
             const eyeOffIcon = document.getElementById('eye-off-icon');
-            
+
             if (passwordField.type === 'password') {
                 passwordField.type = 'text';
                 eyeIcon.classList.add('hidden');
@@ -171,4 +202,3 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </script>
 </body>
 </html>
-

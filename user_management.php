@@ -1,126 +1,149 @@
 <?php
-require_once 'auth_helper.php';
+require_once "auth_helper.php";
 secureSessionStart();
-require_once 'db.php';
+require_once "db.php";
 
-if (!isset($_SESSION['user_id'])) {
-    header('Location: admin_login.php');
-    exit;
+if (!isset($_SESSION["user_id"])) {
+    header("Location: admin_login.php");
+    exit();
 }
-if ($_SESSION['role'] !== 'Admin') {
-    header('Location: login.php');
-    exit;
+if ($_SESSION["role"] !== "Admin") {
+    header("Location: login.php");
+    exit();
 }
 
-$error = '';
-$success = '';
+$error = "";
+$success = "";
 $edit_user_id = null;
 $edit_user = null;
 
 // Handle activation/deactivation
-if (isset($_GET['toggle_status']) && is_numeric($_GET['toggle_status'])) {
-    $toggle_id = (int)$_GET['toggle_status'];
-    if ($toggle_id === $_SESSION['user_id']) {
-        $error = 'You cannot change your own account status.';
+if (isset($_GET["toggle_status"]) && is_numeric($_GET["toggle_status"])) {
+    $toggle_id = (int) $_GET["toggle_status"];
+    if ($toggle_id === $_SESSION["user_id"]) {
+        $error = "You cannot change your own account status.";
     } else {
         try {
             $pdo = getDBConnection();
-            $stmt = $pdo->prepare("UPDATE users SET is_active = NOT is_active WHERE id = ?");
+            $stmt = $pdo->prepare(
+                "UPDATE users SET is_active = NOT is_active WHERE id = ?",
+            );
             $stmt->execute([$toggle_id]);
-            $success = 'User status updated successfully.';
+            $success = "User status updated successfully.";
         } catch (PDOException $e) {
             error_log("Toggle user status error: " . $e->getMessage());
-            $error = 'Failed to update user status.';
+            $error = "Failed to update user status.";
         }
     }
 }
 
 // Handle delete
-if (isset($_GET['delete']) && is_numeric($_GET['delete'])) {
-    $delete_id = (int)$_GET['delete'];
-    if ($delete_id === $_SESSION['user_id']) {
-        $error = 'You cannot delete your own account.';
+if (isset($_GET["delete"]) && is_numeric($_GET["delete"])) {
+    $delete_id = (int) $_GET["delete"];
+    if ($delete_id === $_SESSION["user_id"]) {
+        $error = "You cannot delete your own account.";
     } else {
         try {
             $pdo = getDBConnection();
             $stmt = $pdo->prepare("DELETE FROM users WHERE id = ?");
             $stmt->execute([$delete_id]);
-            $success = 'User deleted successfully.';
+            $success = "User deleted successfully.";
         } catch (PDOException $e) {
             error_log("Delete user error: " . $e->getMessage());
-            $error = 'Failed to delete user.';
+            $error = "Failed to delete user.";
         }
     }
 }
 
 // Handle edit - load user data
-if (isset($_GET['edit']) && is_numeric($_GET['edit'])) {
-    $edit_user_id = (int)$_GET['edit'];
+if (isset($_GET["edit"]) && is_numeric($_GET["edit"])) {
+    $edit_user_id = (int) $_GET["edit"];
     try {
         $pdo = getDBConnection();
-        $stmt = $pdo->prepare("SELECT id, name, email, role FROM users WHERE id = ?");
+        $stmt = $pdo->prepare(
+            "SELECT id, name, email, role FROM users WHERE id = ?",
+        );
         $stmt->execute([$edit_user_id]);
         $edit_user = $stmt->fetch();
         if (!$edit_user) {
-            $error = 'User not found.';
+            $error = "User not found.";
             $edit_user_id = null;
         }
     } catch (PDOException $e) {
         error_log("Load user error: " . $e->getMessage());
-        $error = 'Failed to load user data.';
+        $error = "Failed to load user data.";
         $edit_user_id = null;
     }
 }
 
 // Handle form submission (add or update)
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $name = trim($_POST['name'] ?? '');
-    $email = trim($_POST['email'] ?? '');
-    $password = $_POST['password'] ?? '';
-    $confirm_password = $_POST['confirm_password'] ?? '';
-    $role = $_POST['role'] ?? 'Commuter';
-    $user_id = isset($_POST['user_id']) ? (int)$_POST['user_id'] : null;
-    
+if ($_SERVER["REQUEST_METHOD"] === "POST") {
+    $name = trim($_POST["name"] ?? "");
+    $email = trim($_POST["email"] ?? "");
+    $password = $_POST["password"] ?? "";
+    $confirm_password = $_POST["confirm_password"] ?? "";
+    $role = $_POST["role"] ?? "Commuter";
+    $user_id = isset($_POST["user_id"]) ? (int) $_POST["user_id"] : null;
+
     if (empty($name) || empty($email)) {
-        $error = 'Name and email are required.';
+        $error = "Name and email are required.";
     } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        $error = 'Invalid email format.';
-    } elseif (!in_array($role, ['Admin', 'Commuter'])) {
-        $error = 'Invalid role selected.';
+        $error = "Invalid email format.";
+    } elseif (!in_array($role, ["Admin", "Commuter"])) {
+        $error = "Invalid role selected.";
     } else {
         try {
             $pdo = getDBConnection();
-            
+
             if ($user_id) {
                 // Update existing user
-                $check_stmt = $pdo->prepare("SELECT id FROM users WHERE email = ? AND id != ?");
+                $check_stmt = $pdo->prepare(
+                    "SELECT id FROM users WHERE email = ? AND id != ?",
+                );
                 $check_stmt->execute([$email, $user_id]);
                 if ($check_stmt->fetch()) {
-                    $error = 'Email already registered to another user.';
+                    $error = "Email already registered to another user.";
                 } else {
                     if (!empty($password)) {
                         if (strlen($password) < 6) {
-                            $error = 'Password must be at least 6 characters long.';
+                            $error =
+                                "Password must be at least 6 characters long.";
                         } elseif ($password !== $confirm_password) {
-                            $error = 'Passwords do not match.';
+                            $error = "Passwords do not match.";
                         } else {
-                            $hashed_password = password_hash($password, PASSWORD_DEFAULT);
-                            $stmt = $pdo->prepare("UPDATE users SET name = ?, email = ?, password = ?, role = ? WHERE id = ?");
-                            $stmt->execute([$name, $email, $hashed_password, $role, $user_id]);
-                            $success = 'User updated successfully!';
+                            $hashed_password = password_hash(
+                                $password,
+                                PASSWORD_DEFAULT,
+                            );
+                            $stmt = $pdo->prepare(
+                                "UPDATE users SET name = ?, email = ?, password = ?, role = ? WHERE id = ?",
+                            );
+                            $stmt->execute([
+                                $name,
+                                $email,
+                                $hashed_password,
+                                $role,
+                                $user_id,
+                            ]);
+                            $success = "User updated successfully!";
                             $edit_user_id = null;
                             $edit_user = null;
                         }
                     } else {
                         // Update without changing password
-                        $check_stmt = $pdo->prepare("SELECT id FROM users WHERE email = ? AND id != ?");
+                        $check_stmt = $pdo->prepare(
+                            "SELECT id FROM users WHERE email = ? AND id != ?",
+                        );
                         $check_stmt->execute([$email, $user_id]);
                         if ($check_stmt->fetch()) {
-                            $error = 'Email already registered to another user.';
+                            $error =
+                                "Email already registered to another user.";
                         } else {
-                            $stmt = $pdo->prepare("UPDATE users SET name = ?, email = ?, role = ? WHERE id = ?");
+                            $stmt = $pdo->prepare(
+                                "UPDATE users SET name = ?, email = ?, role = ? WHERE id = ?",
+                            );
                             $stmt->execute([$name, $email, $role, $user_id]);
-                            $success = 'User updated successfully!';
+                            $success = "User updated successfully!";
                             $edit_user_id = null;
                             $edit_user = null;
                         }
@@ -129,28 +152,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } else {
                 // Add new user
                 if (empty($password)) {
-                    $error = 'Password is required for new users.';
+                    $error = "Password is required for new users.";
                 } elseif (strlen($password) < 6) {
-                    $error = 'Password must be at least 6 characters long.';
+                    $error = "Password must be at least 6 characters long.";
                 } elseif ($password !== $confirm_password) {
-                    $error = 'Passwords do not match.';
+                    $error = "Passwords do not match.";
                 } else {
-                    $check_stmt = $pdo->prepare("SELECT id FROM users WHERE email = ?");
+                    $check_stmt = $pdo->prepare(
+                        "SELECT id FROM users WHERE email = ?",
+                    );
                     $check_stmt->execute([$email]);
                     if ($check_stmt->fetch()) {
-                        $error = 'Email already registered.';
+                        $error = "Email already registered.";
                     } else {
-                        $hashed_password = password_hash($password, PASSWORD_DEFAULT);
-                        $stmt = $pdo->prepare("INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)");
-                        $stmt->execute([$name, $email, $hashed_password, $role]);
-                        $success = 'User created successfully!';
+                        $hashed_password = password_hash(
+                            $password,
+                            PASSWORD_DEFAULT,
+                        );
+                        $stmt = $pdo->prepare(
+                            "INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)",
+                        );
+                        $stmt->execute([
+                            $name,
+                            $email,
+                            $hashed_password,
+                            $role,
+                        ]);
+                        $success = "User created successfully!";
                         $_POST = [];
                     }
                 }
             }
         } catch (PDOException $e) {
             error_log("User management error: " . $e->getMessage());
-            $error = 'Operation failed. Please try again.';
+            $error = "Operation failed. Please try again.";
         }
     }
 }
@@ -158,7 +193,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 // Fetch all users
 try {
     $pdo = getDBConnection();
-    $stmt = $pdo->query("SELECT id, name, email, role, is_active, created_at FROM users ORDER BY created_at DESC");
+    $stmt = $pdo->query(
+        "SELECT id, name, email, role, is_active, created_at FROM users ORDER BY created_at DESC",
+    );
     $users = $stmt->fetchAll();
 } catch (PDOException $e) {
     error_log("Fetch users error: " . $e->getMessage());
@@ -188,16 +225,18 @@ try {
             box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.18);
         }
         .glass-sidebar {
-            background: linear-gradient(to bottom, rgba(30, 58, 138, 0.92), rgba(30, 41, 59, 0.92));
-            backdrop-filter: blur(14px);
-            -webkit-backdrop-filter: blur(14px);
-            border-right: 1px solid rgba(255, 255, 255, 0.12);
+            background: rgba(34, 51, 92, 0.75);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.35), 0 2px 8px 0 rgba(0,0,0,0.15);
+            transition: box-shadow 0.3s ease;
         }
     </style>
 </head>
 <body class="bg-[var(--transit-foundation)]">
-    <div class="flex flex-col md:flex-row min-h-screen">
-        <aside class="w-full md:w-64 glass-sidebar text-white flex flex-col shadow-2xl">
+    <div class="min-h-screen">
+        <aside id="adminSidebar" class="fixed top-4 inset-x-4 md:inset-x-auto md:left-4 md:w-64 md:h-[calc(100vh-2rem)] glass-sidebar text-white flex flex-col z-30 rounded-2xl shadow-2xl">
             <div class="px-4 py-4 sm:p-6 flex-shrink-0 border-b border-[#475569] md:border-b-0">
                 <div id="adminNavToggle" class="flex items-center justify-between md:justify-start mb-4 md:mb-8 cursor-pointer md:cursor-default">
                     <div class="bg-[#fbbf24] p-2 rounded-lg mr-3">
@@ -211,49 +250,49 @@ try {
                     </svg>
                 </div>
                 <nav id="adminNavLinks" class="space-y-1 md:space-y-2 text-sm sm:text-base hidden md:block">
-                    <a href="admin_dashboard.php" 
+                    <a href="admin_dashboard.php"
                        class="flex items-center px-4 py-3 hover:bg-[#475569] rounded-lg transition duration-150 group">
                         <svg class="w-5 h-5 mr-3 group-hover:text-[#fbbf24]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
                         </svg>
                         Dashboard
                     </a>
-                    <a href="admin_reports.php" 
+                    <a href="admin_reports.php"
                        class="flex items-center px-4 py-3 hover:bg-[#475569] rounded-lg transition duration-150 group">
                         <svg class="w-5 h-5 mr-3 group-hover:text-[#fbbf24]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-6a2 2 0 012-2h6m-4-4l4 4-4 4"></path>
                         </svg>
                         Reports
                     </a>
-                    <a href="admin_trust_management.php" 
+                    <a href="admin_trust_management.php"
                        class="flex items-center px-4 py-3 hover:bg-[#475569] rounded-lg transition duration-150 group">
                         <svg class="w-5 h-5 mr-3 group-hover:text-[#fbbf24]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                         </svg>
                         Trust Management
                     </a>
-                    <a href="route_status.php" 
+                    <a href="route_status.php"
                        class="flex items-center px-4 py-3 hover:bg-[#475569] rounded-lg transition duration-150 group">
                         <svg class="w-5 h-5 mr-3 group-hover:text-[#fbbf24]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"></path>
                         </svg>
                         Route Status
                     </a>
-                    <a href="manage_routes.php" 
+                    <a href="manage_routes.php"
                        class="flex items-center px-4 py-3 hover:bg-[#475569] rounded-lg transition duration-150 group">
                         <svg class="w-5 h-5 mr-3 group-hover:text-[#fbbf24]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"></path>
                         </svg>
                         Manage Routes
                     </a>
-                    <a href="heatmap.php" 
+                    <a href="heatmap.php"
                        class="flex items-center px-4 py-3 hover:bg-[#475569] rounded-lg transition duration-150 group">
                         <svg class="w-5 h-5 mr-3 group-hover:text-[#fbbf24]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
                         </svg>
                         Crowdsourcing Heatmap
                     </a>
-                    <a href="user_management.php" 
+                    <a href="user_management.php"
                        class="flex items-center px-4 py-3 bg-[#fbbf24] text-[#1e3a8a] rounded-lg hover:bg-[#f59e0b] transition duration-150 shadow-lg">
                         <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path>
@@ -266,7 +305,9 @@ try {
                 <div class="bg-[#475569] rounded-lg p-3 sm:p-4 mb-4">
                     <p class="text-xs text-gray-400 mb-1">Logged in as</p>
                     <div class="flex items-center justify-between">
-                        <p class="text-sm font-semibold"><?php echo htmlspecialchars($_SESSION['user_name']); ?></p>
+                        <p class="text-sm font-semibold"><?php echo htmlspecialchars(
+                            $_SESSION["user_name"],
+                        ); ?></p>
                         <div class="flex items-center gap-2">
                             <span class="px-2 py-1 bg-[#fbbf24] text-[#1e3a8a] text-xs rounded-full">Admin</span>
                             <a href="logout.php" class="text-red-400 hover:text-red-300 transition-colors">
@@ -280,7 +321,7 @@ try {
             </div>
         </aside>
 
-        <main class="flex-1 w-full overflow-y-auto">
+        <main class="w-full md:ml-72 pt-24 md:pt-0 overflow-y-auto">
             <div class="p-4 sm:p-6 lg:p-8">
                 <div class="mb-8">
                     <h2 class="text-3xl font-bold text-[#1e3a8a]">User Management</h2>
@@ -295,7 +336,7 @@ try {
                         <?php echo htmlspecialchars($error); ?>
                     </div>
                 <?php endif; ?>
-                
+
                 <?php if ($success): ?>
                     <div class="bg-green-100 border-l-4 border-green-500 text-green-700 px-4 py-3 rounded mb-6 flex items-center">
                         <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
@@ -309,7 +350,9 @@ try {
                     <div class="lg:col-span-2">
                         <div class="glass-card rounded-2xl overflow-hidden">
                             <div class="px-6 py-4 border-b border-white/20 flex justify-between items-center">
-                                <h3 class="text-xl font-semibold text-[#1e3a8a]">All Users (<?php echo count($users); ?>)</h3>
+                                <h3 class="text-xl font-semibold text-[#1e3a8a]">All Users (<?php echo count(
+                                    $users,
+                                ); ?>)</h3>
                             </div>
                             <div class="overflow-x-auto">
                                 <table class="min-w-full divide-y divide-gray-200">
@@ -333,28 +376,42 @@ try {
                                                 <tr>
                                                     <td class="px-6 py-4 whitespace-nowrap">
                                                         <div class="text-sm font-medium text-gray-900">
-                                                            <?php echo htmlspecialchars($user['name']); ?>
+                                                            <?php echo htmlspecialchars(
+                                                                $user["name"],
+                                                            ); ?>
                                                         </div>
                                                     </td>
                                                     <td class="px-6 py-4 whitespace-nowrap">
                                                         <div class="text-sm text-gray-600">
-                                                            <?php echo htmlspecialchars($user['email']); ?>
+                                                            <?php echo htmlspecialchars(
+                                                                $user["email"],
+                                                            ); ?>
                                                         </div>
                                                     </td>
                                                     <td class="px-6 py-4 whitespace-nowrap">
                                                         <?php
                                                         $roleColors = [
-                                                            'Admin' => 'bg-red-100 text-red-800 border-red-300',
-                                                            'Commuter' => 'bg-gray-100 text-gray-800 border-gray-300'
+                                                            "Admin" =>
+                                                                "bg-red-100 text-red-800 border-red-300",
+                                                            "Commuter" =>
+                                                                "bg-gray-100 text-gray-800 border-gray-300",
                                                         ];
-                                                        $roleColor = $roleColors[$user['role']] ?? 'bg-gray-100 text-gray-800 border-gray-300';
+                                                        $roleColor =
+                                                            $roleColors[
+                                                                $user["role"]
+                                                            ] ??
+                                                            "bg-gray-100 text-gray-800 border-gray-300";
                                                         ?>
                                                         <span class="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full border <?php echo $roleColor; ?>">
-                                                            <?php echo htmlspecialchars($user['role']); ?>
+                                                            <?php echo htmlspecialchars(
+                                                                $user["role"],
+                                                            ); ?>
                                                         </span>
                                                     </td>
                                                     <td class="px-6 py-4 whitespace-nowrap">
-                                                        <?php if ($user['is_active']): ?>
+                                                        <?php if (
+                                                            $user["is_active"]
+                                                        ): ?>
                                                             <span class="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800 border-green-300">
                                                                 Active
                                                             </span>
@@ -365,17 +422,49 @@ try {
                                                         <?php endif; ?>
                                                     </td>
                                                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                                        <?php echo date('M d, Y', strtotime($user['created_at'])); ?>
+                                                        <?php echo date(
+                                                            "M d, Y",
+                                                            strtotime(
+                                                                $user[
+                                                                    "created_at"
+                                                                ],
+                                                            ),
+                                                        ); ?>
                                                     </td>
                                                     <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                                        <a href="?edit=<?php echo $user['id']; ?>" class="text-blue-600 hover:text-blue-900 mr-2">Edit</a>
-                                                        <?php if ($user['id'] != $_SESSION['user_id']): ?>
-                                                            <a href="?toggle_status=<?php echo $user['id']; ?>" 
-                                                               onclick="return confirm('Are you sure you want to <?php echo $user['is_active'] ? 'deactivate' : 'activate'; ?> this user?')"
-                                                               class="text-<?php echo $user['is_active'] ? 'orange' : 'green'; ?>-600 hover:text-<?php echo $user['is_active'] ? 'orange' : 'green'; ?>-900 mr-2">
-                                                                <?php echo $user['is_active'] ? 'Deactivate' : 'Activate'; ?>
+                                                        <a href="?edit=<?php echo $user[
+                                                            "id"
+                                                        ]; ?>" class="text-blue-600 hover:text-blue-900 mr-2">Edit</a>
+                                                        <?php if (
+                                                            $user["id"] !=
+                                                            $_SESSION["user_id"]
+                                                        ): ?>
+                                                            <a href="?toggle_status=<?php echo $user[
+                                                                "id"
+                                                            ]; ?>"
+                                                               onclick="return confirm('Are you sure you want to <?php echo $user[
+                                                                   "is_active"
+                                                               ]
+                                                                   ? "deactivate"
+                                                                   : "activate"; ?> this user?')"
+                                                               class="text-<?php echo $user[
+                                                                   "is_active"
+                                                               ]
+                                                                   ? "orange"
+                                                                   : "green"; ?>-600 hover:text-<?php echo $user[
+    "is_active"
+]
+    ? "orange"
+    : "green"; ?>-900 mr-2">
+                                                                <?php echo $user[
+                                                                    "is_active"
+                                                                ]
+                                                                    ? "Deactivate"
+                                                                    : "Activate"; ?>
                                                             </a>
-                                                            <a href="?delete=<?php echo $user['id']; ?>" 
+                                                            <a href="?delete=<?php echo $user[
+                                                                "id"
+                                                            ]; ?>"
                                                                onclick="return confirm('Are you sure you want to delete this user?')"
                                                                class="text-red-600 hover:text-red-900">Delete</a>
                                                         <?php else: ?>
@@ -395,46 +484,72 @@ try {
                     <div class="lg:col-span-1">
                         <div class="glass-card rounded-2xl p-6">
                             <h3 class="text-xl font-semibold text-gray-800 mb-4">
-                                <?php echo $edit_user ? 'Edit User' : 'Add New User'; ?>
+                                <?php echo $edit_user
+                                    ? "Edit User"
+                                    : "Add New User"; ?>
                             </h3>
-                            
+
                             <form method="POST" action="" class="space-y-4">
                                 <?php if ($edit_user): ?>
-                                    <input type="hidden" name="user_id" value="<?php echo $edit_user['id']; ?>">
+                                    <input type="hidden" name="user_id" value="<?php echo $edit_user[
+                                        "id"
+                                    ]; ?>">
                                 <?php endif; ?>
-                                
+
                                 <div>
                                     <label for="name" class="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
-                                    <input type="text" id="name" name="name" required 
-                                           value="<?php echo htmlspecialchars($edit_user['name'] ?? ($_POST['name'] ?? '')); ?>"
+                                    <input type="text" id="name" name="name" required
+                                           value="<?php echo htmlspecialchars(
+                                               $edit_user["name"] ??
+                                                   ($_POST["name"] ?? ""),
+                                           ); ?>"
                                            class="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
                                 </div>
-                                
+
                                 <div>
                                     <label for="email" class="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                                    <input type="email" id="email" name="email" required 
-                                           value="<?php echo htmlspecialchars($edit_user['email'] ?? ($_POST['email'] ?? '')); ?>"
+                                    <input type="email" id="email" name="email" required
+                                           value="<?php echo htmlspecialchars(
+                                               $edit_user["email"] ??
+                                                   ($_POST["email"] ?? ""),
+                                           ); ?>"
                                            class="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
                                 </div>
-                                
+
                                 <div>
                                     <label for="role" class="block text-sm font-medium text-gray-700 mb-1">Role</label>
                                     <select id="role" name="role" required
                                             class="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
-                                        <option value="Commuter" <?php echo (($edit_user['role'] ?? ($_POST['role'] ?? 'Commuter')) === 'Commuter') ? 'selected' : ''; ?>>Commuter</option>
-                                        <option value="Admin" <?php echo (($edit_user['role'] ?? ($_POST['role'] ?? '')) === 'Admin') ? 'selected' : ''; ?>>Admin</option>
+                                        <option value="Commuter" <?php echo ($edit_user[
+                                            "role"
+                                        ] ??
+                                            ($_POST["role"] ?? "Commuter")) ===
+                                        "Commuter"
+                                            ? "selected"
+                                            : ""; ?>>Commuter</option>
+                                        <option value="Admin" <?php echo ($edit_user[
+                                            "role"
+                                        ] ??
+                                            ($_POST["role"] ?? "")) ===
+                                        "Admin"
+                                            ? "selected"
+                                            : ""; ?>>Admin</option>
                                     </select>
                                 </div>
-                                
+
                                 <div>
                                     <label for="password" class="block text-sm font-medium text-gray-700 mb-1">
-                                        Password <?php echo $edit_user ? '(leave blank to keep current)' : ''; ?>
+                                        Password <?php echo $edit_user
+                                            ? "(leave blank to keep current)"
+                                            : ""; ?>
                                     </label>
                                     <div class="relative">
-                                        <input type="password" id="password" name="password" 
-                                               <?php echo $edit_user ? '' : 'required'; ?> minlength="6"
+                                        <input type="password" id="password" name="password"
+                                               <?php echo $edit_user
+                                                   ? ""
+                                                   : "required"; ?> minlength="6"
                                                class="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
-                                        <button type="button" onclick="togglePassword('password')" 
+                                        <button type="button" onclick="togglePassword('password')"
                                                 class="absolute right-3 top-2 text-gray-500 hover:text-gray-700">
                                             <svg id="eye-icon-password" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
@@ -446,14 +561,14 @@ try {
                                         </button>
                                     </div>
                                 </div>
-                                
+
                                 <?php if (!$edit_user): ?>
                                 <div>
                                     <label for="confirm_password" class="block text-sm font-medium text-gray-700 mb-1">Confirm Password</label>
                                     <div class="relative">
                                         <input type="password" id="confirm_password" name="confirm_password" required minlength="6"
                                                class="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
-                                        <button type="button" onclick="togglePassword('confirm_password')" 
+                                        <button type="button" onclick="togglePassword('confirm_password')"
                                                 class="absolute right-3 top-2 text-gray-500 hover:text-gray-700">
                                             <svg id="eye-icon-confirm_password" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
@@ -466,14 +581,16 @@ try {
                                     </div>
                                 </div>
                                 <?php endif; ?>
-                                
+
                                 <div class="flex space-x-2 pt-2">
-                                    <button type="submit" 
+                                    <button type="submit"
                                             class="flex-1 bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 transition duration-150 font-medium">
-                                        <?php echo $edit_user ? 'Update User' : 'Add User'; ?>
+                                        <?php echo $edit_user
+                                            ? "Update User"
+                                            : "Add User"; ?>
                                     </button>
                                     <?php if ($edit_user): ?>
-                                        <a href="user_management.php" 
+                                        <a href="user_management.php"
                                            class="bg-gray-200 text-gray-700 py-2 px-4 rounded-md hover:bg-gray-300 transition duration-150 font-medium">
                                             Cancel
                                         </a>
@@ -486,13 +603,13 @@ try {
             </div>
         </main>
     </div>
-    
+
     <script>
         function togglePassword(fieldId) {
             const passwordField = document.getElementById(fieldId);
             const eyeIcon = document.getElementById('eye-icon-' + fieldId);
             const eyeOffIcon = document.getElementById('eye-off-icon-' + fieldId);
-            
+
             if (passwordField.type === 'password') {
                 passwordField.type = 'text';
                 eyeIcon.classList.add('hidden');
