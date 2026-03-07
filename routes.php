@@ -82,10 +82,10 @@ try {
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&display=swap" rel="stylesheet">
     <style>
         :root {
-            --transit-primary-route: #ff1744;    /* Bright Red */
-            --transit-secondary-route: #4169e1;  /* Royal Blue */
-            --transit-info: #facc15;             /* Vivid Yellow */
-            --transit-foundation: #050505;       /* Matte Black */
+            --transit-primary-route: #22335C;   /* Navy Blue */
+            --transit-secondary-route: #5B7B99; /* Slate Blue */
+            --transit-info: #FBC061;            /* Gold/Yellow */
+            --transit-foundation: #E8E1D8;      /* Light Gray */
         }
         .brand-font {
             font-family: 'Poppins', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -117,6 +117,45 @@ try {
             background-color: var(--transit-info);
             color: #1f2933;
         }
+        
+        /* Glassmorphism styles */
+        .glass {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+        }
+        
+        .glass-nav {
+            background: rgba(34, 51, 92, 0.8);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 4px 16px 0 rgba(31, 38, 135, 0.3);
+        }
+        
+        .glass-card {
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(15px);
+            -webkit-backdrop-filter: blur(15px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.25);
+        }
+        
+        .glass-input {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: white;
+        }
+        
+        .glass-input:focus {
+            background: rgba(255, 255, 255, 0.2);
+            border-color: var(--transit-info);
+            box-shadow: 0 0 0 3px rgba(251, 191, 36, 0.3);
+        }
         .route-map {
             height: 300px;
             border-radius: 8px;
@@ -140,8 +179,8 @@ try {
         }
     </style>
 </head>
-<body class="bg-[#F3F4F6] min-h-screen">
-    <nav class="fixed top-0 inset-x-0 z-30 bg-[#1E3A8A] text-white shadow-sm">
+<body class="bg-[var(--transit-foundation)] min-h-screen">
+    <nav class="fixed top-0 inset-x-0 z-30 glass-nav text-white shadow-lg">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between items-center h-16">
                 <div class="flex items-center space-x-8">
@@ -151,7 +190,7 @@ try {
                         <a href="about.php" class="text-gray-100 hover:text-white px-3 py-2 rounded-md text-sm font-medium">About</a>
                         <a href="report.php" class="text-gray-100 hover:text-white px-3 py-2 rounded-md text-sm font-medium">Submit Report</a>
                         <a href="reports_map.php" class="text-gray-100 hover:text-white px-3 py-2 rounded-md text-sm font-medium">Reports Map</a>
-                        <a href="routes.php" class="bg-blue-500 text-white px-3 py-2 rounded-md text-sm font-medium border-b-2 border-blue-800">Routes</a>
+                        <a href="routes.php" class="glass px-4 py-2 rounded-lg text-sm font-medium border border-white/20">Routes</a>
                     </div>
                     <div id="mobileMenu" class="md:hidden hidden absolute top-16 left-0 right-0 bg-[#1E3A8A] text-white flex flex-col space-y-1 px-4 py-2 z-20">
                         <a href="user_dashboard.php" class="block px-3 py-2 rounded-md text-sm font-medium">Home</a>
@@ -208,7 +247,7 @@ try {
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-6">
         <!-- Header -->
         <div class="bg-white rounded-2xl shadow-md overflow-hidden mb-6">
-            <div class="px-6 py-4 border-b border-gray-200">
+            <div class="px-6 py-4 border-b border-white/20">
                 <div class="flex items-center justify-between">
                     <div>
                         <h2 class="text-2xl font-semibold text-gray-800">Transport Routes</h2>
@@ -228,7 +267,7 @@ try {
 
         <!-- View Tabs -->
         <div class="bg-white rounded-2xl shadow-md overflow-hidden mb-6">
-            <div class="flex border-b border-gray-200">
+            <div class="px-6 py-4 border-b border-white/20">
                 <button id="individualTab" class="flex-1 px-6 py-3 text-center font-medium tab-active transition-colors">
                     <svg class="w-5 h-5 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"></path>
@@ -247,7 +286,7 @@ try {
         <!-- Individual Routes View -->
         <div id="individualView" class="space-y-6">
             <?php if (empty($routes)): ?>
-                <div class="bg-white rounded-2xl shadow-md p-8 text-center">
+                <div class="glass-card rounded-2xl shadow-md p-8 text-center">
                     <svg class="w-16 h-16 mx-auto text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"></path>
                     </svg>
@@ -262,7 +301,7 @@ try {
                 </div>
             <?php else: ?>
                 <?php foreach ($routes as $route): ?>
-                    <div class="bg-white rounded-2xl shadow-md overflow-hidden route-card">
+                    <div class="glass-card rounded-2xl shadow-md overflow-hidden route-card">
                         <div class="p-6">
                             <div class="flex items-center justify-between mb-4">
                                 <div>
@@ -318,8 +357,8 @@ try {
 
         <!-- Combined View -->
         <div id="combinedView" class="hidden">
-            <div class="bg-white rounded-2xl shadow-md overflow-hidden">
-                <div class="p-6 border-b border-gray-200">
+            <div class="glass-card rounded-2xl shadow-md overflow-hidden">
+                <div class="px-6 py-4 border-b border-white/20">
                     <h3 class="text-xl font-semibold text-gray-800 mb-2">All Routes Combined</h3>
                     <p class="text-sm text-gray-600">View all transport routes on a single map</p>
                     

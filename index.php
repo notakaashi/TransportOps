@@ -29,10 +29,10 @@ if (isset($_SESSION['user_id'])) {
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&display=swap" rel="stylesheet">
     <style>
         :root {
-            --transit-primary-route: #ff1744;    /* Bright Red */
-            --transit-secondary-route: #4169e1;  /* Royal Blue */
-            --transit-info: #facc15;             /* Vivid Yellow */
-            --transit-foundation: #050505;       /* Matte Black */
+            --transit-primary-route: #22335C;   /* Navy Blue */
+            --transit-secondary-route: #5B7B99; /* Slate Blue */
+            --transit-info: #FBC061;            /* Gold/Yellow */
+            --transit-foundation: #E8E1D8;      /* Light Gray */
         }
         .brand-font {
             font-family: 'Poppins', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -64,17 +64,56 @@ if (isset($_SESSION['user_id'])) {
             background-color: var(--transit-info);
             color: #1f2933;
         }
+        
+        /* Glassmorphism styles */
+        .glass {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+        }
+        
+        .glass-nav {
+            background: rgba(34, 51, 92, 0.8);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 4px 16px 0 rgba(31, 38, 135, 0.3);
+        }
+        
+        .glass-card {
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(15px);
+            -webkit-backdrop-filter: blur(15px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.25);
+        }
+        
+        .glass-input {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: white;
+        }
+        
+        .glass-input:focus {
+            background: rgba(255, 255, 255, 0.2);
+            border-color: var(--transit-info);
+            box-shadow: 0 0 0 3px rgba(251, 191, 36, 0.3);
+        }
     </style>
 </head>
-<body class="bg-[#F3F4F6] min-h-screen">
+<body class="bg-[var(--transit-foundation)] min-h-screen">
     <!-- Navigation Bar -->
-    <nav class="bg-[#1E3A8A] text-white shadow-md">
+    <nav class="fixed top-0 inset-x-0 z-30 glass-nav text-white shadow-lg">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between items-center h-16">
                 <div class="flex items-center space-x-8">
                     <a href="index.php" id="brandLink" class="brand-font text-xl sm:text-2xl font-bold text-white whitespace-nowrap">Transport Ops</a>
                     <div class="hidden md:flex space-x-4">
-                        <a href="index.php" class="bg-blue-500 text-white px-3 py-2 rounded-md text-sm font-medium border-b-2 border-blue-800">Home</a>
+                        <a href="index.php" class="glass px-4 py-2 rounded-lg text-sm font-medium border border-white/20">Home</a>
                         <a href="about.php" class="text-gray-100 hover:text-white px-3 py-2 rounded-md text-sm font-medium">About</a>
                     </div>
                     <div id="mobileMenu" class="md:hidden hidden absolute top-16 left-0 right-0 bg-[#1E3A8A] text-white flex flex-col space-y-1 px-4 py-2 z-20">
@@ -84,11 +123,11 @@ if (isset($_SESSION['user_id'])) {
                 </div>
                 <div class="flex items-center gap-2 sm:gap-4">
                     <a href="register.php" 
-                       class="text-white border border-white/40 hover:bg-white hover:text-[#1E3A8A] px-2 sm:px-3 py-2 rounded-md text-sm font-medium transition duration-150 whitespace-nowrap">
+                       class="glass glass-input px-4 py-3 rounded-lg hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-white/60 focus:ring-offset-2 focus:ring-offset-transparent transition duration-150 font-medium whitespace-nowrap">
                         Register
                     </a>
                     <a href="login.php" 
-                       class="bg-[#10B981] text-white px-3 sm:px-4 py-2 rounded-md hover:bg-[#059669] focus:outline-none focus:ring-2 focus:ring-white/60 focus:ring-offset-2 focus:ring-offset-[#1E3A8A] transition duration-150 font-medium whitespace-nowrap">
+                       class="glass glass-input px-4 py-3 rounded-lg hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-white/60 focus:ring-offset-2 focus:ring-offset-transparent transition duration-150 font-medium whitespace-nowrap">
                         Login
                     </a>
                 </div>
@@ -97,8 +136,8 @@ if (isset($_SESSION['user_id'])) {
     </nav>
 
     <!-- Hero Section -->
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 sm:py-16">
-        <div class="text-center">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 sm:pt-24 py-12 sm:py-16">
+        <div class="glass-card rounded-2xl p-8 sm:p-12 text-center">
             <h1 class="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-gray-900 mb-4 sm:mb-6 leading-tight tracking-tight">
                 Public Transportation Operations System
             </h1>
@@ -107,12 +146,12 @@ if (isset($_SESSION['user_id'])) {
                 Monitor PUV units, track crowding levels, and optimize transportation services.
             </p>
             <div class="flex flex-col sm:flex-row justify-center gap-3 sm:gap-4 max-w-md sm:max-w-none mx-auto">
-                <a href="register.php" 
-                   class="bg-blue-600 text-white px-6 sm:px-8 py-3 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition duration-150 font-medium text-base sm:text-lg w-full sm:w-auto">
+                <a href="login.php" 
+                   class="glass glass-input px-8 py-4 rounded-lg hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-white/60 focus:ring-offset-2 focus:ring-offset-transparent transition duration-150 font-medium text-base sm:text-lg w-full sm:w-auto">
                     Get Started
                 </a>
                 <a href="login.php" 
-                   class="bg-white text-blue-600 px-6 sm:px-8 py-3 rounded-lg border-2 border-blue-600 hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition duration-150 font-medium text-base sm:text-lg w-full sm:w-auto">
+                   class="glass glass-input px-8 py-4 rounded-lg hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-white/60 focus:ring-offset-2 focus:ring-offset-transparent transition duration-150 font-medium text-base sm:text-lg w-full sm:w-auto">
                     Login
                 </a>
             </div>
@@ -123,7 +162,7 @@ if (isset($_SESSION['user_id'])) {
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
         <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
             <!-- Feature 1 -->
-            <div class="bg-white rounded-lg shadow-lg p-6 hover:shadow-xl transition duration-300">
+            <div class="glass-card rounded-2xl p-6 hover:shadow-2xl transition duration-300">
                 <div class="bg-blue-100 w-16 h-16 rounded-full flex items-center justify-center mb-4">
                     <svg class="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path>
@@ -136,7 +175,7 @@ if (isset($_SESSION['user_id'])) {
             </div>
 
             <!-- Feature 2 -->
-            <div class="bg-white rounded-lg shadow-lg p-6 hover:shadow-xl transition duration-300">
+            <div class="glass-card rounded-2xl p-6 hover:shadow-2xl transition duration-300">
                 <div class="bg-green-100 w-16 h-16 rounded-full flex items-center justify-center mb-4">
                     <svg class="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path>
@@ -150,7 +189,7 @@ if (isset($_SESSION['user_id'])) {
             </div>
 
             <!-- Feature 3 -->
-            <div class="bg-white rounded-lg shadow-lg p-6 hover:shadow-xl transition duration-300">
+            <div class="glass-card rounded-2xl p-6 hover:shadow-2xl transition duration-300">
                 <div class="bg-yellow-100 w-16 h-16 rounded-full flex items-center justify-center mb-4">
                     <svg class="w-8 h-8 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>

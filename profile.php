@@ -167,6 +167,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($error) && !isset($_POST['act
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&display=swap" rel="stylesheet">
     <style>
+        :root {
+            --transit-primary-route: #22335C;   /* Navy Blue */
+            --transit-secondary-route: #5B7B99; /* Slate Blue */
+            --transit-info: #FBC061;            /* Gold/Yellow */
+            --transit-foundation: #E8E1D8;      /* Light Gray */
+        }
         .brand-font {
             font-family: 'Poppins', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
             letter-spacing: 0.02em;
@@ -221,9 +227,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($error) && !isset($_POST['act
         }
     </style>
 </head>
-<body class="bg-[#F3F4F6] min-h-screen">
+<body class="bg-[var(--transit-foundation)] min-h-screen">
     <!-- Navigation Bar -->
-    <nav class="fixed top-0 inset-x-0 z-30 bg-[#1E3A8A] text-white shadow-sm">
+    <nav class="fixed top-0 inset-x-0 z-30 bg-[var(--transit-primary-route)] text-white shadow-sm">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between items-center h-16">
                 <div class="flex items-center space-x-8">
@@ -272,8 +278,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($error) && !isset($_POST['act
                     </button>
                     <div id="profileMenu"
                          class="hidden absolute right-0 top-11 w-44 bg-white text-gray-800 rounded-lg shadow-lg border border-gray-100 py-1 z-40">
-                        <a href="profile.php" class="block px-3 py-2 text-sm bg-gray-50 font-medium">View &amp; Edit Profile</a>
-                        <a href="public_profile.php?id=<?php echo $_SESSION['user_id']; ?>" class="block px-3 py-2 text-sm hover:bg-gray-50">View Public Profile</a>
+                        <a href="profile.php" class="block px-3 py-2 text-sm hover:bg-gray-50<?php if (basename($_SERVER['PHP_SELF']) == 'profile.php') echo ' font-bold bg-gray-100'; ?>">View &amp; Edit Profile</a>
+                        <a href="public_profile.php?id=<?php echo $_SESSION['user_id']; ?>" class="block px-3 py-2 text-sm hover:bg-gray-50<?php if (basename($_SERVER['PHP_SELF']) == 'public_profile.php' && isset($_GET['id']) && $_GET['id'] == $_SESSION['user_id']) echo ' font-bold bg-gray-100'; ?>">View Public Profile</a>
                         <div class="my-1 border-t border-gray-100"></div>
                         <a href="logout.php" class="block px-3 py-2 text-sm text-red-600 hover:bg-red-50">Logout</a>
                     </div>

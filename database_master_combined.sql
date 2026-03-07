@@ -3,6 +3,7 @@
 --  Master Database Script (Combined)
 --  Includes: base schema + profile images + user activation
 --             + route definitions/stops + route-only reports
+--             + trust score + rejected reports status
 -- ============================================================
 
 CREATE DATABASE IF NOT EXISTS `transport_ops`
@@ -23,6 +24,7 @@ CREATE TABLE IF NOT EXISTS `users` (
     `password`      VARCHAR(255) NOT NULL,
     `role`          ENUM('Admin','Commuter') NOT NULL DEFAULT 'Commuter',
     `is_active`     TINYINT(1)   NOT NULL DEFAULT 1,
+    `trust_score`   DECIMAL(5,2) DEFAULT 50.00,
     `created_at`    TIMESTAMP             DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),
     UNIQUE KEY  `uq_email`          (`email`),
@@ -138,6 +140,7 @@ CREATE TABLE IF NOT EXISTS `reports` (
     `is_verified`          TINYINT(1)             DEFAULT 0,
     `geofence_validated`   TINYINT(1)             DEFAULT 0,
     `peer_verifications`   INT(11)                DEFAULT 0,
+    `status`               ENUM('pending','verified','rejected') DEFAULT 'pending',
     PRIMARY KEY (`id`),
     CONSTRAINT `fk_reports_user`
         FOREIGN KEY (`user_id`)             REFERENCES `users`(`id`)            ON DELETE CASCADE,
@@ -149,7 +152,8 @@ CREATE TABLE IF NOT EXISTS `reports` (
     INDEX `idx_puv_id`              (`puv_id`),
     INDEX `idx_route_definition_id` (`route_definition_id`),
     INDEX `idx_timestamp`           (`timestamp`),
-    INDEX `idx_trust_score`         (`trust_score`)
+    INDEX `idx_trust_score`         (`trust_score`),
+    INDEX `idx_status`              (`status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ============================================================
@@ -173,3 +177,30 @@ CREATE TABLE IF NOT EXISTS `report_verifications` (
     UNIQUE KEY `uniq_report_verifier` (`report_id`, `verifier_user_id`),
     INDEX `idx_report_id` (`report_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================================
+--  TABLE: trust_score_logs
+--  Logs trust score changes for users
+-- ============================================================
+CREATE TABLE IF NOT EXISTS trust_score_logs (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    old_score DECIMAL(5,2) NOT NULL,
+    new_score DECIMAL(5,2) NOT NULL,
+    reason VARCHAR(255) NOT NULL,
+    adjusted_by INT NULL, -- NULL for automatic adjustments, user_id for manual adjustments
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    FOREIGN KEY (adjusted_by) REFERENCES users(id)
+);
+
+-- =============================
+-- DATA MIGRATIONS & UPDATES
+-- =============================
+
+-- Initialize existing users with trust score of 50
+UPDATE users SET trust_score = 50.00 WHERE trust_score IS NULL;
+
+-- Update existing reports to have appropriate status
+UPDATE reports SET status = 'verified' WHERE is_verified = 1;
+UPDATE reports SET status = 'pending' WHERE is_verified = 0;

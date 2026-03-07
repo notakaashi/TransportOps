@@ -38,10 +38,10 @@ if ($is_logged_in && isset($_SESSION['user_id'])) {
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&display=swap" rel="stylesheet">
     <style>
         :root {
-            --transit-primary-route: #ff1744;
-            --transit-secondary-route: #4169e1;
-            --transit-info: #facc15;
-            --transit-foundation: #050505;
+            --transit-primary-route: #22335C;   /* Navy Blue */
+            --transit-secondary-route: #5B7B99; /* Slate Blue */
+            --transit-info: #FBC061;            /* Gold/Yellow */
+            --transit-foundation: #E8E1D8;      /* Light Gray */
         }
         .brand-font {
             font-family: 'Poppins', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -49,34 +49,30 @@ if ($is_logged_in && isset($_SESSION['user_id'])) {
         }
     </style>
 </head>
-<body class="bg-[#F3F4F6]">
+<body class="bg-[var(--transit-foundation)]">
     <!-- Navigation Bar -->
-    <nav class="fixed top-0 inset-x-0 z-30 bg-[#1E3A8A] text-white shadow-sm">
+    <nav class="fixed top-0 inset-x-0 z-30 glass-nav text-white shadow-lg">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between items-center h-16">
                 <div class="flex items-center space-x-8">
                     <a href="index.php" id="brandLink" class="brand-font text-xl sm:text-2xl font-bold text-white whitespace-nowrap">Transport Ops</a>
                     <div class="hidden md:flex space-x-4">
+                        <a href="<?php echo $is_logged_in ? 'user_dashboard.php' : 'index.php'; ?>" class="glass px-4 py-2 rounded-lg text-sm font-medium border border-white/20<?php if (basename($_SERVER['PHP_SELF']) == ($is_logged_in ? 'user_dashboard.php' : 'index.php')) echo ' bg-white/30'; ?>">Home</a>
+                        <a href="about.php" class="glass px-4 py-2 rounded-lg text-sm font-medium border border-white/20 bg-white/30">About</a>
                         <?php if ($is_logged_in): ?>
-                            <a href="user_dashboard.php" class="text-gray-100 hover:text-white px-3 py-2 rounded-md text-sm font-medium">Home</a>
-                        <?php endif; ?>
-                        <a href="about.php" class="bg-blue-500 text-white px-3 py-2 rounded-md text-sm font-medium border-b-2 border-blue-800">About</a>
-                        <?php if ($is_logged_in): ?>
-                            <a href="report.php" class="text-gray-100 hover:text-white px-3 py-2 rounded-md text-sm font-medium">Submit Report</a>
-                            <a href="reports_map.php" class="text-gray-100 hover:text-white px-3 py-2 rounded-md text-sm font-medium">Reports Map</a>
-                            <a href="routes.php" class="text-gray-100 hover:text-white px-3 py-2 rounded-md text-sm font-medium">Routes</a>
+                            <a href="report.php" class="glass px-4 py-2 rounded-lg text-sm font-medium border border-white/20">Submit Report</a>
+                            <a href="reports_map.php" class="glass px-4 py-2 rounded-lg text-sm font-medium border border-white/20">Reports Map</a>
+                            <a href="routes.php" class="glass px-4 py-2 rounded-lg text-sm font-medium border border-white/20">Routes</a>
                         <?php endif; ?>
                     </div>
                     <!-- mobile dropdown menu -->
                     <div id="mobileMenu" class="md:hidden hidden absolute top-16 left-0 right-0 bg-[#1E3A8A] text-white flex flex-col space-y-1 px-4 py-2 z-20">
+                        <a href="<?php echo $is_logged_in ? 'user_dashboard.php' : 'index.php'; ?>" class="glass px-4 py-2 rounded-lg text-sm font-medium border border-white/20<?php if (basename($_SERVER['PHP_SELF']) == ($is_logged_in ? 'user_dashboard.php' : 'index.php')) echo ' bg-white/30'; ?>">Home</a>
+                        <a href="about.php" class="glass px-4 py-2 rounded-lg text-sm font-medium border border-white/20 bg-white/30">About</a>
                         <?php if ($is_logged_in): ?>
-                            <a href="user_dashboard.php" class="block px-3 py-2 rounded-md text-sm font-medium">Home</a>
-                        <?php endif; ?>
-                        <a href="about.php" class="block px-3 py-2 rounded-md text-sm font-medium">About</a>
-                        <?php if ($is_logged_in): ?>
-                            <a href="report.php" class="block px-3 py-2 rounded-md text-sm font-medium">Submit Report</a>
-                            <a href="reports_map.php" class="block px-3 py-2 rounded-md text-sm font-medium">Reports Map</a>
-                            <a href="routes.php" class="block px-3 py-2 rounded-md text-sm font-medium">Routes</a>
+                            <a href="report.php" class="glass px-4 py-2 rounded-lg text-sm font-medium border border-white/20">Submit Report</a>
+                            <a href="reports_map.php" class="glass px-4 py-2 rounded-lg text-sm font-medium border border-white/20">Reports Map</a>
+                            <a href="routes.php" class="glass px-4 py-2 rounded-lg text-sm font-medium border border-white/20">Routes</a>
                         <?php endif; ?>
                     </div>
                 </div>
@@ -144,7 +140,7 @@ if ($is_logged_in && isset($_SESSION['user_id'])) {
         <div class="space-y-12">
 
             <!-- System Overview -->
-            <section class="bg-white rounded-2xl shadow-md p-8">
+            <section class="glass-card rounded-2xl shadow-md p-8">
                 <h2 class="text-2xl font-bold text-gray-800 mb-4">System Overview</h2>
                 <p class="text-gray-600 leading-relaxed mb-4">
                     The Transport Operations System lets commuters and transit supervisors work together to capture on-the-ground conditions in real time. Registered users can report crowding levels, wait times, and delay reasons for specific routes or stops; each submission is automatically geofenced and assigned a trust score through peer verification to ensure data accuracy. A centralized web dashboard aggregates these reports alongside live GPS tracking of vehicles.
@@ -155,10 +151,10 @@ if ($is_logged_in && isset($_SESSION['user_id'])) {
             </section>
 
             <!-- Key Features -->
-            <section class="bg-white rounded-2xl shadow-md p-8">
+            <section class="glass-card rounded-2xl shadow-md p-8">
                 <h2 class="text-2xl font-bold text-gray-800 mb-6">Key Features</h2>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div class="p-5 bg-blue-50 rounded-xl border border-blue-100">
+                    <div class="p-5 glass-input rounded-xl border border-white/20">
                         <div class="flex items-center gap-2 mb-2">
                             <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/>
@@ -169,7 +165,7 @@ if ($is_logged_in && isset($_SESSION['user_id'])) {
                             A centralized monitoring dashboard lets operations managers view the live GPS positions of all active bus units, with automated tracking of departure times and estimated arrivals replacing error-prone manual logs.
                         </p>
                     </div>
-                    <div class="p-5 bg-green-50 rounded-xl border border-green-100">
+                    <div class="p-5 glass-input rounded-xl border border-white/20">
                         <div class="flex items-center gap-2 mb-2">
                             <svg class="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0"/>
@@ -180,7 +176,7 @@ if ($is_logged_in && isset($_SESSION['user_id'])) {
                             Commuters at terminals and informal roadside stops submit live reports on crowd levels, queue lengths, and service disruptions. GPS-based geofencing and a peer-verification trust scoring system ensure that only credible, location-validated reports are used.
                         </p>
                     </div>
-                    <div class="p-5 bg-yellow-50 rounded-xl border border-yellow-100">
+                    <div class="p-5 glass-input rounded-xl border border-white/20">
                         <div class="flex items-center gap-2 mb-2">
                             <svg class="w-5 h-5 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
@@ -191,7 +187,7 @@ if ($is_logged_in && isset($_SESSION['user_id'])) {
                             Crowding heatmaps and peak-hour analytics highlight the time intervals and route segments with the highest passenger demand. Delay trend analysis tools process historical data to forecast recurring bottlenecks and travel time variances.
                         </p>
                     </div>
-                    <div class="p-5 bg-purple-50 rounded-xl border border-purple-100">
+                    <div class="p-5 glass-input rounded-xl border border-white/20">
                         <div class="flex items-center gap-2 mb-2">
                             <svg class="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
@@ -206,7 +202,7 @@ if ($is_logged_in && isset($_SESSION['user_id'])) {
             </section>
 
             <!-- Our Mission -->
-            <section class="bg-white rounded-2xl shadow-md p-8">
+            <section class="glass-card rounded-2xl shadow-md p-8">
                 <h2 class="text-2xl font-bold text-gray-800 mb-4">Our Mission</h2>
                 <p class="text-gray-600 leading-relaxed mb-4">
                     Our mission is to digitize and streamline daily public transit operations by integrating real-time crowding and delay data into transport management improving service reliability and enabling data-driven decisions across Metro Manila's urban and provincial routes.
@@ -217,7 +213,7 @@ if ($is_logged_in && isset($_SESSION['user_id'])) {
             </section>
 
             <!-- Technology Stack -->
-            <section class="bg-white rounded-2xl shadow-md p-8">
+            <section class="glass-card rounded-2xl shadow-md p-8">
                 <h2 class="text-2xl font-bold text-gray-800 mb-4">Technology Stack</h2>
                 <p class="text-gray-600 leading-relaxed mb-5">
                     The system is built on reliable, widely-supported web technologies to ensure performance, scalability, and ease of maintenance across all user devices.

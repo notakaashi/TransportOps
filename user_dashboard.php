@@ -87,10 +87,10 @@ function getStatusBadge($status) {
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&display=swap" rel="stylesheet">
     <style>
         :root {
-            --transit-primary-route: #ff1744;    /* Bright Red */
-            --transit-secondary-route: #4169e1;  /* Royal Blue */
-            --transit-info: #facc15;             /* Vivid Yellow */
-            --transit-foundation: #050505;       /* Matte Black */
+            --transit-primary-route: #22335C;   /* Navy Blue */
+            --transit-secondary-route: #5B7B99; /* Slate Blue */
+            --transit-info: #FBC061;            /* Gold/Yellow */
+            --transit-foundation: #E8E1D8;      /* Light Gray */
         }
         .brand-font {
             font-family: 'Poppins', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -122,11 +122,50 @@ function getStatusBadge($status) {
             background-color: var(--transit-info);
             color: #1f2933;
         }
+        
+        /* Glassmorphism styles */
+        .glass {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+        }
+        
+        .glass-nav {
+            background: rgba(34, 51, 92, 0.8);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 4px 16px 0 rgba(31, 38, 135, 0.3);
+        }
+        
+        .glass-card {
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(15px);
+            -webkit-backdrop-filter: blur(15px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.25);
+        }
+        
+        .glass-input {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: white;
+        }
+        
+        .glass-input:focus {
+            background: rgba(255, 255, 255, 0.2);
+            border-color: var(--transit-info);
+            box-shadow: 0 0 0 3px rgba(251, 191, 36, 0.3);
+        }
     </style>
 </head>
-<body class="bg-[#F3F4F6] min-h-screen">
+<body class="bg-[var(--transit-foundation)] min-h-screen">
     <!-- Navigation Bar (same as routes.php, report.php) -->
-    <nav class="fixed top-0 inset-x-0 z-30 bg-[#1E3A8A] text-white shadow-sm">
+    <nav class="fixed top-0 inset-x-0 z-30 glass-nav text-white shadow-lg">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between items-center h-16">
                 <div class="flex items-center space-x-8">
@@ -134,7 +173,7 @@ function getStatusBadge($status) {
                     <a href="index.php" id="brandLink" class="brand-font text-xl sm:text-2xl font-bold text-white whitespace-nowrap">Transport Ops</a>
                     <!-- desktop links -->
                     <div class="hidden md:flex space-x-4">
-                        <a href="user_dashboard.php" class="bg-blue-500 text-white px-3 py-2 rounded-md text-sm font-medium border-b-2 border-blue-800">Home</a>
+                        <a href="user_dashboard.php" class="glass px-4 py-2 rounded-lg text-sm font-medium border border-white/20">Home</a>
                         <a href="about.php" class="text-gray-100 hover:text-white px-3 py-2 rounded-md text-sm font-medium">About</a>
                         <a href="report.php" class="text-gray-100 hover:text-white px-3 py-2 rounded-md text-sm font-medium">Submit Report</a>
                         <a href="reports_map.php" class="text-gray-100 hover:text-white px-3 py-2 rounded-md text-sm font-medium">Reports Map</a>
@@ -190,8 +229,8 @@ function getStatusBadge($status) {
     <!-- Main Content -->
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-8">
         <!-- Header -->
-        <div class="bg-white rounded-2xl shadow-md overflow-hidden mb-6">
-            <div class="px-6 py-4 border-b border-gray-200">
+        <div class="glass-card rounded-2xl shadow-md overflow-hidden mb-6">
+            <div class="px-6 py-4 border-b border-white/20">
                 <h2 class="text-2xl font-semibold text-gray-800">Dashboard</h2>
                 <p class="text-sm text-gray-600">Welcome, <?php echo htmlspecialchars($_SESSION['user_name']); ?>! Help improve transportation services by reporting real-time conditions.</p>
             </div>
@@ -199,7 +238,7 @@ function getStatusBadge($status) {
 
         <!-- Quick Actions -->
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-            <a href="report.php" class="bg-white rounded-2xl shadow-md px-4 py-4 sm:px-5 sm:py-5 hover:shadow-lg transition duration-150 border-l-4 border-blue-500">
+            <a href="report.php" class="glass-card rounded-2xl px-4 py-4 sm:px-5 sm:py-5 hover:shadow-2xl transition duration-150 border-l-4 border-[var(--transit-info)]">
                 <div class="flex items-center justify-between gap-3">
                     <div>
                         <h3 class="text-sm sm:text-base font-semibold text-gray-800 mb-0.5">Submit Report</h3>
@@ -213,7 +252,7 @@ function getStatusBadge($status) {
                 </div>
             </a>
 
-            <div class="bg-white rounded-2xl shadow-md px-4 py-4 sm:px-5 sm:py-5 border-l-4 border-green-500">
+            <div class="glass-card rounded-2xl px-4 py-4 sm:px-5 sm:py-5 border-l-4 border-green-500">
                 <div class="flex items-center justify-between gap-3">
                     <div>
                         <h3 class="text-sm sm:text-base font-semibold text-gray-800 mb-0.5">Total Reports</h3>
@@ -227,7 +266,7 @@ function getStatusBadge($status) {
                 </div>
             </div>
 
-            <div class="bg-white rounded-2xl shadow-md px-4 py-4 sm:px-5 sm:py-5 border-l-4 border-purple-500">
+            <div class="glass-card rounded-2xl px-4 py-4 sm:px-5 sm:py-5 border-l-4 border-purple-500">
                 <div class="flex items-center justify-between gap-3">
                     <div>
                         <h3 class="text-sm sm:text-base font-semibold text-gray-800 mb-0.5">Verified Reports</h3>
@@ -259,8 +298,8 @@ function getStatusBadge($status) {
         </div>
 
         <!-- Recent Reports -->
-        <div class="bg-white rounded-2xl shadow-md overflow-hidden">
-            <div class="px-6 py-4 border-b border-gray-200">
+        <div class="glass-card rounded-2xl shadow-md overflow-hidden">
+            <div class="px-6 py-4 border-b border-white/20">
                 <h3 class="text-xl font-semibold text-gray-800">Your Recent Reports</h3>
             </div>
             <div class="overflow-x-auto">
