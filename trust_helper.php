@@ -300,6 +300,7 @@ function getAllUsersByTrustScore() {
                     trust_score,
                     role,
                     is_active,
+                    profile_image,
                     created_at
                 FROM users 
                 ORDER BY trust_score ASC
@@ -315,6 +316,7 @@ function getAllUsersByTrustScore() {
                     email,
                     role,
                     is_active,
+                    profile_image,
                     created_at
                 FROM users 
                 ORDER BY created_at ASC
@@ -325,6 +327,10 @@ function getAllUsersByTrustScore() {
             // Add default trust_score to each user
             foreach ($users as &$user) {
                 $user['trust_score'] = 50.0;
+                // Ensure profile_image key exists
+                if (!isset($user['profile_image'])) {
+                    $user['profile_image'] = null;
+                }
             }
         }
         

@@ -149,155 +149,41 @@ if ($selectedUserId > 0) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Trust Management - Admin Dashboard</title>
+    <title>Trust Management — Transport Ops</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <?php include "admin_layout_head.php"; ?>
     <style>
-        :root {
-            --transit-primary-route: #22335C;   /* Navy Blue */
-            --transit-secondary-route: #5B7B99; /* Slate Blue */
-            --transit-info: #FBC061;            /* Gold/Yellow */
-            --transit-foundation: #E8E1D8;      /* Light Gray */
-        }
-
-        /* Glassmorphism styles (aligned with user pages) */
-        .glass-card {
-            background: rgba(255, 255, 255, 0.15);
-            backdrop-filter: blur(15px);
-            -webkit-backdrop-filter: blur(15px);
-            border: 1px solid rgba(255, 255, 255, 0.30);
-            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.18);
-        }
-        .glass-sidebar {
-            background: rgba(34, 51, 92, 0.75);
-            backdrop-filter: blur(16px);
-            -webkit-backdrop-filter: blur(16px);
-            border: 1px solid rgba(255, 255, 255, 0.15);
-            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.35), 0 2px 8px 0 rgba(0,0,0,0.15);
-            transition: box-shadow 0.3s ease;
-        }
+        .main-area { padding: 2rem 2rem 3rem; overflow-y: auto; }
+        @media (max-width: 768px) { .main-area { padding: 5rem 1rem 2rem; } }
     </style>
 </head>
-<body class="bg-[var(--transit-foundation)]">
-    <div class="min-h-screen">
-        <!-- Sidebar -->
-        <aside id="adminSidebar" class="fixed top-4 inset-x-4 md:inset-x-auto md:left-4 md:w-64 md:h-[calc(100vh-2rem)] glass-sidebar text-white flex flex-col z-30 rounded-2xl shadow-2xl">
-            <div class="px-4 py-4 sm:p-6 flex-shrink-0 border-b border-[#475569] md:border-b-0">
-                <div id="adminNavToggle" class="flex items-center justify-between md:justify-start mb-4 md:mb-8 cursor-pointer md:cursor-default">
-                    <div class="bg-[#5B7B99] p-2 rounded-lg mr-3">
-                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path>
-                        </svg>
-                    </div>
-                    <h1 class="text-xl sm:text-2xl font-bold">Transport Ops</h1>
-                    <svg class="w-5 h-5 text-gray-300 md:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
-                    </svg>
-                </div>
-                <nav id="adminNavLinks" class="space-y-1 md:space-y-2 text-sm sm:text-base hidden md:block">
-                    <a href="admin_dashboard.php"
-                       class="flex items-center px-4 py-3 hover:bg-[#475569] rounded-lg transition duration-150 group">
-                        <svg class="w-5 h-5 mr-3 group-hover:text-[#E8E1D8]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
-                        </svg>
-                        Dashboard
-                    </a>
-                    <a href="admin_reports.php"
-                       class="flex items-center px-4 py-3 hover:bg-[#475569] rounded-lg transition duration-150 group">
-                        <svg class="w-5 h-5 mr-3 group-hover:text-[#E8E1D8]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-6a2 2 0 012-2h6m-4-4l4 4-4 4"></path>
-                        </svg>
-                        Reports
-                    </a>
-                    <a href="admin_trust_management.php"
-                       class="flex items-center px-4 py-3 bg-[#5B7B99] text-white rounded-lg hover:bg-[#4a6a89] transition duration-150 shadow-lg">
-                        <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                        </svg>
-                        Trust Management
-                    </a>
-                    <a href="route_status.php"
-                       class="flex items-center px-4 py-3 hover:bg-[#475569] rounded-lg transition duration-150 group">
-                        <svg class="w-5 h-5 mr-3 group-hover:text-[#E8E1D8]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"></path>
-                        </svg>
-                        Route Status
-                    </a>
-                    <a href="manage_routes.php"
-                       class="flex items-center px-4 py-3 hover:bg-[#475569] rounded-lg transition duration-150 group">
-                        <svg class="w-5 h-5 mr-3 group-hover:text-[#E8E1D8]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"></path>
-                        </svg>
-                        Manage Routes
-                    </a>
-                    <a href="heatmap.php"
-                       class="flex items-center px-4 py-3 hover:bg-[#475569] rounded-lg transition duration-150 group">
-                        <svg class="w-5 h-5 mr-3 group-hover:text-[#E8E1D8]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
-                        </svg>
-                        Crowdsourcing Heatmap
-                    </a>
-                    <a href="user_management.php"
-                       class="flex items-center px-4 py-3 hover:bg-[#475569] rounded-lg transition duration-150 group">
-                        <svg class="w-5 h-5 mr-3 group-hover:text-[#E8E1D8]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path>
-                        </svg>
-                        User Management
-                    </a>
-                </nav>
+<body>
+<?php include "admin_sidebar.php"; ?>
+
+    <!-- ═══ MAIN CONTENT ════════════════════════════════════ -->
+    <main class="main-area">
+
+        <!-- Page Header -->
+        <div style="margin-bottom:1.75rem;">
+            <h1 class="page-title">Trust Management</h1>
+            <p class="page-subtitle">Manage user trust scores, view credibility statistics, and reject invalid reports.</p>
+        </div>
+
+        <!-- Flash Messages -->
+        <?php if ($success): ?>
+            <div class="alert alert-success">
+                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+                <?php echo htmlspecialchars($success); ?>
             </div>
-            <div id="adminNavFooter" class="mt-auto p-4 sm:p-6 border-t border-[#475569] hidden md:block">
-                <div class="bg-[#475569] rounded-lg p-3 sm:p-4 mb-4">
-                    <p class="text-xs text-gray-400 mb-1">Logged in as</p>
-                    <div class="flex items-center justify-between">
-                        <p class="text-sm font-semibold"><?php echo htmlspecialchars(
-                            $_SESSION["user_name"],
-                        ); ?></p>
-                        <div class="flex items-center gap-2">
-                            <span class="px-2 py-1 bg-[#5B7B99] text-white text-xs rounded-full">Admin</span>
-                            <a href="logout.php" class="text-red-400 hover:text-red-300 transition-colors">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path>
-                                </svg>
-                            </a>
-                        </div>
-                    </div>
-                </div>
+        <?php endif; ?>
+        <?php if ($error): ?>
+            <div class="alert alert-error">
+                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                <?php echo htmlspecialchars($error); ?>
             </div>
-        </aside>
+        <?php endif; ?>
 
-        <!-- Main Content -->
-        <main class="w-full md:ml-72 pt-24 md:pt-0 overflow-x-hidden">
-            <!-- Mobile Navigation Toggle -->
-            <div class="md:hidden glass-card border-b border-white/20 px-4 py-3 flex items-center justify-between">
-                <button id="mobileMenuToggle" class="text-gray-600 hover:text-gray-900">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
-                    </svg>
-                </button>
-                <h1 class="text-lg font-semibold text-gray-800">Trust Management</h1>
-            </div>
-
-            <div class="p-4 sm:p-6 lg:p-8">
-                <!-- Page Header -->
-                <div class="mb-6">
-                    <h1 class="text-2xl sm:text-3xl font-bold text-gray-900">Trust Management</h1>
-                    <p class="text-gray-600 mt-2">Manage user trust scores, view credibility statistics, and reject invalid reports</p>
-                </div>
-
-                <!-- Success/Error Messages -->
-                <?php if ($success): ?>
-                    <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-6">
-                        <?php echo htmlspecialchars($success); ?>
-                    </div>
-                <?php endif; ?>
-
-                <?php if ($error): ?>
-                    <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-6">
-                        <?php echo htmlspecialchars($error); ?>
-                    </div>
-                <?php endif; ?>
-
-                <!-- Users Table -->
+        <!-- Users Table -->
                 <div class="glass-card rounded-2xl overflow-hidden mb-6">
                     <div class="px-6 py-4 border-b border-white/20">
                         <h2 class="text-xl font-semibold text-gray-800">All Users (Sorted by Trust Score)</h2>
@@ -409,7 +295,7 @@ if ($selectedUserId > 0) {
                                             ]; ?>" class="text-blue-600 hover:text-blue-900 mr-3">View Details</a>
                                             <a href="public_profile.php?id=<?php echo $user[
                                                 "id"
-                                            ]; ?>" class="text-gray-600 hover:text-gray-900">Public Profile</a>
+                                            ]; ?>&admin=1" class="text-gray-600 hover:text-gray-900">Public Profile</a>
                                         </td>
                                     </tr>
                                 <?php endforeach; ?>
@@ -490,7 +376,7 @@ if ($selectedUserId > 0) {
                                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Adjusted By</th>
                                             </tr>
                                         </thead>
-                                        <tbody class="bg-white/70 divide-y divide-gray-200">
+                                <tbody>
                                             <?php foreach (
                                                 $trustLogs
                                                 as $log
@@ -554,7 +440,7 @@ if ($selectedUserId > 0) {
                         </div>
 
                         <!-- Report Verification Management -->
-                        <div>
+
                             <h3 class="text-lg font-medium text-gray-800 mb-4">Report Verification Management</h3>
                             <?php if (empty($userReports)): ?>
                                 <p class="text-gray-600">No reports found for this user.</p>
@@ -689,37 +575,10 @@ if ($selectedUserId > 0) {
                         </div>
                     </div>
                 <?php endif; ?>
-            </div>
-        </main>
-    </div>
 
-    <style>
-        :root {
-            --transit-primary-route: #22335C;   /* Navy Blue */
-            --transit-secondary-route: #5B7B99; /* Slate Blue */
-            --transit-info: #FBC061;            /* Gold/Yellow */
-            --transit-foundation: #E8E1D8;      /* Light Gray */
-        }
-    </style>
+    </main>
+</div><!-- /app-layout -->
 
-    <script>
-        // Mobile menu toggle
-        const adminNavToggle = document.getElementById('adminNavToggle');
-        const adminNavLinks = document.getElementById('adminNavLinks');
-        const mobileMenuToggle = document.getElementById('mobileMenuToggle');
-
-        if (adminNavToggle && adminNavLinks) {
-            adminNavToggle.addEventListener('click', () => {
-                adminNavLinks.classList.toggle('hidden');
-            });
-        }
-
-        if (mobileMenuToggle && adminNavLinks) {
-            mobileMenuToggle.addEventListener('click', () => {
-                adminNavLinks.classList.toggle('hidden');
-            });
-        }
-    </script>
+<?php include "admin_sidebar_js.php"; ?>
 </body>
 </html>
-

@@ -12,6 +12,9 @@ require_once "trust_helper.php";
 // Get user ID from URL parameter
 $userId = isset($_GET["id"]) ? (int) $_GET["id"] : 0;
 
+// Check if coming from admin (hide navigation)
+$fromAdmin = isset($_GET["admin"]) && $_GET["admin"] == "1";
+
 if ($userId <= 0) {
     header("Location: index.php");
     exit();
@@ -119,6 +122,7 @@ $badge = $profile["badge"];
 </head>
 <body class="bg-[var(--transit-foundation)] min-h-screen">
     <!-- Navigation Bar -->
+    <?php if (!$fromAdmin): ?>
     <nav id="floatingNav" class="fixed top-4 left-1/2 -translate-x-1/2 z-30 glass-nav text-white rounded-2xl w-[calc(100%-2rem)] max-w-7xl">
         <div class="px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between items-center h-14">
@@ -214,9 +218,10 @@ $badge = $profile["badge"];
             </div>
         </div>
     </nav>
+    <?php endif; ?>
 
     <!-- Main Content -->
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 sm:pt-28 pb-12">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 <?php echo $fromAdmin ? 'pt-8' : 'pt-24 sm:pt-28'; ?> pb-12">
         <!-- Profile Header -->
         <div class="bg-white rounded-2xl shadow-md p-6 mb-6">
             <div class="flex items-center space-x-6">

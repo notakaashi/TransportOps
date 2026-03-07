@@ -74,248 +74,214 @@ try {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Reports - Transport Operations System</title>
+    <title>Reports — Transport Ops</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="js/osrm-helpers.js"></script>
+    <?php include "admin_layout_head.php"; ?>
     <style>
-        :root {
-            --transit-primary-route: #22335C;   /* Navy Blue */
-            --transit-secondary-route: #5B7B99; /* Slate Blue */
-            --transit-info: #FBC061;            /* Gold/Yellow */
-            --transit-foundation: #E8E1D8;      /* Light Gray */
+        /* Page-specific: full-height split layout */
+        body, html { height: 100%; }
+        .app-layout { height: 100vh; overflow: hidden; }
+        .main-area  { display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+        .reports-split { flex: 1; display: flex; overflow: hidden; min-height: 0; }
+        .reports-list  { width: 50%; overflow-y: auto; border-right: 1px solid rgba(34,51,92,0.08); }
+        .reports-map   { flex: 1; position: relative; }
+        #report-map    { width: 100%; height: 100%; min-height: 400px; }
+        @media (max-width: 1024px) {
+            .reports-list { width: 100%; }
+            .reports-map  { display: none; }
         }
 
-        /* Glassmorphism styles (aligned with user pages) */
-        .glass-card {
-            background: rgba(255, 255, 255, 0.15);
-            backdrop-filter: blur(15px);
-            -webkit-backdrop-filter: blur(15px);
-            border: 1px solid rgba(255, 255, 255, 0.30);
-            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.18);
+        /* Page header bar */
+        .page-header-bar {
+            padding: 1.25rem 1.5rem;
+            background: rgba(255,255,255,0.86);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid rgba(34,51,92,0.07);
+            flex-shrink: 0;
+            position: relative; z-index: 5;
         }
-        .glass-sidebar {
-            background: rgba(34, 51, 92, 0.75);
-            backdrop-filter: blur(16px);
-            -webkit-backdrop-filter: blur(16px);
-            border: 1px solid rgba(255, 255, 255, 0.15);
-            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.35), 0 2px 8px 0 rgba(0,0,0,0.15);
-            transition: box-shadow 0.3s ease;
+
+        /* Filter row */
+        .filter-row {
+            display: flex; align-items: center; gap: 0.75rem;
+            margin-top: 0.75rem; flex-wrap: wrap;
         }
+        .filter-label { font-size: 0.78rem; font-weight: 600; color: #374151; white-space: nowrap; }
+
+        /* View-on-map button */
+        .map-btn {
+            font-size: 0.75rem; font-weight: 600;
+            color: #1d4ed8; background: #dbeafe;
+            border: 1px solid #bfdbfe; border-radius: 999px;
+            padding: 0.2rem 0.65rem; cursor: pointer;
+            transition: all 0.15s; white-space: nowrap;
+        }
+        .map-btn:hover { background: #bfdbfe; color: #1e3a8a; }
+
+        /* Show-all button */
+        .show-all-btn {
+            font-size: 0.78rem; font-weight: 600;
+            color: #5B7B99; background: transparent;
+            border: none; cursor: pointer; padding: 0;
+            transition: color 0.15s;
+        }
+        .show-all-btn:hover { color: #22335C; }
     </style>
 </head>
-<body class="bg-[var(--transit-foundation)]">
-    <div class="min-h-screen">
-        <aside id="adminSidebar" class="fixed top-4 inset-x-4 md:inset-x-auto md:left-4 md:w-64 md:h-[calc(100vh-2rem)] glass-sidebar text-white flex flex-col z-30 rounded-2xl shadow-2xl">
-            <div class="px-4 py-4 sm:p-6 flex-shrink-0 border-b border-[#475569] md:border-b-0">
-                <div id="adminNavToggle" class="flex items-center justify-between md:justify-start mb-4 md:mb-8 cursor-pointer md:cursor-default">
-                    <div class="bg-[#5B7B99] p-2 rounded-lg mr-3">
-                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path>
-                        </svg>
-                    </div>
-                    <h1 class="text-xl sm:text-2xl font-bold">Transport Ops</h1>
-                    <svg class="w-5 h-5 text-gray-300 md:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
-                    </svg>
-                </div>
-                <nav id="adminNavLinks" class="space-y-1 md:space-y-2 text-sm sm:text-base hidden md:block">
-                    <a href="admin_dashboard.php"
-                       class="flex items-center px-4 py-3 hover:bg-[#475569] rounded-lg transition duration-150 group">
-                        <svg class="w-5 h-5 mr-3 group-hover:text-[#E8E1D8]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
-                        </svg>
-                        Dashboard
-                    </a>
-                    <a href="admin_reports.php"
-                       class="flex items-center px-4 py-3 bg-[#5B7B99] text-white rounded-lg hover:bg-[#4a6a89] transition duration-150 shadow-lg">
-                        <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-6a2 2 0 012-2h6m-4-4l4 4-4 4"></path>
-                        </svg>
-                        Reports
-                    </a>
-                    <a href="admin_trust_management.php"
-                       class="flex items-center px-4 py-3 hover:bg-[#475569] rounded-lg transition duration-150 group">
-                        <svg class="w-5 h-5 mr-3 group-hover:text-[#E8E1D8]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                        </svg>
-                        Trust Management
-                    </a>
-                    <a href="route_status.php"
-                       class="flex items-center px-4 py-3 hover:bg-[#475569] rounded-lg transition duration-150 group">
-                        <svg class="w-5 h-5 mr-3 group-hover:text-[#E8E1D8]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"></path>
-                        </svg>
-                        Route Status
-                    </a>
-                    <a href="manage_routes.php"
-                       class="flex items-center px-4 py-3 hover:bg-[#475569] rounded-lg transition duration-150 group">
-                        <svg class="w-5 h-5 mr-3 group-hover:text-[#E8E1D8]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"></path>
-                        </svg>
-                        Manage Routes
-                    </a>
-                    <a href="heatmap.php"
-                       class="flex items-center px-4 py-3 hover:bg-[#475569] rounded-lg transition duration-150 group">
-                        <svg class="w-5 h-5 mr-3 group-hover:text-[#E8E1D8]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
-                        </svg>
-                        Crowdsourcing Heatmap
-                    </a>
-                    <a href="user_management.php"
-                       class="flex items-center px-4 py-3 hover:bg-[#475569] rounded-lg transition duration-150 group">
-                        <svg class="w-5 h-5 mr-3 group-hover:text-[#E8E1D8]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path>
-                        </svg>
-                        User Management
-                    </a>
-                </nav>
-            </div>
-            <div id="adminNavFooter" class="mt-auto p-4 sm:p-6 border-t border-[#475569] hidden md:block">
-                <div class="bg-[#475569] rounded-lg p-3 sm:p-4 mb-4">
-                    <p class="text-xs text-gray-400 mb-1">Logged in as</p>
-                    <div class="flex items-center justify-between">
-                        <p class="text-sm font-semibold"><?php echo htmlspecialchars(
-                            $_SESSION["user_name"],
-                        ); ?></p>
-                        <div class="flex items-center gap-2">
-                            <span class="px-2 py-1 bg-[#5B7B99] text-white text-xs rounded-full">Admin</span>
-                            <a href="logout.php" class="text-red-400 hover:text-red-300 transition-colors">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l-4-4m0 0l4-4m-4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path>
-                                </svg>
-                            </a>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </aside>
+<body>
+<?php include "admin_sidebar.php"; ?>
 
-        <main class="w-full md:ml-72 pt-24 md:pt-0 flex flex-col">
-            <div class="glass-card shadow-sm p-4 sm:p-6 rounded-b-2xl md:rounded-none border-b border-white/20">
-                <h2 class="text-3xl font-bold text-[#1e3a8a]">Reports</h2>
-                <p class="text-[#475569] mt-2">Browse all reports and inspect a single report on the map. Select a route to see it drawn on the map.</p>
-                <?php if (!empty($routes_with_stops)): ?>
-                <div class="mt-4 flex items-center gap-3">
-                    <label for="routeFilter" class="text-sm font-medium text-[#1e3a8a]">Filter by route:</label>
-                    <select id="routeFilter" class="px-3 py-2 border border-[#d1d5db] rounded-md focus:ring-[#fbbf24] focus:border-[#fbbf24] text-sm">
-                        <option value="">All reports</option>
-                        <?php foreach ($routes_with_stops as $rd): ?>
-                            <option value="<?php echo htmlspecialchars(
-                                $rd["name"],
-                            ); ?>"><?php echo htmlspecialchars(
+    <!-- ═══ MAIN CONTENT ════════════════════════════════════ -->
+    <main class="main-area">
+
+        <!-- Page Header Bar -->
+        <div class="page-header-bar">
+            <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.75rem;">
+                <div>
+                    <h1 class="page-title">Reports</h1>
+                    <p class="page-subtitle">Browse all crowd reports and inspect locations on the map.</p>
+                </div>
+                <button id="showAllBtn" class="show-all-btn">Show all on map ↗</button>
+            </div>
+            <?php if (!empty($routes_with_stops)): ?>
+            <div class="filter-row">
+                <span class="filter-label">Filter by route:</span>
+                <select id="routeFilter" class="aform-select" style="width:auto;min-width:200px;">
+                    <option value="">All reports</option>
+                    <?php foreach ($routes_with_stops as $rd): ?>
+                        <option value="<?php echo htmlspecialchars(
+                            $rd["name"],
+                        ); ?>"><?php echo htmlspecialchars(
     $rd["name"],
 ); ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-                <?php endif; ?>
+                    <?php endforeach; ?>
+                </select>
             </div>
+            <?php endif; ?>
+        </div>
 
-            <div class="flex-1 flex overflow-hidden">
-                <div class="w-full lg:w-1/2 overflow-y-auto">
-                    <div class="p-4 sm:p-6">
-                        <div class="flex items-center justify-between mb-4">
-                            <h3 class="text-xl font-semibold text-[#1e3a8a]">All Reports</h3>
-                            <button id="showAllBtn" class="text-sm text-[#1e3a8a] hover:text-[#fbbf24] font-medium">
-                                Show all on map
-                            </button>
+        <!-- Split: list + map -->
+        <div class="reports-split">
+
+            <!-- Reports List -->
+            <div class="reports-list">
+                <div style="padding:1.25rem 1.375rem;">
+                    <div class="admin-card">
+                        <div class="admin-card-header">
+                            <div class="admin-card-title-wrap">
+                                <div class="admin-card-icon aci-blue">
+                                    <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 17v-6a2 2 0 012-2h6m-4-4l4 4-4 4"/>
+                                    </svg>
+                                </div>
+                                <span class="admin-card-title">All Reports</span>
+                            </div>
+                            <span style="font-size:0.75rem;color:#94a3b8;font-weight:500;"><?php echo count(
+                                $reports,
+                            ); ?> records</span>
                         </div>
-                        <div class="glass-card rounded-2xl overflow-x-auto">
-                            <table class="min-w-full divide-y divide-gray-200 text-sm">
-                                <thead class="bg-white/30">
+                        <div style="overflow-x:auto;">
+                            <table class="admin-table">
+                                <thead>
                                     <tr>
-                                        <th class="px-4 py-2 text-left font-medium text-[#475569] uppercase tracking-wider">Time</th>
-                                        <th class="px-4 py-2 text-left font-medium text-[#475569] uppercase tracking-wider">Route</th>
-                                        <th class="px-4 py-2 text-left font-medium text-[#475569] uppercase tracking-wider">Crowd</th>
-                                        <th class="px-4 py-2 text-left font-medium text-[#475569] uppercase tracking-wider">Verified</th>
-                                        <th class="px-4 py-2 text-left font-medium text-[#475569] uppercase tracking-wider">Actions</th>
+                                        <th>Time</th>
+                                        <th>Route</th>
+                                        <th>Crowd</th>
+                                        <th>Verified</th>
+                                        <th>Action</th>
                                     </tr>
                                 </thead>
-                                <tbody class="bg-white/70 divide-y divide-gray-200">
+                                <tbody>
                                     <?php if (empty($reports)): ?>
-                                        <tr>
-                                            <td colspan="5" class="px-4 py-4 text-center text-[#475569]">
-                                                No reports found.
-                                            </td>
-                                        </tr>
+                                        <tr class="empty-row"><td colspan="5">No reports found.</td></tr>
                                     <?php else: ?>
                                         <?php foreach ($reports as $report): ?>
                                             <tr class="report-row" data-route="<?php echo htmlspecialchars(
                                                 $report["route_name"] ?? "",
                                             ); ?>">
-                                                <td class="px-4 py-2 whitespace-nowrap">
-                                                    <?php echo date(
-                                                        "M d, Y H:i",
+                                                <td style="white-space:nowrap;">
+                                                    <div style="font-size:0.82rem;font-weight:600;color:#1e293b;"><?php echo date(
+                                                        "M d, Y",
                                                         strtotime(
                                                             $report[
                                                                 "timestamp"
                                                             ],
                                                         ),
-                                                    ); ?>
-                                                </td>
-                                                <td class="px-4 py-2 whitespace-nowrap">
-                                                    <div class="font-medium text-[#1e3a8a]">
-                                                        <?php echo htmlspecialchars(
+                                                    ); ?></div>
+                                                    <div style="font-size:0.72rem;color:#94a3b8;"><?php echo date(
+                                                        "H:i",
+                                                        strtotime(
                                                             $report[
-                                                                "route_name"
-                                                            ] ?? "N/A",
-                                                        ); ?>
-                                                    </div>
-                                                </td>
-                                                <td class="px-4 py-2 whitespace-nowrap">
-                                                    <span class="px-2 py-1 text-xs rounded-full border
-                                                        <?php echo $report[
-                                                            "crowd_level"
-                                                        ] === "Light"
-                                                            ? "bg-green-50 text-green-800 border-green-300"
-                                                            : ($report[
-                                                                "crowd_level"
-                                                            ] === "Moderate"
-                                                                ? "bg-yellow-50 text-yellow-800 border-yellow-300"
-                                                                : "bg-red-50 text-red-800 border-red-300"); ?>">
-                                                        <?php echo htmlspecialchars(
-                                                            $report[
-                                                                "crowd_level"
+                                                                "timestamp"
                                                             ],
+                                                        ),
+                                                    ); ?></div>
+                                                </td>
+                                                <td>
+                                                    <div style="font-weight:600;color:#334155;font-size:0.835rem;"><?php echo htmlspecialchars(
+                                                        $report["route_name"] ??
+                                                            "N/A",
+                                                    ); ?></div>
+                                                    <?php if (
+                                                        !empty(
+                                                            $report["user_name"]
+                                                        )
+                                                    ): ?>
+                                                    <div style="font-size:0.72rem;color:#94a3b8;"><?php echo htmlspecialchars(
+                                                        $report["user_name"],
+                                                    ); ?></div>
+                                                    <?php endif; ?>
+                                                </td>
+                                                <td>
+                                                    <?php
+                                                    $cl =
+                                                        $report["crowd_level"];
+                                                    $cb =
+                                                        $cl === "Light"
+                                                            ? "abadge-light"
+                                                            : ($cl ===
+                                                            "Moderate"
+                                                                ? "abadge-moderate"
+                                                                : "abadge-heavy");
+                                                    ?>
+                                                    <span class="abadge <?php echo $cb; ?>">
+                                                        <span class="abadge-dot"></span>
+                                                        <?php echo htmlspecialchars(
+                                                            $cl,
                                                         ); ?>
                                                     </span>
                                                 </td>
-                                                <td class="px-4 py-2 whitespace-nowrap">
+                                                <td>
                                                     <?php $verified =
                                                         (int) $report[
                                                             "is_verified"
                                                         ] === 1; ?>
-                                                    <span class="px-2 py-1 text-xs font-semibold rounded-full
+                                                    <span class="abadge <?php echo $verified
+                                                        ? "abadge-verified"
+                                                        : "abadge-unverified"; ?>">
                                                         <?php echo $verified
-                                                            ? "bg-green-100 text-green-800"
-                                                            : "bg-yellow-100 text-yellow-800"; ?>">
-                                                        <?php echo $verified
-                                                            ? "Yes"
-                                                            : "No"; ?>
+                                                            ? "Verified"
+                                                            : "Pending"; ?>
                                                     </span>
-                                                    <div class="text-xs text-[#475569]">
-                                                        <?php echo (int) ($report[
-                                                            "peer_verifications"
-                                                        ] ??
-                                                            0); ?>/3 verifications
-                                                    </div>
+                                                    <div style="font-size:0.7rem;color:#94a3b8;margin-top:2px;"><?php echo (int) ($report[
+                                                        "peer_verifications"
+                                                    ] ?? 0); ?>/3</div>
                                                 </td>
-                                                <td class="px-4 py-2 whitespace-nowrap">
+                                                <td>
                                                     <?php if (
                                                         $report["latitude"] &&
                                                         $report["longitude"]
                                                     ): ?>
-                                                        <button
-                                                            class="view-on-map-btn text-[#1e3a8a] hover:text-[#fbbf24] text-xs font-medium"
-                                                            data-report-id="<?php echo $report[
-                                                                "id"
-                                                            ]; ?>">
+                                                        <button class="view-on-map-btn map-btn" data-report-id="<?php echo $report[
+                                                            "id"
+                                                        ]; ?>">
                                                             View on map
                                                         </button>
                                                     <?php else: ?>
-                                                        <span class="text-xs text-[#475569]">No location</span>
+                                                        <span style="font-size:0.75rem;color:#cbd5e1;">No location</span>
                                                     <?php endif; ?>
                                                 </td>
                                             </tr>
@@ -326,13 +292,16 @@ try {
                         </div>
                     </div>
                 </div>
-
-                <div class="hidden lg:block lg:w-1/2 border-l border-[#e5e7eb]">
-                    <div class="h-full" id="report-map"></div>
-                </div>
             </div>
-        </main>
-    </div>
+
+            <!-- Map Panel -->
+            <div class="reports-map">
+                <div id="report-map"></div>
+            </div>
+
+        </div><!-- /reports-split -->
+    </main>
+</div><!-- /app-layout -->
 
     <script>
         const reportsData = <?php echo json_encode($reports); ?>;
@@ -514,28 +483,7 @@ try {
             });
         });
 
-        // Mobile sidebar toggle
-        (function () {
-            const toggle = document.getElementById('adminNavToggle');
-            const links = document.getElementById('adminNavLinks');
-            const footer = document.getElementById('adminNavFooter');
-            if (!toggle || !links || !footer) return;
-            toggle.addEventListener('click', function () {
-                if (window.innerWidth >= 768) return;
-                links.classList.toggle('hidden');
-                footer.classList.toggle('hidden');
-            });
-            // Close mobile menu when clicking outside
-            document.addEventListener('click', function (ev) {
-                if (window.innerWidth >= 768) return;
-                const sidebar = document.getElementById('adminSidebar');
-                if (sidebar && !sidebar.contains(ev.target)) {
-                    links.classList.add('hidden');
-                    footer.classList.add('hidden');
-                }
-            });
-        })();
     </script>
+<?php include "admin_sidebar_js.php"; ?>
 </body>
 </html>
-
