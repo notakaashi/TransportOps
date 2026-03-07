@@ -126,11 +126,34 @@ if ($selectedUserId > 0) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Trust Management - Admin Dashboard</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        :root {
+            --transit-primary-route: #22335C;   /* Navy Blue */
+            --transit-secondary-route: #5B7B99; /* Slate Blue */
+            --transit-info: #FBC061;            /* Gold/Yellow */
+            --transit-foundation: #E8E1D8;      /* Light Gray */
+        }
+
+        /* Glassmorphism styles (aligned with user pages) */
+        .glass-card {
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(15px);
+            -webkit-backdrop-filter: blur(15px);
+            border: 1px solid rgba(255, 255, 255, 0.30);
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.18);
+        }
+        .glass-sidebar {
+            background: linear-gradient(to bottom, rgba(30, 58, 138, 0.92), rgba(30, 41, 59, 0.92));
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            border-right: 1px solid rgba(255, 255, 255, 0.12);
+        }
+    </style>
 </head>
-<body class="bg-[#fef9e7]">
+<body class="bg-[var(--transit-foundation)]">
     <div class="flex flex-col md:flex-row min-h-screen">
         <!-- Sidebar -->
-        <aside class="w-full md:w-64 bg-gradient-to-b from-[#1e3a8a] to-[#1e293b] text-white flex flex-col shadow-2xl">
+        <aside class="w-full md:w-64 glass-sidebar text-white flex flex-col shadow-2xl">
             <div class="px-4 py-4 sm:p-6 flex-shrink-0 border-b border-[#475569] md:border-b-0">
                 <div id="adminNavToggle" class="flex items-center justify-between md:justify-start mb-4 md:mb-8 cursor-pointer md:cursor-default">
                     <div class="bg-[#fbbf24] p-2 rounded-lg mr-3">
@@ -216,7 +239,7 @@ if ($selectedUserId > 0) {
         <!-- Main Content -->
         <main class="flex-1 overflow-x-hidden">
             <!-- Mobile Navigation Toggle -->
-            <div class="md:hidden bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
+            <div class="md:hidden glass-card border-b border-white/20 px-4 py-3 flex items-center justify-between">
                 <button id="mobileMenuToggle" class="text-gray-600 hover:text-gray-900">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
@@ -246,15 +269,15 @@ if ($selectedUserId > 0) {
                 <?php endif; ?>
 
                 <!-- Users Table -->
-                <div class="bg-white rounded-2xl shadow-md overflow-hidden mb-6">
-                    <div class="px-6 py-4 border-b border-gray-200">
+                <div class="glass-card rounded-2xl overflow-hidden mb-6">
+                    <div class="px-6 py-4 border-b border-white/20">
                         <h2 class="text-xl font-semibold text-gray-800">All Users (Sorted by Trust Score)</h2>
                         <p class="text-sm text-gray-600 mt-1">Users with low trust scores are shown first for easy identification</p>
                     </div>
                     
                     <div class="overflow-x-auto">
                         <table class="min-w-full divide-y divide-gray-200">
-                            <thead class="bg-gray-50">
+                            <thead class="bg-white/30">
                                 <tr>
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Trust Score</th>
@@ -264,7 +287,7 @@ if ($selectedUserId > 0) {
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                                 </tr>
                             </thead>
-                            <tbody class="bg-white divide-y divide-gray-200">
+                            <tbody class="bg-white/70 divide-y divide-gray-200">
                                 <?php foreach ($users as $user): ?>
                                     <?php $badge = getTrustBadge($user['trust_score']); ?>
                                     <tr class="<?php echo $user['trust_score'] < 20 ? 'bg-red-50' : ''; ?>">
@@ -316,7 +339,7 @@ if ($selectedUserId > 0) {
 
                 <!-- User Details Panel -->
                 <?php if ($selectedUser): ?>
-                    <div class="bg-white rounded-2xl shadow-md p-6 mb-6">
+                    <div class="glass-card rounded-2xl p-6 mb-6">
                         <div class="flex justify-between items-start mb-6">
                             <div>
                                 <h2 class="text-xl font-semibold text-gray-800">User Details: <?php echo htmlspecialchars($selectedUser['name']); ?></h2>
@@ -326,7 +349,7 @@ if ($selectedUserId > 0) {
                         </div>
 
                         <!-- Manual Adjustment Form -->
-                        <div class="bg-gray-50 rounded-lg p-4 mb-6">
+                        <div class="bg-white/30 rounded-lg p-4 mb-6">
                             <h3 class="text-lg font-medium text-gray-800 mb-4">Manual Trust Score Adjustment</h3>
                             <form method="POST" class="space-y-4">
                                 <input type="hidden" name="action" value="adjust_score">
@@ -368,7 +391,7 @@ if ($selectedUserId > 0) {
                             <?php else: ?>
                                 <div class="overflow-x-auto">
                                     <table class="min-w-full divide-y divide-gray-200">
-                                        <thead class="bg-gray-50">
+                                        <thead class="bg-white/30">
                                             <tr>
                                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
                                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Old Score</th>
@@ -378,7 +401,7 @@ if ($selectedUserId > 0) {
                                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Adjusted By</th>
                                             </tr>
                                         </thead>
-                                        <tbody class="bg-white divide-y divide-gray-200">
+                                        <tbody class="bg-white/70 divide-y divide-gray-200">
                                             <?php foreach ($trustLogs as $log): ?>
                                                 <tr>
                                                     <td class="px-4 py-3 text-sm text-gray-900">
@@ -410,7 +433,7 @@ if ($selectedUserId > 0) {
                             <?php else: ?>
                                 <div class="overflow-x-auto">
                                     <table class="min-w-full divide-y divide-gray-200">
-                                        <thead class="bg-gray-50">
+                                        <thead class="bg-white/30">
                                             <tr>
                                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Report ID</th>
                                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Route</th>
@@ -420,7 +443,7 @@ if ($selectedUserId > 0) {
                                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Verifications</th>
                                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
                                             </tr>
-                                            <tbody class="bg-white divide-y divide-gray-200">
+                                            <tbody class="bg-white/70 divide-y divide-gray-200">
                                             <?php foreach ($userReports as $report): ?>
                                                 <tr class="<?php echo $report['status'] === 'rejected' ? 'bg-red-50' : ''; ?>">
                                                     <td class="px-4 py-3 text-sm text-gray-900">#<?php echo $report['id']; ?></td>

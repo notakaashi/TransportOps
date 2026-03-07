@@ -66,10 +66,33 @@ try {
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="js/osrm-helpers.js"></script>
+    <style>
+        :root {
+            --transit-primary-route: #22335C;   /* Navy Blue */
+            --transit-secondary-route: #5B7B99; /* Slate Blue */
+            --transit-info: #FBC061;            /* Gold/Yellow */
+            --transit-foundation: #E8E1D8;      /* Light Gray */
+        }
+
+        /* Glassmorphism styles (aligned with user pages) */
+        .glass-card {
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(15px);
+            -webkit-backdrop-filter: blur(15px);
+            border: 1px solid rgba(255, 255, 255, 0.30);
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.18);
+        }
+        .glass-sidebar {
+            background: linear-gradient(to bottom, rgba(30, 58, 138, 0.92), rgba(30, 41, 59, 0.92));
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            border-right: 1px solid rgba(255, 255, 255, 0.12);
+        }
+    </style>
 </head>
-<body class="bg-[#fef9e7]">
+<body class="bg-[var(--transit-foundation)]">
     <div class="flex flex-col md:flex-row min-h-screen">
-        <aside class="w-full md:w-64 bg-gradient-to-b from-[#1e3a8a] to-[#1e293b] text-white flex flex-col shadow-2xl">
+        <aside class="w-full md:w-64 glass-sidebar text-white flex flex-col shadow-2xl">
             <div class="px-4 py-4 sm:p-6 flex-shrink-0 border-b border-[#475569] md:border-b-0">
                 <div id="adminNavToggle" class="flex items-center justify-between md:justify-start mb-4 md:mb-8 cursor-pointer md:cursor-default">
                     <div class="bg-[#fbbf24] p-2 rounded-lg mr-3">
@@ -153,7 +176,7 @@ try {
         </aside>
 
         <main class="flex-1 flex flex-col w-full">
-            <div class="bg-white shadow-sm border-b border-[#e5e7eb] p-4 sm:p-6">
+            <div class="glass-card shadow-sm p-4 sm:p-6 rounded-b-2xl md:rounded-none border-b border-white/20">
                 <h2 class="text-3xl font-bold text-[#1e3a8a]">Reports</h2>
                 <p class="text-[#475569] mt-2">Browse all reports and inspect a single report on the map. Select a route to see it drawn on the map.</p>
                 <?php if (!empty($routes_with_stops)): ?>
@@ -178,9 +201,9 @@ try {
                                 Show all on map
                             </button>
                         </div>
-                        <div class="overflow-x-auto">
+                        <div class="glass-card rounded-2xl overflow-x-auto">
                             <table class="min-w-full divide-y divide-gray-200 text-sm">
-                                <thead class="bg-[#fef9e7]">
+                                <thead class="bg-white/30">
                                     <tr>
                                         <th class="px-4 py-2 text-left font-medium text-[#475569] uppercase tracking-wider">Time</th>
                                         <th class="px-4 py-2 text-left font-medium text-[#475569] uppercase tracking-wider">Route</th>
@@ -189,7 +212,7 @@ try {
                                         <th class="px-4 py-2 text-left font-medium text-[#475569] uppercase tracking-wider">Actions</th>
                                     </tr>
                                 </thead>
-                                <tbody class="bg-white divide-y divide-gray-200">
+                                <tbody class="bg-white/70 divide-y divide-gray-200">
                                     <?php if (empty($reports)): ?>
                                         <tr>
                                             <td colspan="5" class="px-4 py-4 text-center text-[#475569]">

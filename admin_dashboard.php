@@ -136,12 +136,34 @@ function getStatusBadge($status) {
             --transit-info: #FBC061;            /* Gold/Yellow */
             --transit-foundation: #E8E1D8;      /* Light Gray */
         }
+
+        /* Glassmorphism styles (aligned with user pages) */
+        .glass {
+            background: rgba(255, 255, 255, 0.10);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.20);
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.25);
+        }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(15px);
+            -webkit-backdrop-filter: blur(15px);
+            border: 1px solid rgba(255, 255, 255, 0.30);
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.18);
+        }
+        .glass-sidebar {
+            background: linear-gradient(to bottom, rgba(30, 58, 138, 0.92), rgba(30, 41, 59, 0.92));
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            border-right: 1px solid rgba(255, 255, 255, 0.12);
+        }
     </style>
 </head>
-<body class="bg-[#fef9e7]">
+<body class="bg-[var(--transit-foundation)]">
     <div class="flex flex-col md:flex-row min-h-screen">
         <!-- Sidebar -->
-        <aside class="w-full md:w-64 bg-gradient-to-b from-[#1e3a8a] to-[#1e293b] text-white flex flex-col shadow-2xl">
+        <aside class="w-full md:w-64 glass-sidebar text-white flex flex-col shadow-2xl">
             <div class="px-4 py-4 sm:p-6 flex-shrink-0 border-b border-[#475569] md:border-b-0">
                 <div id="adminNavToggle" class="flex items-center justify-between md:justify-start mb-4 md:mb-8 cursor-pointer md:cursor-default">
                     <div class="bg-[#fbbf24] p-2 rounded-lg mr-3">
@@ -258,7 +280,7 @@ function getStatusBadge($status) {
                 <!-- Stats Cards -->
                 <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 lg:gap-6 mb-8">
                     <!-- Total Reports Card -->
-                    <div class="bg-white rounded-lg shadow-md p-6 border-l-4 border-green-500">
+                    <div class="glass-card rounded-2xl p-6 border-l-4 border-green-500">
                         <div class="flex items-center justify-between">
                             <div>
                                 <p class="text-gray-600 text-sm font-medium">Total Reports</p>
@@ -273,7 +295,7 @@ function getStatusBadge($status) {
                     </div>
 
                     <!-- Active Delays Card -->
-                    <div class="bg-white rounded-lg shadow-md p-6 border-l-4 border-red-500">
+                    <div class="glass-card rounded-2xl p-6 border-l-4 border-red-500">
                         <div class="flex items-center justify-between">
                             <div>
                                 <p class="text-gray-600 text-sm font-medium">Active Delays</p>
@@ -288,7 +310,7 @@ function getStatusBadge($status) {
                     </div>
 
                     <!-- Total Users Card -->
-                    <div class="bg-white rounded-lg shadow-md p-6 border-l-4 border-purple-500">
+                    <div class="glass-card rounded-2xl p-6 border-l-4 border-purple-500">
                         <div class="flex items-center justify-between">
                             <div>
                                 <p class="text-gray-600 text-sm font-medium">Total Users</p>
@@ -303,7 +325,7 @@ function getStatusBadge($status) {
                     </div>
 
                     <!-- Total Routes Card -->
-                    <div class="bg-white rounded-lg shadow-md p-6 border-l-4 border-indigo-500">
+                    <div class="glass-card rounded-2xl p-6 border-l-4 border-indigo-500">
                         <div class="flex items-center justify-between">
                             <div>
                                 <p class="text-gray-600 text-sm font-medium">Routes</p>
@@ -319,8 +341,8 @@ function getStatusBadge($status) {
                 </div>
 
                 <!-- Recent Reports Table -->
-                <div class="bg-white rounded-lg shadow-md overflow-hidden mb-8">
-                    <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+                <div class="glass-card rounded-2xl overflow-hidden mb-8">
+                    <div class="px-6 py-4 border-b border-white/20 flex justify-between items-center">
                         <h3 class="text-xl font-semibold text-gray-800 flex items-center">
                             Recent Reports
                             <span id="report-notification-badge" class="ml-3 hidden px-2 py-1 text-xs font-semibold rounded-full bg-red-600 text-white">
@@ -331,7 +353,7 @@ function getStatusBadge($status) {
                     </div>
                     <div class="overflow-x-auto">
                         <table class="w-full">
-                            <thead class="bg-gray-50">
+                            <thead class="bg-white/30">
                                 <tr>
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Timestamp</th>
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
@@ -396,8 +418,8 @@ function getStatusBadge($status) {
                 <!-- Analytics Section -->
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
                     <!-- Delay Trend Analysis -->
-                    <div class="bg-white rounded-lg shadow-md overflow-hidden">
-                        <div class="px-6 py-4 border-b border-gray-200">
+                    <div class="glass-card rounded-2xl overflow-hidden">
+                        <div class="px-6 py-4 border-b border-white/20">
                             <h3 class="text-xl font-semibold text-gray-800">Delay Trend Analysis (Last 7 Days)</h3>
                         </div>
                         <div class="p-6">
@@ -422,8 +444,8 @@ function getStatusBadge($status) {
                     </div>
 
                     <!-- Peak Hour Analytics -->
-                    <div class="bg-white rounded-lg shadow-md overflow-hidden">
-                        <div class="px-6 py-4 border-b border-gray-200">
+                    <div class="glass-card rounded-2xl overflow-hidden">
+                        <div class="px-6 py-4 border-b border-white/20">
                             <h3 class="text-xl font-semibold text-gray-800">Peak Hour Crowding Analysis</h3>
                         </div>
                         <div class="p-6">
@@ -449,8 +471,8 @@ function getStatusBadge($status) {
                 </div>
 
                 <!-- Users Management Table -->
-                <div class="bg-white rounded-lg shadow-md overflow-hidden">
-                    <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+                <div class="glass-card rounded-2xl overflow-hidden">
+                    <div class="px-6 py-4 border-b border-white/20 flex justify-between items-center">
                         <h3 class="text-xl font-semibold text-gray-800">User Management</h3>
                         <a href="user_management.php" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition duration-150 font-medium text-sm">
                             Manage Users
@@ -458,7 +480,7 @@ function getStatusBadge($status) {
                     </div>
                     <div class="overflow-x-auto">
                         <table class="w-full">
-                            <thead class="bg-gray-50">
+                            <thead class="bg-white/30">
                                 <tr>
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
@@ -534,7 +556,6 @@ function getStatusBadge($status) {
             </div>
         </div>
     </div>
-}</script>
 <script>
     (function () {
         let lastReportTimestamp = <?php

@@ -88,10 +88,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             font-family: 'Poppins', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
             letter-spacing: 0.02em;
         }
+        :root {
+            --transit-primary-route: #22335C;
+            --transit-secondary-route: #5B7B99;
+            --transit-info: #FBC061;
+            --transit-foundation: #E8E1D8;
+        }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.55);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.40);
+            box-shadow: 0 10px 35px rgba(31, 38, 135, 0.18);
+        }
     </style>
 </head>
-<body class="bg-[#F3F4F6] min-h-screen flex items-center justify-center px-4">
-    <div class="bg-white p-6 sm:p-8 rounded-2xl shadow-md w-full max-w-md">
+<body class="bg-[var(--transit-foundation)] min-h-screen flex items-center justify-center px-4">
+    <div class="glass-card p-6 sm:p-8 rounded-2xl w-full max-w-md">
         <h2 class="auth-title text-2xl font-semibold text-gray-900 mb-6 text-center">Login</h2>
         
         <?php if ($error): ?>

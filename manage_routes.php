@@ -193,15 +193,29 @@ if (!$error) {
             --transit-info: #FBC061;            /* Gold/Yellow */
             --transit-foundation: #E8E1D8;      /* Light Gray */
         }
+
+        .glass-card {
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(15px);
+            -webkit-backdrop-filter: blur(15px);
+            border: 1px solid rgba(255, 255, 255, 0.30);
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.18);
+        }
+        .glass-sidebar {
+            background: linear-gradient(to bottom, rgba(30, 58, 138, 0.92), rgba(30, 41, 59, 0.92));
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            border-right: 1px solid rgba(255, 255, 255, 0.12);
+        }
     </style>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="js/osrm-helpers.js"></script>
 </head>
-<body class="bg-[#fef9e7]">
+<body class="bg-[var(--transit-foundation)]">
     <div class="flex flex-col md:flex-row min-h-screen">
-        <aside class="w-full md:w-64 bg-gradient-to-b from-[#1e3a8a] to-[#1e293b] text-white flex flex-col shadow-2xl">
+        <aside class="w-full md:w-64 glass-sidebar text-white flex flex-col shadow-2xl">
             <div class="px-4 py-4 sm:p-6 flex-shrink-0 border-b border-[#475569] md:border-b-0">
                 <div id="adminNavToggle" class="flex items-center justify-between md:justify-start mb-4 md:mb-8 cursor-pointer md:cursor-default">
                     <div class="bg-[#fbbf24] p-2 rounded-lg mr-3">
@@ -281,7 +295,7 @@ if (!$error) {
 
                 <?php if (!$error): ?>
                 <!-- Create new route -->
-                <div class="mt-6 bg-white rounded-lg shadow-md p-6">
+                <div class="mt-6 glass-card rounded-2xl p-6">
                     <h3 class="text-xl font-semibold text-gray-800 mb-4">Create new route</h3>
                     <form method="POST" class="flex flex-wrap items-end gap-4">
                         <input type="hidden" name="action" value="create_route">
@@ -300,13 +314,13 @@ if (!$error) {
                     : 0; ?>
                 <div class="mt-8 space-y-6">
                     <?php foreach ($routes_with_stops as $route): ?>
-                        <div class="bg-white rounded-lg shadow-md overflow-hidden<?php echo $highlight_route_id ===
+                        <div class="glass-card rounded-2xl overflow-hidden<?php echo $highlight_route_id ===
                         (int) $route["id"]
                             ? " ring-2 ring-blue-500"
                             : ""; ?>" id="route-<?php echo (int) $route[
     "id"
 ]; ?>">
-                            <div class="px-6 py-4 bg-gray-50 border-b flex flex-wrap justify-between items-center gap-2">
+                            <div class="px-6 py-4 bg-white/30 border-b border-white/20 flex flex-wrap justify-between items-center gap-2">
                                 <div class="flex items-center gap-2 flex-wrap">
                                     <h3 class="text-lg font-semibold text-gray-800"><?php echo htmlspecialchars(
                                         $route["name"],
