@@ -129,6 +129,71 @@ try {
             transition: color 0.15s;
         }
         .show-all-btn:hover { color: #22335C; }
+
+        /* ── Mini Calendar ───────────────────────────── */
+        .cal-card {
+            padding: 0.85rem 1rem 0.75rem;
+            margin-bottom: 0;
+        }
+        .cal-header {
+            display: flex; align-items: center;
+            justify-content: space-between; margin-bottom: 0.55rem; gap: 0.4rem;
+        }
+        .cal-month-label {
+            font-size: 0.83rem; font-weight: 700; color: #1e293b;
+            flex: 1; text-align: center; letter-spacing: 0.01em;
+        }
+        .cal-nav-btn {
+            background: none; border: none; cursor: pointer;
+            font-size: 1.2rem; line-height: 1; color: #64748b;
+            padding: 0.1rem 0.4rem; border-radius: 6px;
+            transition: background 0.15s, color 0.15s;
+        }
+        .cal-nav-btn:hover { background: #f1f5f9; color: #1e293b; }
+        .cal-clear-btn {
+            font-size: 0.67rem; font-weight: 600;
+            color: #6366f1; background: #eef2ff;
+            border: none; border-radius: 999px;
+            padding: 0.18rem 0.55rem; cursor: pointer;
+            transition: background 0.15s; white-space: nowrap;
+        }
+        .cal-clear-btn:hover { background: #e0e7ff; }
+        .cal-dow-row {
+            display: grid; grid-template-columns: repeat(7, 1fr);
+            text-align: center; margin-bottom: 0.2rem;
+        }
+        .cal-dow-row span {
+            font-size: 0.59rem; font-weight: 700;
+            color: #94a3b8; text-transform: uppercase;
+            letter-spacing: 0.04em; padding: 0.1rem 0;
+        }
+        .cal-grid {
+            display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px;
+        }
+        .cal-day {
+            aspect-ratio: 1; display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            border-radius: 7px; font-size: 0.71rem; font-weight: 600;
+            cursor: pointer; position: relative;
+            transition: background 0.13s; color: #334155; user-select: none;
+        }
+        .cal-day:hover { background: #f1f5f9; }
+        .cal-day.cal-empty { pointer-events: none; }
+        .cal-day.cal-today { background: #f0fdf4; color: #16a34a; }
+        .cal-day.cal-has-reports { color: #1d4ed8; }
+        .cal-day.cal-selected { background: #1d4ed8 !important; color: #fff !important; }
+        .cal-day.cal-selected .cal-dot { background: #fff !important; }
+        .cal-day.cal-other-month { color: #d1d5db; }
+        .cal-day.cal-other-month .cal-dot { background: #d1d5db; }
+        .cal-dot {
+            width: 5px; height: 5px; border-radius: 50%;
+            background: #3b82f6; margin-top: 1px; flex-shrink: 0;
+        }
+        .cal-selected-info {
+            font-size: 0.7rem; color: #6366f1; font-weight: 600;
+            text-align: center; margin-top: 0.45rem;
+            padding-top: 0.45rem; border-top: 1px solid rgba(34,51,92,0.07);
+        }
     </style>
 </head>
 <body>
@@ -168,7 +233,26 @@ try {
 
             <!-- Reports List -->
             <div class="reports-list">
-                <div style="padding:1.25rem 1.375rem;">
+
+                <!-- Calendar -->
+                <div style="padding:1rem 1.375rem 0.5rem;">
+                    <div class="admin-card cal-card">
+                        <div class="cal-header">
+                            <button class="cal-nav-btn" id="calPrevBtn" title="Previous month">&#8249;</button>
+                            <span class="cal-month-label" id="calMonthLabel"></span>
+                            <button class="cal-nav-btn" id="calNextBtn" title="Next month">&#8250;</button>
+                            <button class="cal-clear-btn" id="calClearBtn" style="display:none;" title="Clear date filter">&#x2715; Clear</button>
+                        </div>
+                        <div class="cal-dow-row">
+                            <span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span>
+                            <span>Thu</span><span>Fri</span><span>Sat</span>
+                        </div>
+                        <div class="cal-grid" id="calGrid"></div>
+                        <div class="cal-selected-info" id="calSelectedInfo" style="display:none;"></div>
+                    </div>
+                </div>
+
+                <div style="padding:0 1.375rem 1.25rem;">
                     <div class="admin-card">
                         <div class="admin-card-header">
                             <div class="admin-card-title-wrap">
@@ -179,7 +263,7 @@ try {
                                 </div>
                                 <span class="admin-card-title">All Reports</span>
                             </div>
-                            <span style="font-size:0.75rem;color:#94a3b8;font-weight:500;"><?php echo count(
+                            <span id="reportsCountLabel" style="font-size:0.75rem;color:#94a3b8;font-weight:500;"><?php echo count(
                                 $reports,
                             ); ?> records</span>
                         </div>
@@ -199,9 +283,16 @@ try {
                                         <tr class="empty-row"><td colspan="5">No reports found.</td></tr>
                                     <?php else: ?>
                                         <?php foreach ($reports as $report): ?>
-                                            <tr class="report-row" data-route="<?php echo htmlspecialchars(
-                                                $report["route_name"] ?? "",
-                                            ); ?>">
+                                            <tr class="report-row"
+                                                data-route="<?php echo htmlspecialchars(
+                                                    $report["route_name"] ?? "",
+                                                ); ?>"
+                                                data-date="<?php echo date(
+                                                    "Y-m-d",
+                                                    strtotime(
+                                                        $report["timestamp"],
+                                                    ),
+                                                ); ?>">
                                                 <td style="white-space:nowrap;">
                                                     <div style="font-size:0.82rem;font-weight:600;color:#1e293b;"><?php echo date(
                                                         "M d, Y",
@@ -300,6 +391,9 @@ try {
             </div>
 
         </div><!-- /reports-split -->
+
+
+
     </main>
 </div><!-- /app-layout -->
 
@@ -482,6 +576,173 @@ try {
                 focusReportOnMap(reportId);
             });
         });
+
+    /* ── Mini Calendar ─────────────────────────────────── */
+    (function () {
+        /* Build a date → count map from reportsData */
+        const reportDateCounts = {};
+        reportsData.forEach(function (r) {
+            if (!r.timestamp) return;
+            // Handle "YYYY-MM-DD HH:MM:SS" from MySQL
+            const raw = r.timestamp.replace(' ', 'T');
+            const d   = new Date(raw);
+            if (isNaN(d)) return;
+            const key = d.getFullYear() + '-'
+                + String(d.getMonth() + 1).padStart(2, '0') + '-'
+                + String(d.getDate()).padStart(2, '0');
+            reportDateCounts[key] = (reportDateCounts[key] || 0) + 1;
+        });
+
+        const MONTHS = ['January','February','March','April','May','June',
+                        'July','August','September','October','November','December'];
+
+        const today     = new Date();
+        const todayStr  = today.getFullYear() + '-'
+                        + String(today.getMonth() + 1).padStart(2, '0') + '-'
+                        + String(today.getDate()).padStart(2, '0');
+
+        let calYear      = today.getFullYear();
+        let calMonth     = today.getMonth(); // 0-indexed
+        let selectedDate = null;
+
+        function renderCalendar() {
+            const grid  = document.getElementById('calGrid');
+            const label = document.getElementById('calMonthLabel');
+            if (!grid || !label) return;
+
+            label.textContent = MONTHS[calMonth] + ' ' + calYear;
+
+            const firstDow    = new Date(calYear, calMonth, 1).getDay();
+            const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
+
+            let html = '';
+
+            // Leading empty cells
+            for (let i = 0; i < firstDow; i++) {
+                html += '<div class="cal-day cal-empty"></div>';
+            }
+
+            for (let day = 1; day <= daysInMonth; day++) {
+                const dateStr = calYear + '-'
+                    + String(calMonth + 1).padStart(2, '0') + '-'
+                    + String(day).padStart(2, '0');
+                const count      = reportDateCounts[dateStr] || 0;
+                const isToday    = dateStr === todayStr;
+                const isSelected = dateStr === selectedDate;
+
+                let cls = 'cal-day';
+                if (isToday)    cls += ' cal-today';
+                if (isSelected) cls += ' cal-selected';
+                if (count > 0)  cls += ' cal-has-reports';
+
+                const tip = count
+                    ? count + ' report' + (count > 1 ? 's' : '')
+                    : 'No reports';
+
+                html += `<div class="${cls}" data-date="${dateStr}"
+                              title="${tip}"
+                              onclick="calSelectDate('${dateStr}')">
+                            <span class="cal-day-num">${day}</span>
+                            ${count > 0 ? '<div class="cal-dot"></div>' : ''}
+                         </div>`;
+            }
+
+            grid.innerHTML = html;
+        }
+
+        /* ── Public: called by onclick on day cells ── */
+        window.calSelectDate = function (dateStr) {
+            // Toggle off when clicking the already-selected date
+            if (selectedDate === dateStr) {
+                window.clearCalendarFilter();
+                return;
+            }
+
+            selectedDate = dateStr;
+            renderCalendar();
+
+            // Show clear button & info bar
+            const clearBtn = document.getElementById('calClearBtn');
+            const info     = document.getElementById('calSelectedInfo');
+            if (clearBtn) clearBtn.style.display = '';
+            if (info) {
+                const count = reportDateCounts[dateStr] || 0;
+                const label = new Date(dateStr + 'T00:00:00').toLocaleDateString('en-US', {
+                    weekday: 'short', month: 'short', day: 'numeric', year: 'numeric'
+                });
+                info.textContent = label + ' — ' + count + ' report' + (count !== 1 ? 's' : '');
+                info.style.display = '';
+            }
+
+            // Filter table rows
+            let visible = 0;
+            document.querySelectorAll('.report-row').forEach(function (row) {
+                const match = (row.getAttribute('data-date') || '') === dateStr;
+                row.style.display = match ? '' : 'none';
+                if (match) visible++;
+            });
+
+            // Update record count label
+            const countLbl = document.getElementById('reportsCountLabel');
+            if (countLbl) countLbl.textContent = visible + ' record' + (visible !== 1 ? 's' : '');
+
+            // Filter map markers
+            const filtered = reportsData.filter(function (r) {
+                if (!r.timestamp) return false;
+                const d   = new Date(r.timestamp.replace(' ', 'T'));
+                const key = d.getFullYear() + '-'
+                    + String(d.getMonth() + 1).padStart(2, '0') + '-'
+                    + String(d.getDate()).padStart(2, '0');
+                return key === dateStr;
+            });
+            showReportsOnMap(filtered, true);
+        };
+
+        /* ── Public: called by the Clear button ── */
+        window.clearCalendarFilter = function (e) {
+            if (e) e.stopPropagation();
+            selectedDate = null;
+            renderCalendar();
+
+            const clearBtn = document.getElementById('calClearBtn');
+            const info     = document.getElementById('calSelectedInfo');
+            if (clearBtn) clearBtn.style.display = 'none';
+            if (info)     info.style.display = 'none';
+
+            // Restore record count
+            const countLbl = document.getElementById('reportsCountLabel');
+            if (countLbl) countLbl.textContent = reportsData.length + ' records';
+
+            // Re-apply route filter (resets row visibility + map)
+            if (typeof applyRouteFilter === 'function') {
+                applyRouteFilter();
+            } else {
+                document.querySelectorAll('.report-row').forEach(function (r) {
+                    r.style.display = '';
+                });
+                showAllReportsOnMap();
+            }
+        };
+
+        // Wire up the clear button defined in HTML
+        const clearBtn = document.getElementById('calClearBtn');
+        if (clearBtn) clearBtn.addEventListener('click', window.clearCalendarFilter);
+
+        // Prev / Next month navigation
+        document.getElementById('calPrevBtn').addEventListener('click', function () {
+            calMonth--;
+            if (calMonth < 0) { calMonth = 11; calYear--; }
+            renderCalendar();
+        });
+        document.getElementById('calNextBtn').addEventListener('click', function () {
+            calMonth++;
+            if (calMonth > 11) { calMonth = 0; calYear++; }
+            renderCalendar();
+        });
+
+        // Initial render
+        renderCalendar();
+    })();
 
     </script>
 <?php include "admin_sidebar_js.php"; ?>
