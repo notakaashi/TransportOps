@@ -1439,6 +1439,7 @@ if (isset($_GET['debug']) && $_GET['debug'] === 'db') {
     
     exit;
 }
+}
 
 // ── PDF Export Function ─────────────────────────── */
     function exportToPDF() {

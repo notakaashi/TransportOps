@@ -429,7 +429,7 @@ try {
                                     "id"
                                 ]; ?>"></div>
 
-                                <div class="mt-4 flex items-center justify-between">
+                                <div class="mt-4">
                                     <div class="text-sm text-gray-600">
                                         <span class="font-medium">Route:</span>
                                         <?php echo implode(
@@ -441,11 +441,6 @@ try {
                                             }, $route["stops"]),
                                         ); ?>
                                     </div>
-                                    <button onclick="focusRoute(<?php echo $route[
-                                        "id"
-                                    ]; ?>)" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium">
-                                        View Details
-                                    </button>
                                 </div>
                             <?php else: ?>
                                 <div class="text-center py-8 text-gray-500">
