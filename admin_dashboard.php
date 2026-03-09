@@ -72,6 +72,114 @@ try {
     );
     $users_data = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
+    // Fetch real reports over time data for the last 7 days
+    $reports_over_time = [];
+    for ($i = 7; $i >= 0; $i--) {
+        $date = date("Y-m-d", strtotime("-$i days"));
+        $stmt = $pdo->prepare("
+            SELECT COUNT(*) as count
+            FROM reports
+            WHERE DATE(timestamp) = ?
+        ");
+        $stmt->execute([$date]);
+        $count = $stmt->fetch(PDO::FETCH_ASSOC)["count"];
+        $reports_over_time[] = $count;
+    }
+
+    // Calculate week-over-week changes
+    $current_week_reports = array_sum(array_slice($reports_over_time, 0, 7));
+    $previous_week_reports = 0;
+    for ($i = 14; $i >= 8; $i--) {
+        $date = date("Y-m-d", strtotime("-$i days"));
+        $stmt = $pdo->prepare("
+            SELECT COUNT(*) as count
+            FROM reports
+            WHERE DATE(timestamp) = ?
+        ");
+        $stmt->execute([$date]);
+        $previous_week_reports += $stmt->fetch(PDO::FETCH_ASSOC)["count"];
+    }
+
+    $reports_change =
+        $previous_week_reports > 0
+            ? round(
+                (($current_week_reports - $previous_week_reports) /
+                    $previous_week_reports) *
+                    100,
+                1,
+            )
+            : 0;
+
+    // Calculate delay change
+    $current_week_delays = 0;
+    for ($i = 7; $i >= 0; $i--) {
+        $date = date("Y-m-d", strtotime("-$i days"));
+        $stmt = $pdo->prepare("
+            SELECT COUNT(*) as count
+            FROM reports
+            WHERE DATE(timestamp) = ? AND delay_reason IS NOT NULL AND delay_reason != ''
+        ");
+        $stmt->execute([$date]);
+        $current_week_delays += $stmt->fetch(PDO::FETCH_ASSOC)["count"];
+    }
+
+    $previous_week_delays = 0;
+    for ($i = 14; $i >= 8; $i--) {
+        $date = date("Y-m-d", strtotime("-$i days"));
+        $stmt = $pdo->prepare("
+            SELECT COUNT(*) as count
+            FROM reports
+            WHERE DATE(timestamp) = ? AND delay_reason IS NOT NULL AND delay_reason != ''
+        ");
+        $stmt->execute([$date]);
+        $previous_week_delays += $stmt->fetch(PDO::FETCH_ASSOC)["count"];
+    }
+
+    $delays_change =
+        $previous_week_delays > 0
+            ? round(
+                (($current_week_delays - $previous_week_delays) /
+                    $previous_week_delays) *
+                    100,
+                1,
+            )
+            : 0;
+
+    // Calculate user change
+    $current_week_users = 0;
+    for ($i = 7; $i >= 0; $i--) {
+        $date = date("Y-m-d", strtotime("-$i days"));
+        $stmt = $pdo->prepare("
+            SELECT COUNT(*) as count
+            FROM users
+            WHERE DATE(created_at) = ?
+        ");
+        $stmt->execute([$date]);
+        $current_week_users += $stmt->fetch(PDO::FETCH_ASSOC)["count"];
+    }
+
+    $previous_week_users = 0;
+    for ($i = 14; $i >= 8; $i--) {
+        $date = date("Y-m-d", strtotime("-$i days"));
+        $stmt = $pdo->prepare("
+            SELECT COUNT(*) as count
+            FROM users
+            WHERE DATE(created_at) = ?
+        ");
+        $stmt->execute([$date]);
+        $previous_week_users += $stmt->fetch(PDO::FETCH_ASSOC)["count"];
+    }
+
+    $users_change =
+        $previous_week_users > 0
+            ? round(
+                (($current_week_users - $previous_week_users) /
+                    $previous_week_users) *
+                    100,
+                1,
+            )
+            : 0;
+
     $stmt = $pdo->query("
         SELECT delay_reason, COUNT(*) as count
         FROM reports
@@ -413,6 +521,7 @@ function getInitials($name)
         .ci-purple { background: #f3e8ff; color: #7e22ce; }
         .card-title { font-size: 0.925rem; font-weight: 700; color: #1e293b; }
         .card-body  { padding: 1.25rem 1.375rem; }
+        .chart-wrap { position: relative; height: 300px; width: 100%; }
 
         /* ── Two-col grid ───────────────────────────────── */
         .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
@@ -590,7 +699,7 @@ function getInitials($name)
             </svg>
         </button>
     </div>
-    
+
     <nav class="mobile-nav">
         <a href="admin_dashboard.php" class="mobile-nav-link active">
             <svg class="nav-ico" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -641,7 +750,7 @@ function getInitials($name)
             User Management
         </a>
     </nav>
-    
+
     <div class="mobile-dropdown-footer">
         <div class="mobile-user-info">
             <div class="user-ava"><?php echo getInitials(
@@ -801,7 +910,9 @@ function getInitials($name)
                     </div>
                 </div>
                 <div class="card-body">
-                    <canvas id="reportsChart" width="400" height="200"></canvas>
+                    <div class="chart-wrap">
+                        <canvas id="reportsChart"></canvas>
+                    </div>
                 </div>
             </div>
 
@@ -818,7 +929,9 @@ function getInitials($name)
                     </div>
                 </div>
                 <div class="card-body">
-                    <canvas id="delaysChart" width="400" height="200"></canvas>
+                    <div class="chart-wrap">
+                        <canvas id="delaysChart"></canvas>
+                    </div>
                 </div>
             </div>
         </div>
@@ -846,7 +959,7 @@ function getInitials($name)
             <div class="card-body">
                 <!-- Metrics Grid -->
                 <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    
+
                     <!-- Total Reports Metric -->
                     <div class="metric-card">
                         <div class="metric-icon metric-green">
@@ -855,9 +968,19 @@ function getInitials($name)
                             </svg>
                         </div>
                         <div class="metric-content">
-                            <div class="metric-value"><?php echo number_format($total_reports); ?></div>
+                            <div class="metric-value"><?php echo number_format(
+                                $total_reports,
+                            ); ?></div>
                             <div class="metric-label">Total Reports</div>
-                            <div class="metric-change positive">+12% this week</div>
+                            <div class="metric-change <?php echo $reports_change >=
+                            0
+                                ? "positive"
+                                : "negative"; ?>">
+                            <?php
+                            echo $reports_change >= 0 ? "+" : "";
+                            echo $reports_change;
+                            ?>% this week
+                        </div>
                         </div>
                     </div>
 
@@ -869,9 +992,19 @@ function getInitials($name)
                             </svg>
                         </div>
                         <div class="metric-content">
-                            <div class="metric-value"><?php echo number_format($active_delays); ?></div>
+                            <div class="metric-value"><?php echo number_format(
+                                $active_delays,
+                            ); ?></div>
                             <div class="metric-label">Active Delays</div>
-                            <div class="metric-change negative">+5% this week</div>
+                            <div class="metric-change <?php echo $delays_change >=
+                            0
+                                ? "negative"
+                                : "positive"; ?>">
+                            <?php
+                            echo $delays_change >= 0 ? "+" : "";
+                            echo $delays_change;
+                            ?>% this week
+                        </div>
                         </div>
                     </div>
 
@@ -883,9 +1016,19 @@ function getInitials($name)
                             </svg>
                         </div>
                         <div class="metric-content">
-                            <div class="metric-value"><?php echo number_format($total_users); ?></div>
+                            <div class="metric-value"><?php echo number_format(
+                                $total_users,
+                            ); ?></div>
                             <div class="metric-label">Total Users</div>
-                            <div class="metric-change positive">+8% this week</div>
+                            <div class="metric-change <?php echo $users_change >=
+                            0
+                                ? "positive"
+                                : "negative"; ?>">
+                            <?php
+                            echo $users_change >= 0 ? "+" : "";
+                            echo $users_change;
+                            ?>% this week
+                        </div>
                         </div>
                     </div>
 
@@ -897,7 +1040,9 @@ function getInitials($name)
                             </svg>
                         </div>
                         <div class="metric-content">
-                            <div class="metric-value"><?php echo number_format($total_routes); ?></div>
+                            <div class="metric-value"><?php echo number_format(
+                                $total_routes,
+                            ); ?></div>
                             <div class="metric-label">Active Routes</div>
                             <div class="metric-change neutral">0% this week</div>
                         </div>
@@ -909,15 +1054,24 @@ function getInitials($name)
                 <div class="mt-6 p-4 bg-gray-50 rounded-lg">
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
                         <div>
-                            <div class="text-2xl font-bold text-gray-800"><?php echo round(($active_delays / max($total_reports, 1)) * 100, 1); ?>%</div>
+                            <div class="text-2xl font-bold text-gray-800"><?php echo round(
+                                ($active_delays / max($total_reports, 1)) * 100,
+                                1,
+                            ); ?>%</div>
                             <div class="text-sm text-gray-600">Delay Rate</div>
                         </div>
                         <div>
-                            <div class="text-2xl font-bold text-gray-800"><?php echo round($total_reports / max($total_users, 1), 1); ?></div>
+                            <div class="text-2xl font-bold text-gray-800"><?php echo round(
+                                $total_reports / max($total_users, 1),
+                                1,
+                            ); ?></div>
                             <div class="text-sm text-gray-600">Reports per User</div>
                         </div>
                         <div>
-                            <div class="text-2xl font-bold text-gray-800"><?php echo round($total_reports / max($total_routes, 1), 1); ?></div>
+                            <div class="text-2xl font-bold text-gray-800"><?php echo round(
+                                $total_reports / max($total_routes, 1),
+                                1,
+                            ); ?></div>
                             <div class="text-sm text-gray-600">Reports per Route</div>
                         </div>
                     </div>
@@ -1260,46 +1414,60 @@ function getInitials($name)
 </div>
 
 <script>
-    // ── Chart Data Preparation ─────────────────────── */
-    const delayTrendsData = <?php echo json_encode(array_map(function($item) {
-        return [
-            'x' => htmlspecialchars($item['delay_reason'] ?? 'Unknown'),
-            'y' => (int)($item['count'] ?? 0)
-        ];
-    }, $delay_trends)); ?>;
-    
-    const peakHoursData = <?php echo json_encode(array_map(function($item) {
-        return [
-            'x' => (int)$item['hour'] . ':00',
-            'y' => (int)($item['total_reports'] ?? 0)
-        ];
-    }, $peak_hours)); ?>;
+    // Wait for DOM to be fully loaded
+    document.addEventListener('DOMContentLoaded', function() {
+        // ── Chart Data Preparation ─────────────────────── */
+    const delayTrendsData = <?php echo json_encode(
+        array_map(function ($item) {
+            return [
+                "x" => htmlspecialchars($item["delay_reason"] ?? "Unknown"),
+                "y" => (int) ($item["count"] ?? 0),
+            ];
+        }, $delay_trends),
+    ); ?>;
+
+    const peakHoursData = <?php echo json_encode(
+        array_map(function ($item) {
+            return [
+                "x" => (int) $item["hour"] . ":00",
+                "y" => (int) ($item["total_reports"] ?? 0),
+            ];
+        }, $peak_hours),
+    ); ?>;
 
     // ── Chart Configuration ─────────────────────────── */
     const chartColors = {
         primary: '#22335C',
-        secondary: '#5B7B99', 
+        secondary: '#5B7B99',
         accent: '#FBC061',
         success: '#16a34a',
         danger: '#dc2626',
+        warning: '#f59e0b',
+        info: '#06b6d4',
         grid: 'rgba(34, 51, 92, 0.1)'
     };
 
     // ── Reports Over Time Chart ─────────────────────────── */
-    const reportsCtx = document.getElementById('reportsChart').getContext('2d');
-    new Chart(reportsCtx, {
-        type: 'line',
-        data: {
-            labels: ['7 Days Ago', '6 Days Ago', '5 Days Ago', '4 Days Ago', '3 Days Ago', '2 Days Ago', 'Yesterday', 'Today'],
-            datasets: [{
-                label: 'Reports Per Day',
-                data: [12, 15, 8, 25, 18, 22, 30, 28], // Sample data - replace with actual calculation
-                borderColor: chartColors.primary,
-                backgroundColor: 'rgba(34, 51, 92, 0.1)',
-                tension: 0.4,
-                fill: true
-            }]
-        },
+    const reportsCtx = document.getElementById('reportsChart');
+    if (reportsCtx) {
+        const reportsData = <?php echo json_encode(
+            $reports_over_time ?? [],
+        ); ?>;
+        console.log('Reports data:', reportsData); // Debug log
+
+        new Chart(reportsCtx.getContext('2d'), {
+            type: 'line',
+            data: {
+                labels: ['7 Days Ago', '6 Days Ago', '5 Days Ago', '4 Days Ago', '3 Days Ago', '2 Days Ago', 'Yesterday', 'Today'],
+                datasets: [{
+                    label: 'Reports Per Day',
+                    data: reportsData,
+                    borderColor: chartColors.primary,
+                    backgroundColor: 'rgba(34, 51, 92, 0.1)',
+                    tension: 0.4,
+                    fill: true
+                }]
+            },
         options: {
             responsive: true,
             maintainAspectRatio: false,
@@ -1336,16 +1504,22 @@ function getInitials($name)
             }
         }
     });
+    } else {
+        console.error('Reports chart canvas not found');
+    }
 
     // ── Delay Trends Chart ─────────────────────────────── */
-    const delaysCtx = document.getElementById('delaysChart').getContext('2d');
-    new Chart(delaysCtx, {
-        type: 'bar',
-        data: {
-            labels: delayTrendsData.map(item => item.x),
-            datasets: [{
-                label: 'Delay Reasons',
-                data: delayTrendsData.map(item => item.y),
+    const delaysCtx = document.getElementById('delaysChart');
+    if (delaysCtx) {
+        console.log('Delay trends data:', delayTrendsData); // Debug log
+
+        new Chart(delaysCtx.getContext('2d'), {
+            type: 'bar',
+            data: {
+                labels: delayTrendsData.map(item => item.x),
+                datasets: [{
+                    label: 'Delay Reasons',
+                    data: delayTrendsData.map(item => item.y),
                 backgroundColor: [
                     chartColors.danger,
                     chartColors.warning,
@@ -1399,69 +1573,32 @@ function getInitials($name)
                 }
             }
         }
-    });
-
-    // Check if this is a debug request
-if (isset($_GET['debug']) && $_GET['debug'] === 'db') {
-    header('Content-Type: text/plain');
-    
-    try {
-        $pdo = getDBConnection();
-        echo "Database Connection: " . ($pdo ? "SUCCESS" : "FAILED") . "\n";
-        
-        if ($pdo) {
-            $totalReports = $pdo->query("SELECT COUNT(*) FROM reports")->fetchColumn();
-            $totalUsers = $pdo->query("SELECT COUNT(*) FROM users")->fetchColumn();
-            $totalRoutes = $pdo->query("SELECT COUNT(*) FROM route_definitions")->fetchColumn();
-            
-            echo "Reports: $totalReports\n";
-            echo "Users: $totalUsers\n"; 
-            echo "Routes: $totalRoutes\n";
-            
-            // Test delay trends query
-            $delayTrends = $pdo->query("
-                SELECT delay_reason, COUNT(*) as count
-                FROM reports
-                WHERE delay_reason IS NOT NULL AND delay_reason != ''
-                  AND timestamp >= DATE_SUB(NOW(), INTERVAL 7 DAY)
-                GROUP BY delay_reason
-                ORDER BY count DESC
-                LIMIT 5
-            ")->fetchAll(PDO::FETCH_ASSOC);
-            
-            echo "Delay Trends Query: " . (count($delayTrends) > 0 ? "SUCCESS" : "FAILED") . "\n";
-            echo "Delay Trends Count: " . count($delayTrends) . "\n";
-        }
-        
-    } catch (Exception $e) {
-        echo "ERROR: " . $e->getMessage() . "\n";
+        });
+    } else {
+        console.error('Delays chart canvas not found');
     }
-    
-    exit;
-}
-}
 
 // ── PDF Export Function ─────────────────────────── */
     function exportToPDF() {
         console.log('Export to PDF clicked'); // Debug log
-        
+
         // Show loading state
         const btn = event.target;
         const originalHTML = btn.innerHTML;
         btn.innerHTML = 'Generating PDF...';
         btn.disabled = true;
-        
+
         // Debug: Check if data is available
         const totalReports = <?php echo $total_reports ?? 0; ?>;
         const activeDelays = <?php echo $active_delays ?? 0; ?>;
         const totalUsers = <?php echo $total_users ?? 0; ?>;
         const totalRoutes = <?php echo $total_routes ?? 0; ?>;
-        
+
         console.log('Total Reports:', totalReports);
         console.log('Active Delays:', activeDelays);
         console.log('Total Users:', totalUsers);
         console.log('Total Routes:', totalRoutes);
-        
+
         // Validate data before proceeding
         if (!totalReports && !activeDelays && !totalUsers && !totalRoutes) {
             alert('No data available to export. Please refresh the page and try again.');
@@ -1469,7 +1606,7 @@ if (isset($_GET['debug']) && $_GET['debug'] === 'db') {
             btn.disabled = false;
             return;
         }
-        
+
         // Prepare analytics data
         const analyticsData = {
             generatedAt: new Date().toLocaleString(),
@@ -1483,18 +1620,18 @@ if (isset($_GET['debug']) && $_GET['debug'] === 'db') {
             delayTrends: <?php echo json_encode($delay_trends ?? []); ?>,
             peakHours: <?php echo json_encode($peak_hours ?? []); ?>
         };
-        
+
         console.log('Analytics Data:', analyticsData); // Debug log
-        
+
         // Create PDF content
         const pdfContent = generatePDFContent(analyticsData);
-        
+
         // Generate PDF using browser print functionality
         const printWindow = window.open('', '_blank');
         if (printWindow) {
             printWindow.document.write(pdfContent);
             printWindow.document.close();
-            
+
             // Wait for content to load then print
             setTimeout(() => {
                 printWindow.print();
@@ -1508,7 +1645,7 @@ if (isset($_GET['debug']) && $_GET['debug'] === 'db') {
             btn.disabled = false;
         }
     }
-    
+
     function generatePDFContent(data) {
         return `
             <!DOCTYPE html>
@@ -1516,94 +1653,94 @@ if (isset($_GET['debug']) && $_GET['debug'] === 'db') {
             <head>
                 <title>Transport Ops Analytics Report</title>
                 <style>
-                    body { 
-                        font-family: 'Inter', sans-serif; 
-                        margin: 0; 
-                        padding: 20px; 
+                    body {
+                        font-family: 'Inter', sans-serif;
+                        margin: 0;
+                        padding: 20px;
                         background: #f8fafc;
                         color: #1e293b;
                     }
-                    .header { 
-                        text-align: center; 
-                        margin-bottom: 30px; 
-                        border-bottom: 2px solid #e5e7eb; 
+                    .header {
+                        text-align: center;
+                        margin-bottom: 30px;
+                        border-bottom: 2px solid #e5e7eb;
                         padding-bottom: 20px;
                     }
-                    .header h1 { 
-                        color: #1e293b; 
-                        margin: 0; 
-                        font-size: 28px; 
+                    .header h1 {
+                        color: #1e293b;
+                        margin: 0;
+                        font-size: 28px;
                         font-weight: 700;
                     }
-                    .header .date { 
-                        color: #64748b; 
-                        font-size: 14px; 
+                    .header .date {
+                        color: #64748b;
+                        font-size: 14px;
                         margin-top: 5px;
                     }
-                    .metrics-grid { 
-                        display: grid; 
-                        grid-template-columns: repeat(2, 1fr); 
-                        gap: 20px; 
+                    .metrics-grid {
+                        display: grid;
+                        grid-template-columns: repeat(2, 1fr);
+                        gap: 20px;
                         margin-bottom: 30px;
                     }
-                    .metric-box { 
-                        background: white; 
-                        padding: 20px; 
-                        border-radius: 8px; 
+                    .metric-box {
+                        background: white;
+                        padding: 20px;
+                        border-radius: 8px;
                         box-shadow: 0 2px 8px rgba(0,0,0,0.1);
                         border-left: 4px solid #22335c;
                     }
-                    .metric-title { 
-                        font-size: 14px; 
-                        font-weight: 600; 
-                        color: #64748b; 
+                    .metric-title {
+                        font-size: 14px;
+                        font-weight: 600;
+                        color: #64748b;
                         margin-bottom: 8px;
                         text-transform: uppercase;
                         letter-spacing: 0.5px;
                     }
-                    .metric-value { 
-                        font-size: 32px; 
-                        font-weight: 700; 
-                        color: #1e293b; 
+                    .metric-value {
+                        font-size: 32px;
+                        font-weight: 700;
+                        color: #1e293b;
                         margin-bottom: 5px;
                     }
-                    .metric-subtitle { 
-                        font-size: 12px; 
-                        color: #64748b; 
+                    .metric-subtitle {
+                        font-size: 12px;
+                        color: #64748b;
                     }
-                    .chart-section { 
-                        margin-bottom: 30px; 
+                    .chart-section {
+                        margin-bottom: 30px;
                         page-break-inside: avoid;
                     }
-                    .chart-title { 
-                        font-size: 18px; 
-                        font-weight: 600; 
-                        color: #1e293b; 
+                    .chart-title {
+                        font-size: 18px;
+                        font-weight: 600;
+                        color: #1e293b;
                         margin-bottom: 15px;
                         border-bottom: 1px solid #e5e7eb;
                         padding-bottom: 10px;
                     }
-                    .chart-data { 
-                        background: white; 
-                        padding: 15px; 
-                        border-radius: 8px; 
+                    .chart-data {
+                        background: white;
+                        padding: 15px;
+                        border-radius: 8px;
                         margin-bottom: 10px;
                     }
-                    .chart-item { 
-                        display: flex; 
-                        justify-content: space-between; 
-                        padding: 8px 0; 
+                    .chart-item {
+                        display: flex;
+                        justify-content: space-between;
+                        padding: 8px 0;
                         border-bottom: 1px solid #f3f4f6;
                     }
-                    .chart-item:last-child { 
-                        border-bottom: none; 
+                    .chart-item:last-child {
+                        border-bottom: none;
                     }
-                    .footer { 
-                        text-align: center; 
-                        margin-top: 30px; 
-                        padding-top: 20px; 
-                        border-top: 1px solid #e5e7eb; 
-                        color: #64748b; 
+                    .footer {
+                        text-align: center;
+                        margin-top: 30px;
+                        padding-top: 20px;
+                        border-top: 1px solid #e5e7eb;
+                        color: #64748b;
                         font-size: 12px;
                     }
                     @media print {
@@ -1617,7 +1754,7 @@ if (isset($_GET['debug']) && $_GET['debug'] === 'db') {
                     <h1>Transport Operations Analytics</h1>
                     <div class="date">Generated on ${data.generatedAt}</div>
                 </div>
-                
+
                 <div class="metrics-grid">
                     <div class="metric-box">
                         <div class="metric-title">Total Reports</div>
@@ -1640,7 +1777,7 @@ if (isset($_GET['debug']) && $_GET['debug'] === 'db') {
                         <div class="metric-subtitle">Defined PUV routes</div>
                     </div>
                 </div>
-                
+
                 <div class="chart-section">
                     <div class="chart-title">Performance Metrics</div>
                     <div class="chart-data">
@@ -1658,7 +1795,7 @@ if (isset($_GET['debug']) && $_GET['debug'] === 'db') {
                         </div>
                     </div>
                 </div>
-                
+
                 ${data.delayTrends.length > 0 ? `
                 <div class="chart-section">
                     <div class="chart-title">Delay Trends (7 Days)</div>
@@ -1672,7 +1809,7 @@ if (isset($_GET['debug']) && $_GET['debug'] === 'db') {
                     </div>
                 </div>
                 ` : ''}
-                
+
                 ${data.peakHours.length > 0 ? `
                 <div class="chart-section">
                     <div class="chart-title">Peak Reporting Hours</div>
@@ -1686,7 +1823,7 @@ if (isset($_GET['debug']) && $_GET['debug'] === 'db') {
                     </div>
                 </div>
                 ` : ''}
-                
+
                 <div class="footer">
                     <p>Transport Operations System Analytics Report</p>
                     <p>Confidential - Internal Use Only</p>
@@ -1702,15 +1839,19 @@ if (isset($_GET['debug']) && $_GET['debug'] === 'db') {
         const activeDelays = <?php echo $active_delays ?? 0; ?>;
         const totalUsers = <?php echo $total_users ?? 0; ?>;
         const totalRoutes = <?php echo $total_routes ?? 0; ?>;
-        
+
         console.log('=== PDF Data Test ===');
         console.log('Total Reports:', totalReports);
         console.log('Active Delays:', activeDelays);
         console.log('Total Users:', totalUsers);
         console.log('Total Routes:', totalRoutes);
-        console.log('Delay Trends:', <?php echo json_encode($delay_trends ?? []); ?>);
-        console.log('Peak Hours:', <?php echo json_encode($peak_hours ?? []); ?>);
-        
+        console.log('Delay Trends:', <?php echo json_encode(
+            $delay_trends ?? [],
+        ); ?>);
+        console.log('Peak Hours:', <?php echo json_encode(
+            $peak_hours ?? [],
+        ); ?>);
+
         alert(`Data Test Results:\n• Total Reports: ${totalReports}\n• Active Delays: ${activeDelays}\n• Total Users: ${totalUsers}\n• Total Routes: ${totalRoutes}\n\nCheck browser console for detailed data.`);
     }
 
@@ -1853,6 +1994,7 @@ if (isset($_GET['debug']) && $_GET['debug'] === 'db') {
             if (e.key === 'Escape') closeModal();
         });
     })();
+}); // Close DOM ready event
 </script>
 
 <?php include "admin_sidebar_js.php"; ?>
