@@ -621,6 +621,32 @@ if (!$error) {
                    lng >= PHILIPPINES_BOUNDS.west && lng <= PHILIPPINES_BOUNDS.east;
         }
 
+        function normalizeSearchResults(payload) {
+            if (!payload) return [];
+            // Nominatim returns an array
+            if (Array.isArray(payload)) return payload;
+            // Photon returns { features: [...] }
+            if (payload && Array.isArray(payload.features)) return payload.features;
+            return [];
+        }
+
+        function mergeUniqueResults(lists) {
+            const seen = new Set();
+            const out = [];
+            (lists || []).forEach(function (arr) {
+                (arr || []).forEach(function (item) {
+                    const lat = parseFloat(item.lat || item.geometry?.coordinates?.[1]);
+                    const lng = parseFloat(item.lon || item.geometry?.coordinates?.[0]);
+                    if (isNaN(lat) || isNaN(lng)) return;
+                    const key = lat.toFixed(6) + "," + lng.toFixed(6) + "|" + (item.display_name || item.properties?.name || "");
+                    if (seen.has(key)) return;
+                    seen.add(key);
+                    out.push(item);
+                });
+            });
+            return out;
+        }
+
         function searchPlace(routeId, query, resultsEl, setStopFn, isAutoComplete = false) {
             if (!query || !query.trim()) {
                 if (!isAutoComplete) {
@@ -648,18 +674,18 @@ if (!$error) {
                 fetch('https://nominatim.openstreetmap.org/search?q=' + encodeURIComponent(phSearchQuery) + '&format=json&limit=8&addressdetails=1&countrycodes=ph&viewbox=' +
                       [PHILIPPINES_BOUNDS.west, PHILIPPINES_BOUNDS.north, PHILIPPINES_BOUNDS.east, PHILIPPINES_BOUNDS.south].join(','), {
                     headers: { 'Accept': 'application/json', 'User-Agent': 'TransportOps/1.0 (Route Management)' }
-                }).then(r => r.json()).catch(() => []),
+                }).then(r => r.json()).then(normalizeSearchResults).catch(() => []),
 
                 // Photon API with Philippines bounds
                 fetch('https://photon.komoot.io/api/?q=' + encodeURIComponent(query) + '&limit=8&bbox=' +
                       [PHILIPPINES_BOUNDS.west, PHILIPPINES_BOUNDS.south, PHILIPPINES_BOUNDS.east, PHILIPPINES_BOUNDS.north].join(','), {
                     headers: { 'Accept': 'application/json' }
-                }).then(r => r.json()).catch(() => []),
+                }).then(r => r.json()).then(normalizeSearchResults).catch(() => []),
 
                 // Fallback: General search but filter results
                 fetch('https://nominatim.openstreetmap.org/search?q=' + encodeURIComponent(query) + '&format=json&limit=5&addressdetails=1', {
                     headers: { 'Accept': 'application/json', 'User-Agent': 'TransportOps/1.0 (Route Management)' }
-                }).then(r => r.json()).then(data => {
+                }).then(r => r.json()).then(normalizeSearchResults).then(data => {
                     // Filter results to only Philippines locations
                     return data.filter(item => {
                         const lat = parseFloat(item.lat);
@@ -671,19 +697,31 @@ if (!$error) {
                 }).catch(() => [])
             ];
 
-            Promise.race(searchPromises)
-                .then(function (data) {
-                    if (!data || data.length === 0) {
+            Promise.allSettled(searchPromises)
+                .then(function (settled) {
+                    const lists = settled
+                        .filter(function (s) { return s.status === 'fulfilled'; })
+                        .map(function (s) { return Array.isArray(s.value) ? s.value : []; });
+
+                    const merged = mergeUniqueResults(lists)
+                        .filter(function (item) {
+                            const lat = parseFloat(item.lat || item.geometry?.coordinates?.[1]);
+                            const lng = parseFloat(item.lon || item.geometry?.coordinates?.[0]);
+                            return !isNaN(lat) && !isNaN(lng) && isLocationInPhilippines(lat, lng);
+                        })
+                        .slice(0, 12);
+
+                    if (!merged || merged.length === 0) {
                         resultsEl.innerHTML = '<div class="p-3 text-gray-500"><svg class="h-4 w-4 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21v-4m0 0V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path></svg>No places found in Philippines. Try: Manila, Quezon City, Cebu, Davao</div>';
                         return;
                     }
 
                     // Cache the results
                     if (!isAutoComplete) {
-                        searchCache[cacheKey] = data;
+                        searchCache[cacheKey] = merged;
                     }
 
-                    displaySearchResults(data, routeId, resultsEl, setStopFn);
+                    displaySearchResults(merged, routeId, resultsEl, setStopFn);
                 })
                 .catch(function (error) {
                     console.error('Search error:', error);
@@ -886,11 +924,35 @@ if (!$error) {
             var searchInput = document.getElementById('place-search-' + route.id);
             var searchBtn = document.getElementById('place-search-btn-' + route.id);
             var resultsEl = document.getElementById('place-results-' + route.id);
-            var setStopFn = window.setStopForRoute && window.setStopForRoute[route.id];
-            if (!searchInput || !resultsEl || !setStopFn) return;
+            if (!searchInput || !resultsEl) return;
+
+            function resolveSetStopFn() {
+                return window.setStopForRoute && window.setStopForRoute[route.id];
+            }
+
+            function ensureMapReady(cb) {
+                var fn = resolveSetStopFn();
+                if (fn) return cb(fn);
+                // Map is initialized lazily now; init it if needed then retry.
+                if (typeof initMapForRoute === 'function') {
+                    initMapForRoute(route);
+                    setTimeout(function () {
+                        cb(resolveSetStopFn());
+                    }, 50);
+                } else {
+                    cb(null);
+                }
+            }
 
             function doSearch(isAutoComplete = false) {
-                searchPlace(route.id, searchInput.value, resultsEl, setStopFn, isAutoComplete);
+                ensureMapReady(function (setStopFn) {
+                    if (!setStopFn) {
+                        resultsEl.classList.remove('hidden');
+                        resultsEl.innerHTML = '<div class="p-3 text-gray-500">Map is not ready yet. Please select this route first.</div>';
+                        return;
+                    }
+                    searchPlace(route.id, searchInput.value, resultsEl, setStopFn, isAutoComplete);
+                });
             }
 
             // Debounced search for typing
@@ -903,7 +965,9 @@ if (!$error) {
                         doSearch(true); // Auto-complete search
                     }, 300);
                 } else if (query.length === 0) {
-                    showRecentSearches(route.id, resultsEl, setStopFn);
+                    ensureMapReady(function (setStopFn) {
+                        showRecentSearches(route.id, resultsEl, setStopFn);
+                    });
                 } else {
                     resultsEl.classList.add('hidden');
                 }
@@ -912,7 +976,9 @@ if (!$error) {
             // Show recent searches on focus
             searchInput.addEventListener('focus', function() {
                 if (!searchInput.value.trim()) {
-                    showRecentSearches(route.id, resultsEl, setStopFn);
+                    ensureMapReady(function (setStopFn) {
+                        showRecentSearches(route.id, resultsEl, setStopFn);
+                    });
                 }
             });
 
