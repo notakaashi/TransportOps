@@ -364,9 +364,55 @@ try {
             transition: opacity 0.55s cubic-bezier(.4,0,.2,1), transform 0.55s cubic-bezier(.4,0,.2,1);
         }
         .reveal.visible { opacity: 1; transform: none; }
+
+        /* ── Toast ───────────────────────────────────────── */
+        .toast {
+            pointer-events: auto;
+            display: flex;
+            align-items: flex-start;
+            gap: 0.65rem;
+            min-width: 280px;
+            max-width: 380px;
+            padding: 0.85rem 0.95rem;
+            border-radius: 0.9rem;
+            background: rgba(255,255,255,0.92);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(34,51,92,0.10);
+            box-shadow: 0 14px 38px rgba(15,28,54,0.18);
+            transform: translateY(-6px);
+            opacity: 0;
+            transition: transform 180ms ease, opacity 180ms ease;
+        }
+        .toast.show { transform: translateY(0); opacity: 1; }
+        .toast-ico {
+            width: 2.05rem; height: 2.05rem;
+            border-radius: 0.75rem;
+            display: flex; align-items: center; justify-content: center;
+            flex-shrink: 0;
+            color: #fff;
+            box-shadow: 0 6px 18px rgba(0,0,0,0.18);
+        }
+        .toast-ico.success { background: linear-gradient(135deg,#16a34a,#22c55e); }
+        .toast-ico.error   { background: linear-gradient(135deg,#dc2626,#ef4444); }
+        .toast-ico.info    { background: linear-gradient(135deg,#22335C,#5B7B99); }
+        .toast-title { font-weight: 800; color: #0f1c36; font-size: 0.86rem; line-height: 1.15; }
+        .toast-msg { margin-top: 0.15rem; color: #475569; font-size: 0.8rem; line-height: 1.35; }
+        .toast-close {
+            margin-left: auto;
+            border: none;
+            background: transparent;
+            cursor: pointer;
+            color: #94a3b8;
+            padding: 0.15rem;
+            border-radius: 0.5rem;
+        }
+        .toast-close:hover { background: rgba(34,51,92,0.06); color: #334155; }
     </style>
 </head>
 <body>
+
+<!-- Toasts -->
+<div id="toastHost" style="position:fixed;top:1rem;right:1rem;z-index:1000;display:flex;flex-direction:column;gap:0.6rem;pointer-events:none;"></div>
 
 <!-- ════════════════ FLOATING NAV ════════════════ -->
 <nav id="floatingNav" class="fixed top-4 left-1/2 -translate-x-1/2 z-40 glass-nav text-white rounded-2xl w-[calc(100%-2rem)] max-w-7xl">
@@ -927,23 +973,94 @@ try {
         });
     }
 
+    function showToast(type, title, message, opts) {
+        const host = document.getElementById('toastHost');
+        if (!host) return;
+        const options = (typeof opts === 'number' || typeof opts === 'undefined')
+            ? { timeoutMs: opts }
+            : (opts || {});
+
+        const t = document.createElement('div');
+        t.className = 'toast';
+        const icon = type === 'success'
+            ? '✓'
+            : (type === 'error' ? '!' : 'i');
+        t.innerHTML =
+            `<div class="toast-ico ${type}">${icon}</div>` +
+            `<div style="min-width:0;">` +
+              `<div class="toast-title">${title}</div>` +
+              `<div class="toast-msg">${message}</div>` +
+            `</div>` +
+            `<button class="toast-close" aria-label="Dismiss">` +
+              `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>` +
+            `</button>`;
+        host.appendChild(t);
+        const closeBtn = t.querySelector('.toast-close');
+        let removed = false;
+        const remove = (trigger) => {
+            if (removed) return;
+            removed = true;
+            t.classList.remove('show');
+            setTimeout(() => {
+                if (t && t.parentNode) t.parentNode.removeChild(t);
+                if (trigger === 'close' && typeof options.onClose === 'function') {
+                    options.onClose();
+                }
+            }, 180);
+        };
+        if (closeBtn) closeBtn.addEventListener('click', () => remove('close'));
+        setTimeout(() => t.classList.add('show'), 0);
+        const timeoutMs = options.timeoutMs;
+        if (typeof timeoutMs === 'number' && timeoutMs > 0) {
+            setTimeout(() => remove('timeout'), timeoutMs);
+        }
+    }
+
     document.addEventListener('click', async function (e) {
         if (!e.target.classList.contains('verify-btn')) return;
-        if (!userLocation) { alert('Please enable your location first.'); return; }
-        const reportId = e.target.getAttribute('data-report-id');
+        if (!userLocation) { showToast('info', 'Enable location', 'Turn on your location to verify reports within 500m.', 4500); return; }
+        const btn = e.target;
+        const reportId = btn.getAttribute('data-report-id');
         try {
+            btn.disabled = true;
+            btn.style.opacity = '0.85';
+            btn.textContent = 'Verifying…';
             const fd = new FormData();
             fd.append('report_id', reportId);
             fd.append('latitude',  userLocation.latitude);
             fd.append('longitude', userLocation.longitude);
             const res  = await fetch('verify_report.php', { method: 'POST', body: fd, credentials: 'same-origin' });
             const data = await res.json();
-            if (!res.ok || !data.success) { alert(data.error || 'Verification failed.'); return; }
-            alert('Thank you! Verifications: ' + data.peer_verifications + '/3. Fully verified: ' + (data.is_verified ? 'Yes' : 'No'));
-            window.location.reload();
+            if (!res.ok || !data.success) {
+                showToast('error', 'Verification failed', (data && data.error) ? data.error : 'Please try again.', 5200);
+                btn.disabled = false;
+                btn.style.opacity = '';
+                btn.textContent = 'Verify';
+                return;
+            }
+
+            const points = (data && typeof data.verifier_points_awarded === 'number') ? data.verifier_points_awarded : 1;
+            const pv = (data && typeof data.peer_verifications === 'number') ? data.peer_verifications : 0;
+            const fully = !!(data && data.is_verified);
+            const scoreText = (data && (data.verifier_new_trust_score !== null && data.verifier_new_trust_score !== undefined))
+                ? ` Your trust score is now ${Number(data.verifier_new_trust_score).toFixed(1)}.`
+                : '';
+            showToast(
+                'success',
+                'Verified successfully',
+                `+${points} trust point for verifying. Verifications: ${pv}/3. Fully verified: ${fully ? 'Yes' : 'No'}.${scoreText}`,
+                { timeoutMs: 0, onClose: () => window.location.reload() }
+            );
+
+            btn.textContent = 'Verified ✓';
         } catch (err) {
             console.error(err);
-            alert('An error occurred while verifying.');
+            showToast('error', 'Something went wrong', 'An error occurred while verifying. Please try again.', 5200);
+            if (e.target) {
+                e.target.disabled = false;
+                e.target.style.opacity = '';
+                e.target.textContent = 'Verify';
+            }
         }
     });
 

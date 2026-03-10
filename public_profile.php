@@ -33,6 +33,11 @@ $viewerImage = $_SESSION["profile_image"] ?? null;
 $viewerName  = htmlspecialchars($_SESSION["user_name"] ?? "");
 $viewerRole  = htmlspecialchars($_SESSION["role"] ?? "");
 $viewerId    = (int)($_SESSION["user_id"] ?? 0);
+
+$trustLogs = [];
+if ($isOwnProfile) {
+    $trustLogs = getTrustScoreLogs($userId);
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -267,6 +272,49 @@ body {
 }
 .cta-btn-ghost:hover { background: rgba(34,51,92,0.14); transform: translateY(-1px); }
 
+/* ── Trust cards ───────────────────────────── */
+.trust-grid { display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 1.5rem; }
+@media (max-width: 900px) { .trust-grid { grid-template-columns: 1fr; } }
+.trust-pill {
+    display: inline-flex; align-items: center; gap: 0.4rem;
+    font-size: 0.72rem; font-weight: 800; letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 0.22rem 0.6rem; border-radius: 999px;
+    background: rgba(34,51,92,0.06); color: var(--navy);
+    border: 1px solid rgba(34,51,92,0.10);
+}
+.trust-rule { display: flex; align-items: flex-start; gap: 0.75rem; padding: 0.75rem 0; border-top: 1px solid rgba(34,51,92,0.06); }
+.trust-rule:first-child { border-top: none; padding-top: 0; }
+.trust-rule:last-child { padding-bottom: 0; }
+.trust-rule-pts {
+    min-width: 60px;
+    display: inline-flex; align-items: center; justify-content: center;
+    padding: 0.25rem 0.55rem;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 900;
+    background: rgba(251,192,97,0.20);
+    border: 1px solid rgba(251,192,97,0.35);
+    color: #7a4b00;
+}
+.trust-rule-title { font-weight: 800; color: var(--navy); font-size: 0.9rem; }
+.trust-rule-desc { margin-top: 0.1rem; color: #64748b; font-size: 0.82rem; line-height: 1.35; }
+.trust-log-row { display: flex; align-items: flex-start; gap: 0.75rem; padding: 0.85rem 1.25rem; border-top: 1px solid rgba(34,51,92,0.06); }
+.trust-log-row:first-child { border-top: none; }
+.trust-log-delta {
+    min-width: 66px;
+    display: inline-flex; align-items: center; justify-content: center;
+    padding: 0.25rem 0.55rem;
+    border-radius: 0.7rem;
+    font-size: 0.75rem;
+    font-weight: 900;
+    border: 1px solid rgba(34,51,92,0.10);
+}
+.trust-log-delta.pos { background: rgba(22,163,74,0.10); color: #166534; border-color: rgba(22,163,74,0.22); }
+.trust-log-delta.neg { background: rgba(220,38,38,0.10); color: #991b1b; border-color: rgba(220,38,38,0.22); }
+.trust-log-title { font-weight: 800; color: #0f1c36; font-size: 0.86rem; line-height: 1.2; }
+.trust-log-meta  { margin-top: 0.18rem; color: #94a3b8; font-size: 0.75rem; display: flex; gap: 0.5rem; flex-wrap: wrap; }
+
 /* ── Empty state ───────────────────────────── */
 .empty-state { text-align: center; padding: 3.5rem 1.5rem; }
 .empty-icon {
@@ -475,8 +523,129 @@ body {
 <!-- ═══════════════ MAIN ═══════════════ -->
 <main class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pb-16">
 
+    <!-- Trust Score Guide / History -->
+    <div class="trust-grid reveal rd2" style="margin-bottom:1.5rem;">
+        <div class="glass-card">
+            <div class="p-6" style="border-bottom:1px solid rgba(34,51,92,0.07);">
+                <div class="sec-eyebrow mb-1">Trust</div>
+                <h2 class="sec-heading">How Trust Score works</h2>
+                <p style="color:#64748b;font-size:0.86rem;margin-top:0.35rem;line-height:1.5;">
+                    Trust Score reflects how reliable a reporter is based on peer verification and report outcomes. Scores are recalculated and kept between <strong>0</strong> and <strong>100</strong>.
+                </p>
+            </div>
+            <div class="p-6">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:0.75rem;flex-wrap:wrap;margin-bottom:0.85rem;">
+                    <span class="trust-pill">Ways to earn / lose points</span>
+                    <?php if ($isOwnProfile): ?>
+                        <span style="font-size:0.78rem;color:#94a3b8;">Tip: verify reports near you to build credibility faster.</span>
+                    <?php endif; ?>
+                </div>
+
+                <div class="trust-rule">
+                    <span class="trust-rule-pts">+5</span>
+                    <div>
+                        <div class="trust-rule-title">Submit a report</div>
+                        <div class="trust-rule-desc">Each submitted report adds points (quality still matters).</div>
+                    </div>
+                </div>
+                <div class="trust-rule">
+                    <span class="trust-rule-pts">+10</span>
+                    <div>
+                        <div class="trust-rule-title">Get a report peer-verified (3+ verifications)</div>
+                        <div class="trust-rule-desc">When one of your reports reaches the verification threshold, you get a bonus.</div>
+                    </div>
+                </div>
+                <div class="trust-rule">
+                    <span class="trust-rule-pts">+1</span>
+                    <div>
+                        <div class="trust-rule-title">Verify other people’s reports</div>
+                        <div class="trust-rule-desc">Verifying helps the community and increases your trust score.</div>
+                    </div>
+                </div>
+                <div class="trust-rule">
+                    <span class="trust-rule-pts">-10</span>
+                    <div>
+                        <div class="trust-rule-title">Rejected report</div>
+                        <div class="trust-rule-desc">Rejected reports reduce trust score to discourage misinformation.</div>
+                    </div>
+                </div>
+                <div class="trust-rule">
+                    <span class="trust-rule-pts">-2</span>
+                    <div>
+                        <div class="trust-rule-title">Expired report</div>
+                        <div class="trust-rule-desc">If your report gets <strong>0 verifications</strong> after <strong>1 hour</strong>, it reduces score slightly.</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="glass-card">
+            <div class="p-6" style="border-bottom:1px solid rgba(34,51,92,0.07);">
+                <div class="sec-eyebrow mb-1">History</div>
+                <h2 class="sec-heading">Trust score changes</h2>
+                <p style="color:#64748b;font-size:0.86rem;margin-top:0.35rem;line-height:1.5;">
+                    <?php if ($isOwnProfile): ?>
+                        Your recent trust score updates.
+                    <?php else: ?>
+                        Only visible to the account owner.
+                    <?php endif; ?>
+                </p>
+            </div>
+
+            <?php if (!$isOwnProfile): ?>
+                <div class="empty-state">
+                    <div class="empty-icon">
+                        <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24" style="color:var(--slate);">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                    </div>
+                    <p style="font-size:.875rem;color:#64748b;">Private</p>
+                    <p style="font-size:.78rem;color:#94a3b8;margin-top:.3rem;">Trust score history is shown only on your own profile.</p>
+                </div>
+            <?php elseif (empty($trustLogs)): ?>
+                <div class="empty-state">
+                    <div class="empty-icon">
+                        <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24" style="color:var(--slate);">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m2 10H7a2 2 0 01-2-2V4a2 2 0 012-2h10a2 2 0 012 2v16a2 2 0 01-2 2z"/>
+                        </svg>
+                    </div>
+                    <p style="font-size:.875rem;color:#64748b;">No changes recorded yet.</p>
+                    <p style="font-size:.78rem;color:#94a3b8;margin-top:.3rem;">Submit or verify reports to start building your score.</p>
+                </div>
+            <?php else: ?>
+                <div>
+                    <?php foreach (array_slice($trustLogs, 0, 12) as $log): ?>
+                        <?php
+                            $old = (float)($log["old_score"] ?? 0);
+                            $new = (float)($log["new_score"] ?? 0);
+                            $delta = $new - $old;
+                            $deltaCls = $delta >= 0 ? "pos" : "neg";
+                            $deltaTxt = ($delta >= 0 ? "+" : "") . number_format($delta, 1);
+                            $when = !empty($log["created_at"]) ? date("M j, Y · H:i", strtotime($log["created_at"])) : "";
+                            $who  = htmlspecialchars($log["adjusted_by_name"] ?? "System");
+                            $reason = htmlspecialchars($log["reason"] ?? "Trust score updated");
+                        ?>
+                        <div class="trust-log-row">
+                            <span class="trust-log-delta <?= $deltaCls ?>"><?= $deltaTxt ?></span>
+                            <div class="flex-1 min-w-0">
+                                <div class="trust-log-title"><?= $reason ?></div>
+                                <div class="trust-log-meta">
+                                    <span><?= $when ?></span>
+                                    <span style="opacity:0.55;">•</span>
+                                    <span>By <?= $who ?></span>
+                                    <span style="opacity:0.55;">•</span>
+                                    <span><?= number_format($old, 1) ?> → <?= number_format($new, 1) ?></span>
+                                </div>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+            <?php endif; ?>
+        </div>
+    </div>
+
     <!-- Recent Verified Reports card -->
-    <div class="glass-card reveal rd2">
+    <div class="glass-card reveal rd3">
         <div class="p-6" style="border-bottom:1px solid rgba(34,51,92,0.07);">
             <div class="sec-eyebrow mb-1">Activity</div>
             <h2 class="sec-heading">Recent Verified Reports</h2>

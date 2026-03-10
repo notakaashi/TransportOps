@@ -127,8 +127,21 @@ try {
     
     // Update verifier's score (+1 point for verification)
     updateUserTrustScore($_SESSION['user_id'], 'Verified report: +1 point');
+    $verifierPointsAwarded = 1;
+    $verifierNewScore = null;
+    try {
+        $stmt = $pdo->prepare("SELECT trust_score FROM users WHERE id = ?");
+        $stmt->execute([$_SESSION['user_id']]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        if ($row) {
+            $verifierNewScore = (float) $row['trust_score'];
+        }
+    } catch (Exception $e) {
+        $verifierNewScore = null;
+    }
     
     // Check if this verification brought the report to 3+ verifications
+    $reporterBonusAwarded = false;
     if ((int)$updated['peer_verifications'] >= 3 && (int)$updated['is_verified'] === 1) {
         // Get the original reporter's ID to give them the 10-point bonus
         $stmt = $pdo->prepare("SELECT user_id FROM reports WHERE id = ?");
@@ -137,6 +150,7 @@ try {
         
         if ($report && $report['user_id']) {
             updateUserTrustScore($report['user_id'], 'Report reached 3+ verifications: +10 bonus points');
+            $reporterBonusAwarded = true;
         }
     }
 
@@ -144,7 +158,10 @@ try {
         'success' => true,
         'peer_verifications' => (int)$updated['peer_verifications'],
         'is_verified' => (int)$updated['is_verified'] === 1,
-        'distance_km' => round($distanceKm, 2)
+        'distance_km' => round($distanceKm, 2),
+        'verifier_points_awarded' => $verifierPointsAwarded,
+        'verifier_new_trust_score' => $verifierNewScore,
+        'reporter_bonus_awarded' => $reporterBonusAwarded
     ]);
 } catch (PDOException $e) {
     if ($pdo && $pdo->inTransaction()) {
