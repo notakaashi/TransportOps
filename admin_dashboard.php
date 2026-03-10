@@ -29,10 +29,11 @@ $users_data = [];
 $delay_trends = [];
 $peak_hours = [];
 
-// Initialize change variables to prevent undefined warnings
-$reports_change = 0;
-$delays_change = 0;
-$users_change = 0;
+// Initialize today counts for metrics
+$today_reports = 0;
+$today_delays = 0;
+$today_users = 0;
+$today_routes = 0;
 
 try {
     $pdo = getDBConnection();
@@ -114,99 +115,30 @@ try {
         $reports_over_time = [1, 0, 0, 0, 0, 0, 0, 0]; // Show 1 report today
     }
 
-    // Calculate week-over-week changes
-    $current_week_reports = array_sum(array_slice($reports_over_time, 0, 7));
-    $previous_week_reports = 0;
-    for ($i = 14; $i >= 8; $i--) {
-        $date = date("Y-m-d", strtotime("-$i days"));
-        $stmt = $pdo->prepare("
-            SELECT COUNT(*) as count
-            FROM reports
-            WHERE DATE(timestamp) = ?
-        ");
-        $stmt->execute([$date]);
-        $previous_week_reports += $stmt->fetch(PDO::FETCH_ASSOC)["count"];
+    // Today's counts for metrics
+    $today = date("Y-m-d");
+    $stmt = $pdo->prepare("SELECT COUNT(*) as count FROM reports WHERE DATE(timestamp) = ?");
+    $stmt->execute([$today]);
+    $today_reports = (int) $stmt->fetch(PDO::FETCH_ASSOC)["count"];
+
+    $stmt = $pdo->prepare("
+        SELECT COUNT(*) as count FROM reports
+        WHERE DATE(timestamp) = ? AND delay_reason IS NOT NULL AND delay_reason != ''
+    ");
+    $stmt->execute([$today]);
+    $today_delays = (int) $stmt->fetch(PDO::FETCH_ASSOC)["count"];
+
+    $stmt = $pdo->prepare("SELECT COUNT(*) as count FROM users WHERE DATE(created_at) = ?");
+    $stmt->execute([$today]);
+    $today_users = (int) $stmt->fetch(PDO::FETCH_ASSOC)["count"];
+
+    try {
+        $stmt = $pdo->prepare("SELECT COUNT(*) as count FROM route_definitions WHERE DATE(created_at) = ?");
+        $stmt->execute([$today]);
+        $today_routes = (int) $stmt->fetch(PDO::FETCH_ASSOC)["count"];
+    } catch (PDOException $e) {
+        $today_routes = 0;
     }
-
-    $reports_change =
-        $previous_week_reports > 0
-            ? round(
-                (($current_week_reports - $previous_week_reports) /
-                    $previous_week_reports) *
-                    100,
-                1,
-            )
-            : 0;
-
-    // Calculate delay change
-    $current_week_delays = 0;
-    for ($i = 7; $i >= 0; $i--) {
-        $date = date("Y-m-d", strtotime("-$i days"));
-        $stmt = $pdo->prepare("
-            SELECT COUNT(*) as count
-            FROM reports
-            WHERE DATE(timestamp) = ? AND delay_reason IS NOT NULL AND delay_reason != ''
-        ");
-        $stmt->execute([$date]);
-        $current_week_delays += $stmt->fetch(PDO::FETCH_ASSOC)["count"];
-    }
-
-    $previous_week_delays = 0;
-    for ($i = 14; $i >= 8; $i--) {
-        $date = date("Y-m-d", strtotime("-$i days"));
-        $stmt = $pdo->prepare("
-            SELECT COUNT(*) as count
-            FROM reports
-            WHERE DATE(timestamp) = ? AND delay_reason IS NOT NULL AND delay_reason != ''
-        ");
-        $stmt->execute([$date]);
-        $previous_week_delays += $stmt->fetch(PDO::FETCH_ASSOC)["count"];
-    }
-
-    $delays_change =
-        $previous_week_delays > 0
-            ? round(
-                (($current_week_delays - $previous_week_delays) /
-                    $previous_week_delays) *
-                    100,
-                1,
-            )
-            : 0;
-
-    // Calculate user change
-    $current_week_users = 0;
-    for ($i = 7; $i >= 0; $i--) {
-        $date = date("Y-m-d", strtotime("-$i days"));
-        $stmt = $pdo->prepare("
-            SELECT COUNT(*) as count
-            FROM users
-            WHERE DATE(created_at) = ?
-        ");
-        $stmt->execute([$date]);
-        $current_week_users += $stmt->fetch(PDO::FETCH_ASSOC)["count"];
-    }
-
-    $previous_week_users = 0;
-    for ($i = 14; $i >= 8; $i--) {
-        $date = date("Y-m-d", strtotime("-$i days"));
-        $stmt = $pdo->prepare("
-            SELECT COUNT(*) as count
-            FROM users
-            WHERE DATE(created_at) = ?
-        ");
-        $stmt->execute([$date]);
-        $previous_week_users += $stmt->fetch(PDO::FETCH_ASSOC)["count"];
-    }
-
-    $users_change =
-        $previous_week_users > 0
-            ? round(
-                (($current_week_users - $previous_week_users) /
-                    $previous_week_users) *
-                    100,
-                1,
-            )
-            : 0;
 
     // Get delay trends by reason (top reasons)
     $stmt = $pdo->query("
@@ -701,6 +633,100 @@ function getInitials($name)
         /* ── Report row clickable ───────────────────────── */
         .report-row { cursor: pointer; }
 
+        /* ── System Metrics Overview ────────────────────── */
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1.25rem;
+            align-items: stretch;
+        }
+        @media (max-width: 1024px) {
+            .metrics-grid { grid-template-columns: repeat(2, 1fr); }
+        }
+        @media (max-width: 600px) {
+            .metrics-grid { grid-template-columns: 1fr; }
+        }
+        .metric-card {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            background: white;
+            border-radius: 1rem;
+            padding: 1.5rem 1.25rem;
+            box-shadow: 0 4px 20px rgba(34, 51, 92, 0.08), 0 1px 4px rgba(34, 51, 92, 0.04);
+            border: 1px solid rgba(34, 51, 92, 0.06);
+            transition: all 0.2s ease;
+        }
+        .metric-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 30px rgba(34, 51, 92, 0.12), 0 2px 8px rgba(34, 51, 92, 0.06);
+        }
+        .metric-icon {
+            width: 3rem;
+            height: 3rem;
+            border-radius: 0.75rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 1rem;
+            flex-shrink: 0;
+        }
+        .metric-icon.metric-green { background: linear-gradient(135deg, #10b981, #059669); color: white; }
+        .metric-icon.metric-red { background: linear-gradient(135deg, #ef4444, #dc2626); color: white; }
+        .metric-icon.metric-purple { background: linear-gradient(135deg, #8b5cf6, #7c3aed); color: white; }
+        .metric-icon.metric-blue { background: linear-gradient(135deg, #3b82f6, #2563eb); color: white; }
+        .metric-content {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+        }
+        .metric-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #1e293b;
+            line-height: 1;
+            margin-bottom: 0.25rem;
+        }
+        .metric-label {
+            font-size: 0.875rem;
+            color: #64748b;
+            font-weight: 500;
+            margin-bottom: 0.5rem;
+        }
+        .metric-change {
+            font-size: 0.75rem;
+            font-weight: 600;
+            padding: 0.25rem 0.625rem;
+            border-radius: 0.375rem;
+            display: inline-block;
+        }
+        .metric-change.positive { background: #dcfce7; color: #166534; }
+        .metric-change.negative { background: #fee2e2; color: #dc2626; }
+        .metric-change.neutral { background: #f3f4f6; color: #6b7280; }
+
+        /* ── Summary Stats ───────────────────────────────── */
+        .summary-stats {
+            margin-top: 1.5rem;
+            padding: 1.25rem 1.5rem;
+            background: rgba(34, 51, 92, 0.04);
+            border-radius: 0.75rem;
+            border: 1px solid rgba(34, 51, 92, 0.06);
+        }
+        .summary-stats-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1.5rem;
+            text-align: center;
+        }
+        @media (max-width: 640px) {
+            .summary-stats-grid { grid-template-columns: 1fr; }
+        }
+        .summary-stat-item { display: flex; flex-direction: column; align-items: center; }
+        .summary-stat-value { font-size: 1.5rem; font-weight: 700; color: #1e293b; }
+        .summary-stat-label { font-size: 0.8125rem; color: #64748b; margin-top: 0.25rem; }
+
         /* ── Notif count label ──────────────────────────── */
         #report-notification-count { font-size: 0.78rem; color: #64748b; font-weight: 500; }
     </style>
@@ -994,7 +1020,7 @@ function getInitials($name)
             </div>
             <div class="card-body">
                 <!-- Metrics Grid -->
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div class="metrics-grid">
 
                     <!-- Total Reports Metric -->
                     <div class="metric-card">
@@ -1008,15 +1034,7 @@ function getInitials($name)
                                 $total_reports,
                             ); ?></div>
                             <div class="metric-label">Total Reports</div>
-                            <div class="metric-change <?php echo $reports_change >=
-                            0
-                                ? "positive"
-                                : "negative"; ?>">
-                            <?php
-                            echo $reports_change >= 0 ? "+" : "";
-                            echo $reports_change;
-                            ?>% this week
-                        </div>
+                            <div class="metric-change <?php echo $today_reports > 0 ? "positive" : "neutral"; ?>"><?php echo $today_reports; ?> today</div>
                         </div>
                     </div>
 
@@ -1032,15 +1050,7 @@ function getInitials($name)
                                 $active_delays,
                             ); ?></div>
                             <div class="metric-label">Active Delays</div>
-                            <div class="metric-change <?php echo $delays_change >=
-                            0
-                                ? "negative"
-                                : "positive"; ?>">
-                            <?php
-                            echo $delays_change >= 0 ? "+" : "";
-                            echo $delays_change;
-                            ?>% this week
-                        </div>
+                            <div class="metric-change <?php echo $today_delays > 0 ? "negative" : "neutral"; ?>"><?php echo $today_delays; ?> today</div>
                         </div>
                     </div>
 
@@ -1056,15 +1066,7 @@ function getInitials($name)
                                 $total_users,
                             ); ?></div>
                             <div class="metric-label">Total Users</div>
-                            <div class="metric-change <?php echo $users_change >=
-                            0
-                                ? "positive"
-                                : "negative"; ?>">
-                            <?php
-                            echo $users_change >= 0 ? "+" : "";
-                            echo $users_change;
-                            ?>% this week
-                        </div>
+                            <div class="metric-change <?php echo $today_users > 0 ? "positive" : "neutral"; ?>"><?php echo $today_users; ?> today</div>
                         </div>
                     </div>
 
@@ -1080,35 +1082,35 @@ function getInitials($name)
                                 $total_routes,
                             ); ?></div>
                             <div class="metric-label">Active Routes</div>
-                            <div class="metric-change neutral">0% this week</div>
+                            <div class="metric-change neutral"><?php echo $today_routes; ?> today</div>
                         </div>
                     </div>
 
                 </div>
 
                 <!-- Summary Stats -->
-                <div class="mt-6 p-4 bg-gray-50 rounded-lg">
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
-                        <div>
-                            <div class="text-2xl font-bold text-gray-800"><?php echo round(
+                <div class="summary-stats">
+                    <div class="summary-stats-grid">
+                        <div class="summary-stat-item">
+                            <div class="summary-stat-value"><?php echo round(
                                 ($active_delays / max($total_reports, 1)) * 100,
                                 1,
                             ); ?>%</div>
-                            <div class="text-sm text-gray-600">Delay Rate</div>
+                            <div class="summary-stat-label">Delay Rate</div>
                         </div>
-                        <div>
-                            <div class="text-2xl font-bold text-gray-800"><?php echo round(
+                        <div class="summary-stat-item">
+                            <div class="summary-stat-value"><?php echo round(
                                 $total_reports / max($total_users, 1),
                                 1,
                             ); ?></div>
-                            <div class="text-sm text-gray-600">Reports per User</div>
+                            <div class="summary-stat-label">Reports per User</div>
                         </div>
-                        <div>
-                            <div class="text-2xl font-bold text-gray-800"><?php echo round(
+                        <div class="summary-stat-item">
+                            <div class="summary-stat-value"><?php echo round(
                                 $total_reports / max($total_routes, 1),
                                 1,
                             ); ?></div>
-                            <div class="text-sm text-gray-600">Reports per Route</div>
+                            <div class="summary-stat-label">Reports per Route</div>
                         </div>
                     </div>
                 </div>
@@ -1447,26 +1449,23 @@ function getInitials($name)
     // ── Delay Trends Chart (by reason) ───────────────────── */
     const delaysCtx = document.getElementById('delaysChart');
     if (delaysCtx) {
+        const delayColors = [chartColors.danger, chartColors.warning, chartColors.info, chartColors.secondary, chartColors.accent, chartColors.primary];
+        const delayDatasets = delayTrendsData.map((item, i) => ({
+            label: item.x,
+            data: delayTrendsData.map((_, j) => j === i ? item.y : 0),
+            backgroundColor: delayColors[i % delayColors.length],
+            borderColor: 'rgba(15, 23, 42, 0.06)',
+            borderWidth: 1,
+            borderRadius: 8,
+            maxBarThickness: 36,
+            stack: 'delays'
+        }));
+
         new Chart(delaysCtx.getContext('2d'), {
             type: 'bar',
             data: {
-                labels: delayTrendsData.map(item => item.x),
-                datasets: [{
-                    label: 'Total Delays',
-                    data: delayTrendsData.map(item => item.y),
-                    backgroundColor: [
-                        chartColors.danger,
-                        chartColors.warning,
-                        chartColors.info,
-                        chartColors.secondary,
-                        chartColors.accent,
-                        chartColors.primary
-                    ],
-                    borderColor: 'rgba(15, 23, 42, 0.06)',
-                    borderWidth: 1,
-                    borderRadius: 8,
-                    maxBarThickness: 32
-                }]
+                labels: delayTrendsData.map((_, i) => (i + 1).toString()),
+                datasets: delayDatasets
             },
             options: {
                 responsive: true,
@@ -1477,22 +1476,33 @@ function getInitials($name)
                         position: 'bottom',
                         labels: {
                             color: '#64748b',
-                            font: { size: 12 }
+                            font: { size: 11 },
+                            boxWidth: 14,
+                            padding: 12,
+                            usePointStyle: true
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(ctx) {
+                                const v = ctx.raw;
+                                return v ? ctx.dataset.label + ': ' + v : null;
+                            }
                         }
                     }
                 },
                 scales: {
                     y: {
                         beginAtZero: true,
+                        stacked: true,
                         grid: { color: chartColors.grid },
                         ticks: { color: '#64748b' }
                     },
                     x: {
+                        stacked: true,
                         grid: { display: false },
                         ticks: {
-                            color: '#64748b',
-                            maxRotation: 30,
-                            minRotation: 0
+                            display: false
                         }
                     }
                 }
