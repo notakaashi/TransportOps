@@ -34,6 +34,22 @@ $viewerName  = htmlspecialchars($_SESSION["user_name"] ?? "");
 $viewerRole  = htmlspecialchars($_SESSION["role"] ?? "");
 $viewerId    = (int)($_SESSION["user_id"] ?? 0);
 
+$statsTotalReports       = (int)($stats["total_reports"] ?? 0);
+$statsVerifiedReports    = (int)($stats["verified_reports"] ?? 0);
+$statsRejectedReports    = (int)($stats["rejected_reports"] ?? 0);
+$statsExpiredReports     = (int)($stats["expired_reports"] ?? 0);
+$statsVerificationsMade  = (int)($stats["verifications_made"] ?? 0);
+
+$tsBase        = 50;
+$tsFromReports = $statsTotalReports * 5;
+$tsFromVerified= $statsVerifiedReports * 10;
+$tsFromRejected= $statsRejectedReports * -10;
+$tsFromExpired = $statsExpiredReports * -2;
+$tsFromChecks  = $statsVerificationsMade * 1;
+$tsComputedRaw = $tsBase + $tsFromReports + $tsFromVerified + $tsFromRejected + $tsFromExpired + $tsFromChecks;
+
+$tsComputed = max(0, min(100, $tsComputedRaw));
+
 $trustLogs = [];
 if ($isOwnProfile) {
     $trustLogs = getTrustScoreLogs($userId);
@@ -576,6 +592,28 @@ body {
                         <div class="trust-rule-desc">If your report gets <strong>0 verifications</strong> after <strong>1 hour</strong>, it reduces score slightly.</div>
                     </div>
                 </div>
+
+                <?php if ($isOwnProfile): ?>
+                <div style="margin-top:1.2rem;padding-top:1.05rem;border-top:1px dashed rgba(148,163,184,0.55);">
+                    <div style="display:flex;align-items:center;justify-content:space-between;gap:0.75rem;flex-wrap:wrap;margin-bottom:0.4rem;">
+                        <span class="trust-pill">Your current breakdown</span>
+                        <span style="font-size:0.78rem;color:#94a3b8;">
+                            Computed: <?= number_format($tsComputed, 1) ?> / 100
+                            <?php if (abs($tsComputed - (float)$trustScore) > 0.01): ?>
+                                <span style="color:#f97316;">(stored: <?= $trustScore ?>)</span>
+                            <?php endif; ?>
+                        </span>
+                    </div>
+                    <div style="font-size:0.82rem;color:#475569;line-height:1.45;">
+                        <div><strong>Base:</strong> <?= $tsBase ?></div>
+                        <div><strong>Reports submitted:</strong> <?= $statsTotalReports ?> × 5 = <?= $tsFromReports ?></div>
+                        <div><strong>Reports peer-verified (3+ checks):</strong> <?= $statsVerifiedReports ?> × 10 = <?= $tsFromVerified ?></div>
+                        <div><strong>Rejected reports:</strong> <?= $statsRejectedReports ?> × -10 = <?= $tsFromRejected ?></div>
+                        <div><strong>Expired reports (0 checks after 1 hour):</strong> <?= $statsExpiredReports ?> × -2 = <?= $tsFromExpired ?></div>
+                        <div><strong>Verifications you made:</strong> <?= $statsVerificationsMade ?> × 1 = <?= $tsFromChecks ?></div>
+                    </div>
+                </div>
+                <?php endif; ?>
             </div>
         </div>
 

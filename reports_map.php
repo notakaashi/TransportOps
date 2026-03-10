@@ -20,7 +20,8 @@ try {
     $availableRoutes = $routesStmt->fetchAll(PDO::FETCH_COLUMN);
 
     // Build reports query with route filter
-    $whereClause = "WHERE r.latitude IS NOT NULL AND r.longitude IS NOT NULL";
+    // Only show recent reports on the live map (last 1 hour)
+    $whereClause = "WHERE r.latitude IS NOT NULL AND r.longitude IS NOT NULL AND r.timestamp >= DATE_SUB(NOW(), INTERVAL 1 HOUR)";
     $params = [];
 
     if (!empty($selectedRoute)) {

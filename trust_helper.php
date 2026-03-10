@@ -13,7 +13,7 @@ require_once 'db.php';
  * @param int $adjustedBy - Admin user ID (null for automatic adjustments)
  * @return bool - Success status
  */
-function updateUserTrustScore($userId, $reason, $adjustedBy = null) {
+function updateUserTrustScore($userId, $reason, $adjustedBy = null, $logChange = true) {
     try {
         $pdo = getDBConnection();
         
@@ -36,9 +36,11 @@ function updateUserTrustScore($userId, $reason, $adjustedBy = null) {
         $stmt = $pdo->prepare("UPDATE users SET trust_score = ? WHERE id = ?");
         $stmt->execute([$newScore, $userId]);
         
-        // Log the change
-        $stmt = $pdo->prepare("INSERT INTO trust_score_logs (user_id, old_score, new_score, reason, adjusted_by) VALUES (?, ?, ?, ?, ?)");
-        $stmt->execute([$userId, $oldScore, $newScore, $reason, $adjustedBy]);
+        // Log the change (optional)
+        if ($logChange) {
+            $stmt = $pdo->prepare("INSERT INTO trust_score_logs (user_id, old_score, new_score, reason, adjusted_by) VALUES (?, ?, ?, ?, ?)");
+            $stmt->execute([$userId, $oldScore, $newScore, $reason, $adjustedBy]);
+        }
         
         return true;
     } catch (PDOException $e) {
@@ -206,6 +208,16 @@ function getUserPublicProfile($userId) {
             ");
             $stmt->execute([$userId]);
             $stats = $stmt->fetch();
+
+            // How many verifications this user has made
+            $stmt = $pdo->prepare("
+                SELECT COUNT(*) as verification_count
+                FROM report_verifications
+                WHERE verifier_user_id = ?
+            ");
+            $stmt->execute([$userId]);
+            $verStats = $stmt->fetch();
+            $stats['verifications_made'] = (int)($verStats['verification_count'] ?? 0);
         } catch (PDOException $e) {
             error_log("Statistics query failed, using defaults: " . $e->getMessage());
             // Fallback to simple count if verification table doesn't exist
@@ -216,6 +228,7 @@ function getUserPublicProfile($userId) {
                 $stats['verified_reports'] = 0;
                 $stats['rejected_reports'] = 0;
                 $stats['expired_reports'] = 0;
+                $stats['verifications_made'] = 0;
             } catch (PDOException $e2) {
                 error_log("Simple reports query also failed: " . $e2->getMessage());
                 return false;

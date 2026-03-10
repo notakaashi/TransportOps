@@ -129,8 +129,9 @@ try {
     // Update trust scores after commit
     require_once 'trust_helper.php';
     
-    // Update verifier's score (+1 point for verification)
-    updateUserTrustScore($_SESSION['user_id'], 'Verified report: +1 point');
+    // Recalculate verifier's trust score after verifying
+    // (delta may be more than +1 because trust score is computed from overall history)
+    updateUserTrustScore($_SESSION['user_id'], 'Trust score recalculated (verification)');
     $verifierPointsAwarded = 1;
     $verifierNewScore = null;
     try {
@@ -153,7 +154,7 @@ try {
         $report = $stmt->fetch();
         
         if ($report && $report['user_id']) {
-            updateUserTrustScore($report['user_id'], 'Report reached 3+ verifications: +10 bonus points');
+            updateUserTrustScore($report['user_id'], 'Trust score recalculated (report reached 3+ verifications)');
             $reporterBonusAwarded = true;
         }
     }

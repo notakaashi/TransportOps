@@ -65,6 +65,15 @@ function checkUserActive() {
             header('Location: login.php?error=deactivated');
             exit;
         }
+
+        // Periodic trust score refresh (so time-based rules like "expired after 1 hour" apply)
+        // Throttled per session to avoid excessive recalculation/log spam.
+        $last = (int)($_SESSION['last_trust_refresh_ts'] ?? 0);
+        if (time() - $last >= 3600) { // once per hour
+            require_once 'trust_helper.php';
+            updateUserTrustScore((int)$_SESSION['user_id'], 'Trust score refreshed', null, true);
+            $_SESSION['last_trust_refresh_ts'] = time();
+        }
     } catch (PDOException $e) {
         error_log("Active user check error: " . $e->getMessage());
         // On error, allow access but log the issue
