@@ -163,9 +163,9 @@ UPDATE `reports` SET `status` = 'pending'  WHERE `is_verified` = 0 AND `status` 
 --  INSERT IGNORE keeps this script safely re-runnable.
 -- ============================================================
 INSERT IGNORE INTO `route_definitions` (`name`, `created_at`) VALUES
-('Route 1 - Bagumbayan - Pasig',                     NOW()),
-('Route 2 - Guadalupe - FTI',                        NOW()),
-('Route 3 - Pasig - Quiapo',                          NOW()),
+('Bagumbayan - Pasig',                     NOW()),
+('Guadalupe - FTI',                        NOW()),
+('Pasig - Quiapo',                          NOW()),
 ('LRT-1 Roosevelt to Baclaran',                        NOW()),
 ('LRT-2 Recto to Antipolo',                          NOW()),
 ('MRT-3 North Avenue to Taft Avenue',                   NOW());
