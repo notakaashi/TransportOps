@@ -40,12 +40,13 @@ try {
     }
 
     $stmt = $pdo->prepare("
-        SELECT r.id, r.crowd_level, r.delay_reason, r.timestamp,
-               r.trust_score, r.is_verified,
-               COALESCE(rd.name, p.current_route) AS route_name
+        SELECT r.id, r.crowd_level, r.delay_reason, r.timestamp, r.latitude, r.longitude,
+               r.is_verified, r.peer_verifications, r.status,
+               u.name as user_name, u.role as user_role,
+               rd.name AS route_name
         FROM reports r
+        LEFT JOIN users u ON r.user_id = u.id
         LEFT JOIN route_definitions rd ON r.route_definition_id = rd.id
-        LEFT JOIN puv_units p ON r.puv_id = p.id
         WHERE r.user_id = ?
         ORDER BY r.timestamp DESC
         LIMIT 10
@@ -89,10 +90,9 @@ try {
     // Community Pulse — recent community activity feed (any user)
     $stmt = $pdo->prepare("
         SELECT r.crowd_level, r.delay_reason, r.timestamp,
-               COALESCE(rd.name, p.current_route) AS route_name
+               rd.name AS route_name
         FROM reports r
         LEFT JOIN route_definitions rd ON r.route_definition_id = rd.id
-        LEFT JOIN puv_units p ON r.puv_id = p.id
         ORDER BY r.timestamp DESC
         LIMIT 5
     ");

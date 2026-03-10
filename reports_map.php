@@ -13,13 +13,9 @@ try {
 
     // Get all available routes for filtering
     $routesStmt = $pdo->query("
-        SELECT DISTINCT COALESCE(rd.name, p.current_route) as route_name
-        FROM reports r
-        LEFT JOIN route_definitions rd ON r.route_definition_id = rd.id
-        LEFT JOIN puv_units p ON r.puv_id = p.id
-        WHERE r.latitude IS NOT NULL AND r.longitude IS NOT NULL
-        AND (rd.name IS NOT NULL OR p.current_route IS NOT NULL)
-        ORDER BY route_name
+        SELECT name as route_name
+        FROM route_definitions
+        ORDER BY name
     ");
     $availableRoutes = $routesStmt->fetchAll(PDO::FETCH_COLUMN);
 
@@ -28,8 +24,7 @@ try {
     $params = [];
 
     if (!empty($selectedRoute)) {
-        $whereClause .= " AND (rd.name = ? OR p.current_route = ?)";
-        $params[] = $selectedRoute;
+        $whereClause .= " AND rd.name = ?";
         $params[] = $selectedRoute;
     }
 
@@ -37,11 +32,10 @@ try {
         SELECT r.id, r.crowd_level, r.delay_reason, r.timestamp, r.latitude, r.longitude,
                r.is_verified, r.peer_verifications, r.status,
                u.id as user_id, u.name as user_name, u.trust_score,
-               COALESCE(rd.name, p.current_route) AS route_name
+               rd.name AS route_name
         FROM reports r
         LEFT JOIN users u ON r.user_id = u.id
         LEFT JOIN route_definitions rd ON r.route_definition_id = rd.id
-        LEFT JOIN puv_units p ON r.puv_id = p.id
         $whereClause
         ORDER BY r.timestamp DESC
         LIMIT 100

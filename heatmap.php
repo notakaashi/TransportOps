@@ -24,9 +24,9 @@ try {
     $pdo = getDBConnection();
     $stmt = $pdo->query("
         SELECT r.id, r.crowd_level, r.latitude, r.longitude, r.timestamp,
-               p.plate_number, p.current_route
+               rd.name as route_name
         FROM reports r
-        LEFT JOIN puv_units p ON r.puv_id = p.id
+        LEFT JOIN route_definitions rd ON r.route_definition_id = rd.id
         WHERE r.latitude IS NOT NULL AND r.longitude IS NOT NULL
         ORDER BY r.timestamp DESC
         LIMIT 100

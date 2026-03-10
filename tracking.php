@@ -19,18 +19,14 @@ try {
     $pdo = getDBConnection();
     $stmt = $pdo->query("
         SELECT r.id, r.latitude as lat, r.longitude as lng, r.crowd_level, r.timestamp,
-               p.plate_number, p.vehicle_type, p.current_route
+               rd.name as route_name
         FROM reports r
-        LEFT JOIN puv_units p ON r.puv_id = p.id
+        LEFT JOIN route_definitions rd ON r.route_definition_id = rd.id
         WHERE r.latitude IS NOT NULL AND r.longitude IS NOT NULL
         ORDER BY r.timestamp DESC
         LIMIT 50
     ");
     $reports = $stmt->fetchAll();
-    
-    // Also fetch all PUVs for the list
-    $stmt = $pdo->query("SELECT id, plate_number, vehicle_type, current_route, crowd_status FROM puv_units ORDER BY plate_number");
-    $puvs = $stmt->fetchAll();
 } catch (PDOException $e) {
     error_log("Tracking error: " . $e->getMessage());
     $reports = [];

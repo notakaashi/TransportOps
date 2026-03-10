@@ -133,8 +133,8 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                         $trust_score = 1.0;
 
                         $stmt = $pdo->prepare("
-                            INSERT INTO reports (user_id, route_definition_id, puv_id, crowd_level, delay_reason, latitude, longitude, geofence_validated, trust_score)
-                            VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?)
+                            INSERT INTO reports (user_id, route_definition_id, crowd_level, delay_reason, latitude, longitude, geofence_validated, trust_score)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                         ");
                         $stmt->execute([
                             $_SESSION["user_id"],

@@ -9,6 +9,18 @@ secureSessionStart();
 
 $is_logged_in = isset($_SESSION["user_id"]);
 $user_profile_data = ["profile_image" => null];
+$total_reports = 0;
+
+// Get total reports count for homepage
+try {
+    require_once "db.php";
+    $pdo = getDBConnection();
+    $stmt = $pdo->query("SELECT COUNT(*) as count FROM reports");
+    $result = $stmt->fetch(PDO::FETCH_ASSOC);
+    $total_reports = isset($result["count"]) ? (int) $result["count"] : 0;
+} catch (Exception $e) {
+    $total_reports = 0;
+}
 
 if ($is_logged_in) {
     // Redirect logged-in users to their dashboard
@@ -18,7 +30,6 @@ if ($is_logged_in) {
     }
     // Fetch profile image for nav
     try {
-        require_once "db.php";
         $pdo = getDBConnection();
         $stmt = $pdo->prepare("SELECT profile_image FROM users WHERE id = ?");
         $stmt->execute([$_SESSION["user_id"]]);
@@ -554,7 +565,7 @@ if ($is_logged_in) {
                 <div class="stat-lbl">Route Coverage</div>
             </div>
             <div class="stat-cell">
-                <div class="stat-val" style="color:var(--slate);">Live</div>
+                <div class="stat-val" style="color:var(--slate);"><?php echo number_format($total_reports); ?></div>
                 <div class="stat-lbl">Crowding Reports</div>
             </div>
             <div class="stat-cell">

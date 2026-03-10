@@ -77,24 +77,6 @@ CREATE TABLE IF NOT EXISTS `route_stops` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ============================================================
---  TABLE: routes
---  Schedule-level route records (departure/arrival times)
--- ============================================================
-CREATE TABLE IF NOT EXISTS `routes` (
-    `id`                  INT(11)      NOT NULL AUTO_INCREMENT,
-    `route_name`          VARCHAR(255) NOT NULL,
-    `origin`              VARCHAR(255) NOT NULL,
-    `destination`         VARCHAR(255) NOT NULL,
-    `scheduled_departure` TIME                  DEFAULT NULL,
-    `estimated_arrival`   TIME                  DEFAULT NULL,
-    `status`              ENUM('On Time','Delayed','Cancelled') DEFAULT 'On Time',
-    `created_at`          TIMESTAMP             DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (`id`),
-    INDEX `idx_route_name` (`route_name`),
-    INDEX `idx_status`     (`status`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- ============================================================
 --  TABLE: reports
 --  Commuter crowd / delay reports
 --  - route_definition_id links to a named route (preferred)
@@ -175,15 +157,6 @@ UPDATE `users` SET `trust_score` = 50.00 WHERE `trust_score` IS NULL;
 UPDATE `reports` SET `status` = 'verified' WHERE `is_verified` = 1 AND `status` = 'pending';
 UPDATE `reports` SET `status` = 'pending'  WHERE `is_verified` = 0 AND `status` = 'pending';
 
--- Check why routes table is empty and populate with sample data
-INSERT IGNORE INTO `routes` (`route_name`, `origin`, `destination`, `scheduled_departure`, `estimated_arrival`, `status`) VALUES
-('Route 1 - Bagumbayan - Pasig', 'Bagumbayan', 'Pasig', '06:00:00', '07:30:00', 'On Time'),
-('Route 2 - Guadalupe - FTI', 'Guadalupe', 'FTI', '06:30:00', '08:00:00', 'On Time'),
-('Route 3 - Pasig - Quiapo', 'Pasig', 'Quiapo', '07:00:00', '08:30:00', 'On Time'),
-('LRT-1 Roosevelt to Baclaran', 'Roosevelt', 'Baclaran', '05:30:00', '07:00:00', 'On Time'),
-('LRT-2 Recto to Antipolo', 'Recto', 'Antipolo', '06:00:00', '07:30:00', 'On Time'),
-('MRT-3 North Avenue to Taft Avenue', 'North Avenue', 'Taft Avenue', '05:45:00', '07:15:00', 'On Time');
-
 -- ============================================================
 --  CURRENT ACTIVE ROUTES FROM PRODUCTION DATABASE
 --  These are the routes currently in use with real data
@@ -199,11 +172,11 @@ INSERT IGNORE INTO `route_definitions` (`name`, `created_at`) VALUES
 
 -- Resolve current route IDs into session variables
 SELECT @r1_bagumbayan_pasig := `id` FROM `route_definitions`
-    WHERE `name` = 'Route 1 - Bagumbayan - Pasig'      LIMIT 1;
+    WHERE `name` = 'Bagumbayan - Pasig'      LIMIT 1;
 SELECT @r2_guadalupe_fti    := `id` FROM `route_definitions`
-    WHERE `name` = 'Route 2 - Guadalupe - FTI'         LIMIT 1;
+    WHERE `name` = 'Guadalupe - FTI'         LIMIT 1;
 SELECT @r3_pasig_quiapo    := `id` FROM `route_definitions`
-    WHERE `name` = 'Route 3 - Pasig - Quiapo'          LIMIT 1;
+    WHERE `name` = 'Pasig - Quiapo'          LIMIT 1;
 SELECT @lrt1_roosevelt_baclaran := `id` FROM `route_definitions`
     WHERE `name` = 'LRT-1 Roosevelt to Baclaran'         LIMIT 1;
 SELECT @lrt2_recto_antipolo    := `id` FROM `route_definitions`

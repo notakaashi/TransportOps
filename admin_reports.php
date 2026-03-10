@@ -20,13 +20,12 @@ try {
     $pdo = getDBConnection();
     $stmt = $pdo->query("
         SELECT r.id, r.crowd_level, r.delay_reason, r.timestamp, r.latitude, r.longitude,
-               r.is_verified, r.peer_verifications,
-               u.name AS user_name, u.email AS user_email,
-               COALESCE(rd.name, p.current_route) AS route_name
+               r.is_verified, r.peer_verifications, r.status,
+               u.id as user_id, u.name as user_name, u.email, u.role, u.trust_score,
+               rd.name AS route_name
         FROM reports r
         LEFT JOIN users u ON r.user_id = u.id
         LEFT JOIN route_definitions rd ON r.route_definition_id = rd.id
-        LEFT JOIN puv_units p ON r.puv_id = p.id
         ORDER BY r.timestamp DESC
         LIMIT 200
     ");
