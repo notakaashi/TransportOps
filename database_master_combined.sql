@@ -39,25 +39,7 @@ CREATE TABLE IF NOT EXISTS `users` (
     INDEX       `idx_profile_image` (`profile_image`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- ============================================================
---  TABLE: puv_units
---  Stores Public Utility Vehicle fleet information
--- ============================================================
-CREATE TABLE IF NOT EXISTS `puv_units` (
-    `id`            INT(11)      NOT NULL AUTO_INCREMENT,
-    `plate_number`  VARCHAR(50)  NOT NULL,
-    `vehicle_type`  ENUM('Bus','Jeepney','Tricycle','UV Express','Taxi','Train','Other')
-                                 NOT NULL DEFAULT 'Bus',
-    `current_route` VARCHAR(255) NOT NULL,
-    `crowd_status`  ENUM('Light','Moderate','Heavy') NOT NULL DEFAULT 'Light',
-    `created_at`    TIMESTAMP             DEFAULT CURRENT_TIMESTAMP,
-    `updated_at`    TIMESTAMP             DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    PRIMARY KEY (`id`),
-    UNIQUE KEY  `uq_plate_number`   (`plate_number`),
-    INDEX       `idx_plate_number`  (`plate_number`),
-    INDEX       `idx_vehicle_type`  (`vehicle_type`),
-    INDEX       `idx_crowd_status`  (`crowd_status`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 
 -- ============================================================
 --  TABLE: route_definitions
@@ -67,9 +49,11 @@ CREATE TABLE IF NOT EXISTS `puv_units` (
 CREATE TABLE IF NOT EXISTS `route_definitions` (
     `id`         INT(11)      NOT NULL AUTO_INCREMENT,
     `name`       VARCHAR(255) NOT NULL,
+    `route_type`  ENUM('road', 'lrt', 'mrt') DEFAULT 'road',
     `created_at` TIMESTAMP             DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),
-    UNIQUE KEY `idx_route_def_name` (`name`)
+    UNIQUE KEY `idx_route_def_name` (`name`),
+    INDEX `idx_route_type` (`route_type`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ============================================================
@@ -111,31 +95,14 @@ CREATE TABLE IF NOT EXISTS `routes` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ============================================================
---  TABLE: delay_analytics
---  Aggregated delay trend data for reporting
--- ============================================================
-CREATE TABLE IF NOT EXISTS `delay_analytics` (
-    `id`             INT(11)      NOT NULL AUTO_INCREMENT,
-    `route_id`       INT(11)               DEFAULT NULL,
-    `puv_id`         INT(11)               DEFAULT NULL,
-    `delay_duration` INT(11)               DEFAULT NULL COMMENT 'minutes',
-    `delay_reason`   VARCHAR(255)          DEFAULT NULL,
-    `occurred_at`    TIMESTAMP             DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (`id`),
-    INDEX `idx_occurred_at` (`occurred_at`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- ============================================================
 --  TABLE: reports
 --  Commuter crowd / delay reports
 --  - route_definition_id links to a named route (preferred)
---  - puv_id is nullable; legacy reports may still reference a vehicle
 -- ============================================================
 CREATE TABLE IF NOT EXISTS `reports` (
     `id`                   INT(11)       NOT NULL AUTO_INCREMENT,
     `user_id`              INT(11)       NOT NULL,
     `route_definition_id`  INT(11)                DEFAULT NULL,
-    `puv_id`               INT(11)                DEFAULT NULL,
     `crowd_level`          ENUM('Light','Moderate','Heavy') NOT NULL,
     `delay_reason`         TEXT                   DEFAULT NULL,
     `latitude`             DECIMAL(10,8)          DEFAULT NULL,
@@ -149,12 +116,9 @@ CREATE TABLE IF NOT EXISTS `reports` (
     PRIMARY KEY (`id`),
     CONSTRAINT `fk_reports_user`
         FOREIGN KEY (`user_id`)             REFERENCES `users`(`id`)             ON DELETE CASCADE,
-    CONSTRAINT `fk_reports_puv`
-        FOREIGN KEY (`puv_id`)              REFERENCES `puv_units`(`id`)          ON DELETE SET NULL,
     CONSTRAINT `fk_reports_route_def`
         FOREIGN KEY (`route_definition_id`) REFERENCES `route_definitions`(`id`)  ON DELETE SET NULL,
     INDEX `idx_user_id`             (`user_id`),
-    INDEX `idx_puv_id`              (`puv_id`),
     INDEX `idx_route_definition_id` (`route_definition_id`),
     INDEX `idx_timestamp`           (`timestamp`),
     INDEX `idx_trust_score`         (`trust_score`),
@@ -211,149 +175,147 @@ UPDATE `users` SET `trust_score` = 50.00 WHERE `trust_score` IS NULL;
 UPDATE `reports` SET `status` = 'verified' WHERE `is_verified` = 1 AND `status` = 'pending';
 UPDATE `reports` SET `status` = 'pending'  WHERE `is_verified` = 0 AND `status` = 'pending';
 
+-- Check why routes table is empty and populate with sample data
+INSERT IGNORE INTO `routes` (`route_name`, `origin`, `destination`, `scheduled_departure`, `estimated_arrival`, `status`) VALUES
+('Route 1 - Bagumbayan - Pasig', 'Bagumbayan', 'Pasig', '06:00:00', '07:30:00', 'On Time'),
+('Route 2 - Guadalupe - FTI', 'Guadalupe', 'FTI', '06:30:00', '08:00:00', 'On Time'),
+('Route 3 - Pasig - Quiapo', 'Pasig', 'Quiapo', '07:00:00', '08:30:00', 'On Time'),
+('LRT-1 Roosevelt to Baclaran', 'Roosevelt', 'Baclaran', '05:30:00', '07:00:00', 'On Time'),
+('LRT-2 Recto to Antipolo', 'Recto', 'Antipolo', '06:00:00', '07:30:00', 'On Time'),
+('MRT-3 North Avenue to Taft Avenue', 'North Avenue', 'Taft Avenue', '05:45:00', '07:15:00', 'On Time');
+
 -- ============================================================
---  PREDEFINED MANILA ROUTE DEFINITIONS  (5 common corridors)
+--  CURRENT ACTIVE ROUTES FROM PRODUCTION DATABASE
+--  These are the routes currently in use with real data
 --  INSERT IGNORE keeps this script safely re-runnable.
 -- ============================================================
 INSERT IGNORE INTO `route_definitions` (`name`, `created_at`) VALUES
-('Baclaran - Monumento via Taft Avenue',              NOW()),
-('Quiapo - Cubao via Aurora Boulevard',               NOW()),
-('Manila City Hall - SM Megamall via EDSA',           NOW()),
-('Binondo - Makati CBD via Taft Avenue',              NOW()),
-('Esplanade - University of the Philippines Diliman', NOW());
+('Route 1 - Bagumbayan - Pasig',                     NOW()),
+('Route 2 - Guadalupe - FTI',                        NOW()),
+('Route 3 - Pasig - Quiapo',                          NOW()),
+('LRT-1 Roosevelt to Baclaran',                        NOW()),
+('LRT-2 Recto to Antipolo',                          NOW()),
+('MRT-3 North Avenue to Taft Avenue',                   NOW());
 
--- Resolve route IDs into session variables so stops can be inserted
--- without relying on hardcoded auto-increment values.
-SELECT @r_baclaran_monumento := `id` FROM `route_definitions`
-    WHERE `name` = 'Baclaran - Monumento via Taft Avenue'     LIMIT 1;
-SELECT @r_quiapo_cubao       := `id` FROM `route_definitions`
-    WHERE `name` = 'Quiapo - Cubao via Aurora Boulevard'      LIMIT 1;
-SELECT @r_cityhall_megamall  := `id` FROM `route_definitions`
-    WHERE `name` = 'Manila City Hall - SM Megamall via EDSA'  LIMIT 1;
-SELECT @r_binondo_makati     := `id` FROM `route_definitions`
-    WHERE `name` = 'Binondo - Makati CBD via Taft Avenue'     LIMIT 1;
-SELECT @r_esplanade_up       := `id` FROM `route_definitions`
-    WHERE `name` = 'Esplanade - University of the Philippines Diliman' LIMIT 1;
+-- Resolve current route IDs into session variables
+SELECT @r1_bagumbayan_pasig := `id` FROM `route_definitions`
+    WHERE `name` = 'Route 1 - Bagumbayan - Pasig'      LIMIT 1;
+SELECT @r2_guadalupe_fti    := `id` FROM `route_definitions`
+    WHERE `name` = 'Route 2 - Guadalupe - FTI'         LIMIT 1;
+SELECT @r3_pasig_quiapo    := `id` FROM `route_definitions`
+    WHERE `name` = 'Route 3 - Pasig - Quiapo'          LIMIT 1;
+SELECT @lrt1_roosevelt_baclaran := `id` FROM `route_definitions`
+    WHERE `name` = 'LRT-1 Roosevelt to Baclaran'         LIMIT 1;
+SELECT @lrt2_recto_antipolo    := `id` FROM `route_definitions`
+    WHERE `name` = 'LRT-2 Recto to Antipolo'           LIMIT 1;
+SELECT @mrt3_north_taft       := `id` FROM `route_definitions`
+    WHERE `name` = 'MRT-3 North Avenue to Taft Avenue'   LIMIT 1;
 
--- ============================================================
---  ROUTE STOPS
---  Accurate, distinct per-stop coordinates for each corridor.
---  INSERT IGNORE prevents duplicate rows on re-run.
--- ============================================================
+-- Update route types for LRT/MRT routes (now that table and routes exist)
+UPDATE `route_definitions` SET `route_type` = 'lrt' 
+WHERE `name` IN ('LRT-1 Roosevelt to Baclaran', 'LRT-2 Recto to Antipolo');
+
+UPDATE `route_definitions` SET `route_type` = 'mrt' 
+WHERE `name` = 'MRT-3 North Avenue to Taft Avenue';
 
 -- ----------------------------------------------------------
---  Route 1: Baclaran - Monumento via Taft Avenue
+--  Route 1: Bagumbayan - Pasig (17 reports, 2 verified)
+--  Actual stops from production database
 -- ----------------------------------------------------------
 INSERT IGNORE INTO `route_stops` (`route_definition_id`, `stop_name`, `latitude`, `longitude`, `stop_order`) VALUES
-(@r_baclaran_monumento, 'Baclaran Terminal',       14.5378, 120.9836,  1),
-(@r_baclaran_monumento, 'LRT Baclaran Station',    14.5398, 120.9836,  2),
-(@r_baclaran_monumento, 'Redemptorist Church',      14.5418, 120.9836,  3),
-(@r_baclaran_monumento, 'EDSA Station',             14.5438, 120.9836,  4),
-(@r_baclaran_monumento, 'Libertad Station',         14.5458, 120.9836,  5),
-(@r_baclaran_monumento, 'Gil Puyat Station',        14.5478, 120.9836,  6),
-(@r_baclaran_monumento, 'Vito Cruz Station',        14.5498, 120.9836,  7),
-(@r_baclaran_monumento, 'Quirino Station',          14.5518, 120.9836,  8),
-(@r_baclaran_monumento, 'Pedro Gil Station',        14.5538, 120.9836,  9),
-(@r_baclaran_monumento, 'United Nations Station',   14.5558, 120.9836, 10),
-(@r_baclaran_monumento, 'Central Terminal',         14.5578, 120.9836, 11),
-(@r_baclaran_monumento, 'Carriedo Station',         14.5598, 120.9836, 12),
-(@r_baclaran_monumento, 'Doroteo Jose Station',     14.5618, 120.9836, 13),
-(@r_baclaran_monumento, 'Bambang Station',          14.5638, 120.9836, 14),
-(@r_baclaran_monumento, 'Tayuman Station',          14.5658, 120.9836, 15),
-(@r_baclaran_monumento, 'Blumentritt Station',      14.5678, 120.9836, 16),
-(@r_baclaran_monumento, 'Abad Santos Station',      14.5698, 120.9836, 17),
-(@r_baclaran_monumento, 'R. Papa Station',          14.5718, 120.9836, 18),
-(@r_baclaran_monumento, '5th Avenue Station',       14.5738, 120.9836, 19),
-(@r_baclaran_monumento, 'Monumento Terminal',       14.5758, 120.9836, 20);
+(@r1_bagumbayan_pasig, 'Pasig',          14.55822700, 121.08491000, 0),
+(@r1_bagumbayan_pasig, 'Wawa',           14.52381400, 121.07365200, 1),
+(@r1_bagumbayan_pasig, 'Hagonoy',        14.50850800, 121.06617300, 2),
+(@r1_bagumbayan_pasig, 'Bethel',         14.49749500, 121.06278500, 3),
+(@r1_bagumbayan_pasig, 'Bagumbayan',     14.46632700, 121.05610500, 4);
 
 -- ----------------------------------------------------------
---  Route 2: Quiapo - Cubao via Aurora Boulevard
+--  Route 2: Guadalupe - FTI (3 reports, 0 verified)
+--  Actual stops from production database
 -- ----------------------------------------------------------
 INSERT IGNORE INTO `route_stops` (`route_definition_id`, `stop_name`, `latitude`, `longitude`, `stop_order`) VALUES
-(@r_quiapo_cubao, 'Quiapo Church',          14.5995, 120.9842,  1),
-(@r_quiapo_cubao, 'Carriedo Street',        14.5975, 120.9842,  2),
-(@r_quiapo_cubao, 'Rizal Park',             14.5955, 120.9842,  3),
-(@r_quiapo_cubao, 'Lawton Plaza',           14.5935, 120.9842,  4),
-(@r_quiapo_cubao, 'Sta. Cruz Church',       14.5915, 120.9842,  5),
-(@r_quiapo_cubao, 'Avenida Rizal',          14.5895, 120.9842,  6),
-(@r_quiapo_cubao, 'Recto Avenue',           14.5875, 120.9842,  7),
-(@r_quiapo_cubao, 'Gilmore Street',         14.5855, 120.9842,  8),
-(@r_quiapo_cubao, 'New Manila',             14.5835, 120.9842,  9),
-(@r_quiapo_cubao, 'Aurora Boulevard',       14.5815, 120.9842, 10),
-(@r_quiapo_cubao, 'Cubao Araneta Center',   14.5795, 120.9842, 11),
-(@r_quiapo_cubao, 'Ali Mall',               14.5775, 120.9842, 12),
-(@r_quiapo_cubao, 'Farmers Plaza',          14.5755, 120.9842, 13),
-(@r_quiapo_cubao, 'Cubao Terminal',         14.5735, 120.9842, 14);
+(@r2_guadalupe_fti, 'FTI',             14.50598200, 121.03743100, 0),
+(@r2_guadalupe_fti, 'Tenement',        14.50779300, 121.03510400, 1),
+(@r2_guadalupe_fti, 'Sto Nino',        14.51116600, 121.03365700, 2),
+(@r2_guadalupe_fti, 'Housing',         14.51668800, 121.04797800, 3),
+(@r2_guadalupe_fti, 'Phase 1',         14.52297800, 121.05454900, 4),
+(@r2_guadalupe_fti, 'BCDA',            14.53021300, 121.05735700, 5),
+(@r2_guadalupe_fti, 'Blueboz',         14.53591400, 121.05760800, 6),
+(@r2_guadalupe_fti, 'Mckinley',        14.54069700, 121.05565800, 7),
+(@r2_guadalupe_fti, 'Market-Market',   14.54652400, 121.05609300, 8),
+(@r2_guadalupe_fti, 'Philplans',       14.56072900, 121.05663600, 9),
+(@r2_guadalupe_fti, 'Guadalupe',       14.56791200, 121.04619600, 10);
 
 -- ----------------------------------------------------------
---  Route 3: Manila City Hall - SM Megamall via EDSA
+--  Route 3: Pasig - Quiapo (1 report, 0 verified)
+--  Actual stops from production database
 -- ----------------------------------------------------------
 INSERT IGNORE INTO `route_stops` (`route_definition_id`, `stop_name`, `latitude`, `longitude`, `stop_order`) VALUES
-(@r_cityhall_megamall, 'Manila City Hall',        14.5833, 120.9833,  1),
-(@r_cityhall_megamall, 'National Museum',         14.5853, 120.9833,  2),
-(@r_cityhall_megamall, 'Rizal Monument',          14.5873, 120.9833,  3),
-(@r_cityhall_megamall, 'Kalaw Avenue',            14.5893, 120.9833,  4),
-(@r_cityhall_megamall, 'United Nations Avenue',   14.5913, 120.9833,  5),
-(@r_cityhall_megamall, 'Taft Avenue',             14.5933, 120.9833,  6),
-(@r_cityhall_megamall, 'EDSA',                    14.5953, 120.9833,  7),
-(@r_cityhall_megamall, 'Buendia Avenue',          14.5973, 120.9833,  8),
-(@r_cityhall_megamall, 'Guadalupe Bridge',        14.5993, 120.9833,  9),
-(@r_cityhall_megamall, 'Guadalupe Station',       14.6013, 120.9833, 10),
-(@r_cityhall_megamall, 'Pioneer Street',          14.6033, 120.9833, 11),
-(@r_cityhall_megamall, 'Bonny Serrano Avenue',    14.6053, 120.9833, 12),
-(@r_cityhall_megamall, 'Shaw Boulevard',          14.6073, 120.9833, 13),
-(@r_cityhall_megamall, 'SM Megamall',             14.6093, 120.9833, 14);
+(@r3_pasig_quiapo, 'Quiapo',          14.59715900, 120.98370700, 0),
+(@r3_pasig_quiapo, 'Legarda',         14.60052100, 120.99634900, 1),
+(@r3_pasig_quiapo, 'Pasig',           14.55831100, 121.08494100, 2);
 
 -- ----------------------------------------------------------
---  Route 4: Binondo - Makati CBD via Taft Avenue
+--  LRT-1: Roosevelt to Baclaran (20 stations)
+--  Exact coordinates provided
 -- ----------------------------------------------------------
 INSERT IGNORE INTO `route_stops` (`route_definition_id`, `stop_name`, `latitude`, `longitude`, `stop_order`) VALUES
-(@r_binondo_makati, 'Binondo Church',           14.6000, 120.9700,  1),
-(@r_binondo_makati, 'Ongpin Street',            14.5980, 120.9720,  2),
-(@r_binondo_makati, 'Escolta Street',           14.5960, 120.9740,  3),
-(@r_binondo_makati, 'Jones Bridge',             14.5940, 120.9760,  4),
-(@r_binondo_makati, 'Lawton Plaza',             14.5920, 120.9780,  5),
-(@r_binondo_makati, 'Taft Avenue',              14.5900, 120.9800,  6),
-(@r_binondo_makati, 'United Nations Avenue',    14.5880, 120.9820,  7),
-(@r_binondo_makati, 'Pedro Gil Street',         14.5860, 120.9840,  8),
-(@r_binondo_makati, 'Vito Cruz Street',         14.5840, 120.9860,  9),
-(@r_binondo_makati, 'Gil Puyat Street',         14.5820, 120.9880, 10),
-(@r_binondo_makati, 'Chino Roces Avenue',       14.5800, 120.9900, 11),
-(@r_binondo_makati, 'Ayala Avenue',             14.5780, 120.9920, 12),
-(@r_binondo_makati, 'Makati CBD',               14.5760, 120.9940, 13),
-(@r_binondo_makati, 'Ayala Triangle Gardens',   14.5740, 120.9960, 14);
+(@lrt1_roosevelt_baclaran, 'Roosevelt',      14.6576, 121.0211, 1),
+(@lrt1_roosevelt_baclaran, 'Balintawak',      14.6574, 121.0037, 2),
+(@lrt1_roosevelt_baclaran, 'Monumento',      14.6544, 120.9837, 3),
+(@lrt1_roosevelt_baclaran, '5th Avenue',     14.6444, 120.9836, 4),
+(@lrt1_roosevelt_baclaran, 'R. Papa',        14.6362, 120.9823, 5),
+(@lrt1_roosevelt_baclaran, 'Abad Santos',    14.6306, 120.9814, 6),
+(@lrt1_roosevelt_baclaran, 'Blumentritt',    14.6227, 120.9835, 7),
+(@lrt1_roosevelt_baclaran, 'Tayuman',       14.6168, 120.9827, 8),
+(@lrt1_roosevelt_baclaran, 'Bambang',       14.6111, 120.9825, 9),
+(@lrt1_roosevelt_baclaran, 'Doroteo Jose',   14.6053, 120.9820, 10),
+(@lrt1_roosevelt_baclaran, 'Carriedo',      14.5991, 120.9814, 11),
+(@lrt1_roosevelt_baclaran, 'Central Terminal', 14.5928, 120.9816, 12),
+(@lrt1_roosevelt_baclaran, 'United Nations', 14.5826, 120.9846, 13),
+(@lrt1_roosevelt_baclaran, 'Pedro Gil',     14.5765, 120.9882, 14),
+(@lrt1_roosevelt_baclaran, 'Quirino',       14.5703, 120.9916, 15),
+(@lrt1_roosevelt_baclaran, 'Vito Cruz',     14.5633, 120.9949, 16),
+(@lrt1_roosevelt_baclaran, 'Gil Puyat',     14.5543, 120.9971, 17),
+(@lrt1_roosevelt_baclaran, 'Libertad',      14.5478, 120.9987, 18),
+(@lrt1_roosevelt_baclaran, 'EDSA',          14.5389, 121.0006, 19),
+(@lrt1_roosevelt_baclaran, 'Baclaran',      14.5342, 120.9983, 20);
 
 -- ----------------------------------------------------------
---  Route 5: Esplanade - University of the Philippines Diliman
+--  LRT-2: Recto to Antipolo (13 stations)
+--  Exact coordinates provided
 -- ----------------------------------------------------------
 INSERT IGNORE INTO `route_stops` (`route_definition_id`, `stop_name`, `latitude`, `longitude`, `stop_order`) VALUES
-(@r_esplanade_up, 'Manila Bay Esplanade',   14.5547, 120.9822,  1),
-(@r_esplanade_up, 'Roxas Boulevard',        14.5567, 120.9822,  2),
-(@r_esplanade_up, 'U.N. Avenue',            14.5587, 120.9822,  3),
-(@r_esplanade_up, 'Taft Avenue',            14.5607, 120.9822,  4),
-(@r_esplanade_up, 'España Boulevard',       14.5627, 120.9822,  5),
-(@r_esplanade_up, 'Quezon Boulevard',       14.5647, 120.9822,  6),
-(@r_esplanade_up, 'Welcome Rotonda',        14.5667, 120.9822,  7),
-(@r_esplanade_up, 'Quezon Avenue',          14.5687, 120.9822,  8),
-(@r_esplanade_up, 'Mabuhay Rotonda',        14.5707, 120.9822,  9),
-(@r_esplanade_up, 'Philcoa',               14.5727, 120.9822, 10),
-(@r_esplanade_up, 'Commonwealth Avenue',    14.5747, 120.9822, 11),
-(@r_esplanade_up, 'UP Diliman Gate',        14.5767, 120.9822, 12),
-(@r_esplanade_up, 'UP Palma Hall',          14.5787, 120.9822, 13),
-(@r_esplanade_up, 'UP Diliman Campus',      14.5807, 120.9822, 14);
+(@lrt2_recto_antipolo, 'Recto',           14.6035, 120.9831, 1),
+(@lrt2_recto_antipolo, 'Legarda',         14.6009, 120.9926, 2),
+(@lrt2_recto_antipolo, 'Pureza',         14.6017, 121.0052, 3),
+(@lrt2_recto_antipolo, 'V. Mapa',         14.6042, 121.0172, 4),
+(@lrt2_recto_antipolo, 'J. Ruiz',         14.6106, 121.0262, 5),
+(@lrt2_recto_antipolo, 'Gilmore',         14.6135, 121.0342, 6),
+(@lrt2_recto_antipolo, 'Betty Go-Belmonte', 14.6186, 121.0428, 7),
+(@lrt2_recto_antipolo, 'Araneta Cubao',   14.6227, 121.0526, 8),
+(@lrt2_recto_antipolo, 'Anonas',         14.6279, 121.0647, 9),
+(@lrt2_recto_antipolo, 'Katipunan',       14.6311, 121.0725, 10),
+(@lrt2_recto_antipolo, 'Santolan',        14.6221, 121.0859, 11),
+(@lrt2_recto_antipolo, 'Marikina–Pasig',  14.6204, 121.1003, 12),
+(@lrt2_recto_antipolo, 'Antipolo',        14.6250, 121.1214, 13);
 
--- ============================================================
---  PUV SEED UNITS  (two vehicles per route)
---  INSERT IGNORE prevents duplicate plate numbers on re-run.
--- ============================================================
-INSERT IGNORE INTO `puv_units` (`plate_number`, `vehicle_type`, `current_route`, `crowd_status`, `created_at`) VALUES
-('ABC-123', 'Jeepney', 'Baclaran - Monumento via Taft Avenue',              'Light',    NOW()),
-('DEF-456', 'Jeepney', 'Baclaran - Monumento via Taft Avenue',              'Moderate', NOW()),
-('GHI-789', 'Jeepney', 'Quiapo - Cubao via Aurora Boulevard',               'Light',    NOW()),
-('JKL-012', 'Jeepney', 'Quiapo - Cubao via Aurora Boulevard',               'Heavy',    NOW()),
-('MNO-345', 'Bus',     'Manila City Hall - SM Megamall via EDSA',           'Moderate', NOW()),
-('PQR-678', 'Bus',     'Manila City Hall - SM Megamall via EDSA',           'Light',    NOW()),
-('STU-901', 'Jeepney', 'Binondo - Makati CBD via Taft Avenue',              'Moderate', NOW()),
-('VWX-234', 'Jeepney', 'Binondo - Makati CBD via Taft Avenue',              'Light',    NOW()),
-('YZA-567', 'Bus',     'Esplanade - University of the Philippines Diliman', 'Heavy',    NOW()),
-('BCD-890', 'Bus',     'Esplanade - University of the Philippines Diliman', 'Moderate', NOW());
+-- ----------------------------------------------------------
+--  MRT-3: North Avenue to Taft Avenue (13 stations)
+--  Exact coordinates provided
+-- ----------------------------------------------------------
+INSERT IGNORE INTO `route_stops` (`route_definition_id`, `stop_name`, `latitude`, `longitude`, `stop_order`) VALUES
+(@mrt3_north_taft, 'North Avenue',       14.6520, 121.0325, 1),
+(@mrt3_north_taft, 'Quezon Avenue',     14.6430, 121.0380, 2),
+(@mrt3_north_taft, 'GMA–Kamuning',      14.6352, 121.0433, 3),
+(@mrt3_north_taft, 'Araneta Center–Cubao', 14.6195, 121.0511, 4),
+(@mrt3_north_taft, 'Santolan–Annapolis', 14.6078, 121.0564, 5),
+(@mrt3_north_taft, 'Ortigas',           14.5878, 121.0567, 6),
+(@mrt3_north_taft, 'Shaw Boulevard',     14.5812, 121.0536, 7),
+(@mrt3_north_taft, 'Boni',              14.5738, 121.0481, 8),
+(@mrt3_north_taft, 'Guadalupe',         14.5668, 121.0455, 9),
+(@mrt3_north_taft, 'Buendia',           14.5546, 121.0345, 10),
+(@mrt3_north_taft, 'Ayala',             14.5490, 121.0283, 11),
+(@mrt3_north_taft, 'Magallanes',         14.5420, 121.0195, 12),
+(@mrt3_north_taft, 'Taft Avenue',       14.5377, 121.0022, 13);
+
