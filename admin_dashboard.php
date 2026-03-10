@@ -208,25 +208,20 @@ try {
             )
             : 0;
 
-    // Get delay trends - simplified version with fallback
-    try {
-        $stmt = $pdo->query("
-            SELECT 'All Reports' as delay_reason, COUNT(*) as count
-            FROM reports
-            LIMIT 1
-        ");
-        $delay_trends = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        error_log("Simplified delay trends: " . print_r($delay_trends, true));
-    } catch (Exception $e) {
-        error_log("Delay trends query failed: " . $e->getMessage());
-        // Fallback data
-        $delay_trends = [['delay_reason' => 'All Reports', 'count' => $total_reports]];
-    }
-    
-    // Ensure we always have some data
-    if (empty($delay_trends)) {
-        $delay_trends = [['delay_reason' => 'No Data', 'count' => 0]];
-    }
+    // Get delay trends by reason (top reasons)
+    $stmt = $pdo->query("
+        SELECT 
+            CASE 
+                WHEN delay_reason IS NULL OR delay_reason = '' THEN 'Unspecified'
+                ELSE delay_reason
+            END AS delay_reason,
+            COUNT(*) AS count
+        FROM reports
+        GROUP BY delay_reason
+        ORDER BY count DESC
+        LIMIT 6
+    ");
+    $delay_trends = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     // Get peak hours - simplified version
     try {
@@ -1449,71 +1444,59 @@ function getInitials($name)
         console.error('Reports chart canvas not found');
     }
 
-    // ── Delay Trends Chart ─────────────────────────────── */
+    // ── Delay Trends Chart (by reason) ───────────────────── */
     const delaysCtx = document.getElementById('delaysChart');
     if (delaysCtx) {
-        console.log('Delay trends data:', delayTrendsData); // Debug log
-
         new Chart(delaysCtx.getContext('2d'), {
             type: 'bar',
             data: {
                 labels: delayTrendsData.map(item => item.x),
                 datasets: [{
-                    label: 'Delay Reasons',
+                    label: 'Total Delays',
                     data: delayTrendsData.map(item => item.y),
-                backgroundColor: [
-                    chartColors.danger,
-                    chartColors.warning,
-                    chartColors.info,
-                    chartColors.secondary,
-                    chartColors.accent
-                ],
-                borderColor: [
-                    chartColors.danger,
-                    chartColors.warning,
-                    chartColors.info,
-                    chartColors.secondary,
-                    chartColors.accent
-                ],
-                borderWidth: 1
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    display: true,
-                    position: 'top',
-                    labels: {
-                        color: '#64748b',
-                        font: {
-                            size: 12
+                    backgroundColor: [
+                        chartColors.danger,
+                        chartColors.warning,
+                        chartColors.info,
+                        chartColors.secondary,
+                        chartColors.accent,
+                        chartColors.primary
+                    ],
+                    borderColor: 'rgba(15, 23, 42, 0.06)',
+                    borderWidth: 1,
+                    borderRadius: 8,
+                    maxBarThickness: 32
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'bottom',
+                        labels: {
+                            color: '#64748b',
+                            font: { size: 12 }
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        grid: { color: chartColors.grid },
+                        ticks: { color: '#64748b' }
+                    },
+                    x: {
+                        grid: { display: false },
+                        ticks: {
+                            color: '#64748b',
+                            maxRotation: 30,
+                            minRotation: 0
                         }
                     }
                 }
-            },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    grid: {
-                        color: chartColors.grid
-                    },
-                    ticks: {
-                        color: '#64748b'
-                    }
-                },
-                x: {
-                    grid: {
-                        display: false
-                    },
-                    ticks: {
-                        color: '#64748b',
-                        maxRotation: 45
-                    }
-                }
             }
-        }
         });
     } else {
         console.error('Delays chart canvas not found');
@@ -1521,7 +1504,7 @@ function getInitials($name)
 
 
 
-    /* ── Live date ────────────────────────────────── */──────── */
+    /* ── Live date ────────────────────────────────── */
     (function () {
         const el = document.getElementById('liveDateChip');
         if (!el) return;
