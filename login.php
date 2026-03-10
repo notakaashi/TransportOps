@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 /**
  * Combined Auth Page - Login, Register & Admin Login
  * Three-panel sliding UI; all three forms handled in a single file.
@@ -129,6 +129,20 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                         $hashed,
                         "Commuter",
                     ]);
+                    // Auto-login after registration (prevents extra login step)
+                    $newUserId = (int) $pdo->lastInsertId();
+                    if ($newUserId > 0) {
+                        regenerateSession();
+                        $_SESSION["user_id"] = $newUserId;
+                        $_SESSION["user_name"] = $reg_name;
+                        $_SESSION["user_email"] = $reg_email;
+                        $_SESSION["role"] = "Commuter";
+                        $_SESSION["profile_image"] = null;
+                        header("Location: user_dashboard.php");
+                        exit();
+                    }
+
+                    // Fallback if lastInsertId isn't available for some reason
                     $reg_success = "Account created! You can now sign in.";
                     $reg_name = "";
                     $reg_email = "";

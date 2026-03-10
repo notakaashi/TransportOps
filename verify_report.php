@@ -93,6 +93,8 @@ try {
         exit;
     }
 
+    $wasVerified = (int)($report['is_verified'] ?? 0) === 1;
+
     $pdo->beginTransaction();
 
     // Insert verification record
@@ -102,23 +104,25 @@ try {
     ");
     $stmt->execute([$reportId, $_SESSION['user_id'], $lat, $lng, $distanceKm]);
 
-    // Update report peer_verifications and is_verified when threshold reached
+    // Recompute verifications from source-of-truth table to avoid drift
+    $stmt = $pdo->prepare("SELECT COUNT(*) AS cnt FROM report_verifications WHERE report_id = ?");
+    $stmt->execute([$reportId]);
+    $pvCount = (int)($stmt->fetch(PDO::FETCH_ASSOC)['cnt'] ?? 0);
+    $nowVerified = $pvCount >= 3;
+
+    // Persist computed count and verification state (keep status 'rejected' if already rejected)
     $stmt = $pdo->prepare("
         UPDATE reports
-        SET peer_verifications = peer_verifications + 1,
-            is_verified = CASE WHEN peer_verifications + 1 >= 3 THEN 1 ELSE is_verified END
+        SET peer_verifications = ?,
+            is_verified = ?,
+            status = CASE
+                WHEN status = 'rejected' THEN status
+                WHEN ? = 1 THEN 'verified'
+                ELSE status
+            END
         WHERE id = ?
     ");
-    $stmt->execute([$reportId]);
-
-    // Get updated values
-    $stmt = $pdo->prepare("
-        SELECT peer_verifications, is_verified
-        FROM reports
-        WHERE id = ?
-    ");
-    $stmt->execute([$reportId]);
-    $updated = $stmt->fetch(PDO::FETCH_ASSOC);
+    $stmt->execute([$pvCount, $nowVerified ? 1 : 0, $nowVerified ? 1 : 0, $reportId]);
 
     $pdo->commit();
 
@@ -142,7 +146,7 @@ try {
     
     // Check if this verification brought the report to 3+ verifications
     $reporterBonusAwarded = false;
-    if ((int)$updated['peer_verifications'] >= 3 && (int)$updated['is_verified'] === 1) {
+    if (!$wasVerified && $nowVerified) {
         // Get the original reporter's ID to give them the 10-point bonus
         $stmt = $pdo->prepare("SELECT user_id FROM reports WHERE id = ?");
         $stmt->execute([$reportId]);
@@ -156,8 +160,8 @@ try {
 
     echo json_encode([
         'success' => true,
-        'peer_verifications' => (int)$updated['peer_verifications'],
-        'is_verified' => (int)$updated['is_verified'] === 1,
+        'peer_verifications' => $pvCount,
+        'is_verified' => $nowVerified,
         'distance_km' => round($distanceKm, 2),
         'verifier_points_awarded' => $verifierPointsAwarded,
         'verifier_new_trust_score' => $verifierNewScore,

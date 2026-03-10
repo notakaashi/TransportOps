@@ -1052,7 +1052,7 @@ try {
                 { timeoutMs: 0, onClose: () => window.location.reload() }
             );
 
-            btn.textContent = 'Verified ✓';
+            btn.textContent = fully ? `Verified ✓ (${pv}/3)` : `Verified (${pv}/3)`;
         } catch (err) {
             console.error(err);
             showToast('error', 'Something went wrong', 'An error occurred while verifying. Please try again.', 5200);
