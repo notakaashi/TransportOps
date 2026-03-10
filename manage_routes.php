@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 /**
  * Manage Routes - Define routes with stops for map display
  * Admin can add a route (e.g. Guadalupe - FTI Tenement) and add stops in order; stops are connected on the map.
@@ -230,14 +230,54 @@ if (!$error) {
                 <?php $highlight_route_id = isset($_GET["highlight"])
                     ? (int) $_GET["highlight"]
                     : 0; ?>
-                <div class="mt-8 space-y-6">
-                    <?php foreach ($routes_with_stops as $route): ?>
-                        <div class="glass-card rounded-2xl overflow-hidden<?php echo $highlight_route_id ===
+                <div class="mt-8 grid grid-cols-1 lg:grid-cols-12 gap-6">
+                    <!-- Routes list -->
+                    <aside class="lg:col-span-4 glass-card rounded-2xl overflow-hidden">
+                        <div class="px-6 py-4 bg-white/30 border-b border-white/20">
+                            <h3 class="text-lg font-semibold text-gray-800">Routes</h3>
+                            <p class="text-xs text-gray-600 mt-1">Click a route to view details and map.</p>
+                        </div>
+                        <div class="p-3">
+                            <?php if (empty($routes_with_stops)): ?>
+                                <div class="text-sm text-gray-500 p-3">No routes yet.</div>
+                            <?php else: ?>
+                                <ul class="space-y-2" id="routes-list">
+                                    <?php foreach ($routes_with_stops as $route): ?>
+                                        <li>
+                                            <button
+                                                type="button"
+                                                class="w-full text-left px-4 py-3 rounded-xl border border-gray-200 bg-white/70 hover:bg-white transition flex items-start justify-between gap-3 route-list-btn"
+                                                data-route-id="<?php echo (int) $route["id"]; ?>"
+                                                aria-controls="route-<?php echo (int) $route["id"]; ?>"
+                                            >
+                                                <span class="min-w-0">
+                                                    <span class="block font-semibold text-gray-800 truncate"><?php echo htmlspecialchars(
+                                                        $route["name"],
+                                                    ); ?></span>
+                                                    <span class="block text-xs text-gray-500 mt-0.5"><?php echo count(
+                                                        $route["stops"],
+                                                    ); ?> stop<?php echo count($route["stops"]) === 1
+    ? ""
+    : "s"; ?></span>
+                                                </span>
+                                                <span class="text-gray-400 text-sm mt-0.5">›</span>
+                                            </button>
+                                        </li>
+                                    <?php endforeach; ?>
+                                </ul>
+                            <?php endif; ?>
+                        </div>
+                    </aside>
+
+                    <!-- Route details -->
+                    <section class="lg:col-span-8 space-y-6">
+                        <?php foreach ($routes_with_stops as $route): ?>
+                        <div class="glass-card rounded-2xl overflow-hidden route-detail hidden<?php echo $highlight_route_id ===
                         (int) $route["id"]
                             ? " ring-2 ring-blue-500"
                             : ""; ?>" id="route-<?php echo (int) $route[
     "id"
-]; ?>">
+]; ?>" data-route-id="<?php echo (int) $route["id"]; ?>">
                             <div class="px-6 py-4 bg-white/30 border-b border-white/20 flex flex-wrap justify-between items-center gap-2">
                                 <div class="flex items-center gap-2 flex-wrap">
                                     <h3 class="text-lg font-semibold text-gray-800"><?php echo htmlspecialchars(
@@ -389,7 +429,14 @@ if (!$error) {
                                 ]; ?>"></div>
                             </div>
                         </div>
-                    <?php endforeach; ?>
+                        <?php endforeach; ?>
+
+                        <?php if (!empty($routes_with_stops)): ?>
+                            <div class="glass-card rounded-2xl p-6 text-sm text-gray-600" id="route-empty-state">
+                                Select a route from the list to view its stops and map.
+                            </div>
+                        <?php endif; ?>
+                    </section>
                 </div>
 
                 <?php if (empty($routes_with_stops)): ?>
@@ -402,58 +449,64 @@ if (!$error) {
     <script src="admin_sidebar_js.php"></script>
     <script>
         const routesData = <?php echo json_encode($routes_with_stops); ?>;
-        routesData.forEach(function (route) {
-            const el = document.getElementById('map-route-' + route.id);
+        const routeMapState = {}; // routeId -> { map, pendingMarker, routeLine, initialized }
+
+        function initMapForRoute(route) {
+            const routeId = route.id;
+            if (routeMapState[routeId] && routeMapState[routeId].initialized) return;
+            const el = document.getElementById('map-route-' + routeId);
             if (!el) return;
+
             const map = L.map(el).setView([14.5995, 120.9842], 12);
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(map);
             const stops = route.stops || [];
+
             let pendingMarker = null;
             let routeLine = null;
 
             function setStopFromClick(lat, lng) {
-                document.getElementById('lat-' + route.id).value = lat;
-                document.getElementById('lng-' + route.id).value = lng;
-                var statusEl = document.getElementById('pin-status-' + route.id);
+                const latEl = document.getElementById('lat-' + routeId);
+                const lngEl = document.getElementById('lng-' + routeId);
+                if (latEl) latEl.value = lat;
+                if (lngEl) lngEl.value = lng;
+
+                var statusEl = document.getElementById('pin-status-' + routeId);
                 if (statusEl) statusEl.textContent = 'Location set (on road): ' + lat.toFixed(5) + ', ' + lng.toFixed(5);
                 if (pendingMarker) map.removeLayer(pendingMarker);
                 pendingMarker = L.marker([lat, lng], { opacity: 0.8 })
                     .bindPopup('New stop here')
                     .addTo(map);
             }
+
             window.setStopForRoute = window.setStopForRoute || {};
-            window.setStopForRoute[route.id] = setStopFromClick;
+            window.setStopForRoute[routeId] = setStopFromClick;
 
             if (stops.length > 0) {
                 var waypoints = stops.map(function (s) { return [parseFloat(s.latitude), parseFloat(s.longitude)]; });
-                function drawRoadRoute() {
-                    if (typeof getRouteGeometry === 'function') {
-                        getRouteGeometry(waypoints, function (roadLatlngs) {
-                            var latlngs = roadLatlngs && roadLatlngs.length ? roadLatlngs : waypoints;
-                            if (routeLine) map.removeLayer(routeLine);
-                            routeLine = L.polyline(latlngs, { color: '#2563eb', weight: 4 }).addTo(map);
-                            stops.forEach(function (s, i) {
-                                L.marker([parseFloat(s.latitude), parseFloat(s.longitude)])
-                                    .bindPopup((i + 1) + '. ' + s.stop_name)
-                                    .addTo(map);
-                            });
-                            map.fitBounds(latlngs, { padding: [20, 20] });
-                        });
-                    } else {
-                        routeLine = L.polyline(waypoints, { color: '#2563eb', weight: 4 }).addTo(map);
+                if (typeof getRouteGeometry === 'function') {
+                    getRouteGeometry(waypoints, function (roadLatlngs) {
+                        var latlngs = roadLatlngs && roadLatlngs.length ? roadLatlngs : waypoints;
+                        routeLine = L.polyline(latlngs, { color: '#2563eb', weight: 4 }).addTo(map);
                         stops.forEach(function (s, i) {
                             L.marker([parseFloat(s.latitude), parseFloat(s.longitude)])
                                 .bindPopup((i + 1) + '. ' + s.stop_name)
                                 .addTo(map);
                         });
-                        map.fitBounds(waypoints, { padding: [20, 20] });
-                    }
+                        map.fitBounds(latlngs, { padding: [20, 20] });
+                    });
+                } else {
+                    routeLine = L.polyline(waypoints, { color: '#2563eb', weight: 4 }).addTo(map);
+                    stops.forEach(function (s, i) {
+                        L.marker([parseFloat(s.latitude), parseFloat(s.longitude)])
+                            .bindPopup((i + 1) + '. ' + s.stop_name)
+                            .addTo(map);
+                    });
+                    map.fitBounds(waypoints, { padding: [20, 20] });
                 }
-                drawRoadRoute();
             }
 
             map.on('click', function (e) {
-                var statusEl = document.getElementById('pin-status-' + route.id);
+                var statusEl = document.getElementById('pin-status-' + routeId);
                 if (statusEl) statusEl.textContent = 'Snapping to road…';
                 if (typeof snapToRoad === 'function') {
                     snapToRoad(e.latlng.lat, e.latlng.lng, function (lat, lng) {
@@ -463,6 +516,47 @@ if (!$error) {
                 } else {
                     setStopFromClick(e.latlng.lat, e.latlng.lng);
                 }
+            });
+
+            routeMapState[routeId] = { map, pendingMarker, routeLine, initialized: true };
+        }
+
+        function showRoute(routeId) {
+            document.querySelectorAll('.route-detail').forEach(function (el) {
+                el.classList.add('hidden');
+                el.classList.remove('ring-2', 'ring-blue-500');
+            });
+            const emptyState = document.getElementById('route-empty-state');
+            if (emptyState) emptyState.classList.add('hidden');
+
+            const detailEl = document.querySelector('.route-detail[data-route-id="' + routeId + '"]');
+            if (!detailEl) return;
+            detailEl.classList.remove('hidden');
+            detailEl.classList.add('ring-2', 'ring-blue-500');
+
+            document.querySelectorAll('.route-list-btn').forEach(function (btn) {
+                const isActive = btn.getAttribute('data-route-id') === String(routeId);
+                btn.classList.toggle('border-blue-300', isActive);
+                btn.classList.toggle('bg-blue-50', isActive);
+            });
+
+            const route = routesData.find(function (r) { return String(r.id) === String(routeId); });
+            if (route) {
+                initMapForRoute(route);
+                // Leaflet needs a size recalculation when un-hiding containers
+                setTimeout(function () {
+                    const st = routeMapState[routeId];
+                    if (st && st.map) st.map.invalidateSize();
+                }, 50);
+            }
+        }
+
+        // Bind list click
+        document.querySelectorAll('.route-list-btn').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                const rid = this.getAttribute('data-route-id');
+                if (!rid) return;
+                showRoute(rid);
             });
         });
 
@@ -848,9 +942,14 @@ if (!$error) {
         var highlightId = <?php echo $highlight_route_id
             ? (int) $highlight_route_id
             : 0; ?>;
+        // Default selection: highlight route if provided, otherwise first route (if any)
         if (highlightId) {
-            var el = document.getElementById('route-' + highlightId);
-            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            showRoute(highlightId);
+        } else if (routesData && routesData.length) {
+            showRoute(routesData[0].id);
+        } else {
+            const emptyState = document.getElementById('route-empty-state');
+            if (emptyState) emptyState.classList.remove('hidden');
         }
     </script>
     <?php include "admin_sidebar_js.php"; ?>

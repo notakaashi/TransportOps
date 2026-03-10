@@ -168,7 +168,13 @@ INSERT IGNORE INTO `route_definitions` (`name`, `created_at`) VALUES
 ('Pasig - Quiapo',                          NOW()),
 ('LRT-1 Roosevelt to Baclaran',                        NOW()),
 ('LRT-2 Recto to Antipolo',                          NOW()),
-('MRT-3 North Avenue to Taft Avenue',                   NOW());
+('MRT-3 North Avenue to Taft Avenue',                   NOW()),
+('Triumph - Arca South',                    NOW()),
+('Triumph - C5 Waterfun',                   NOW()),
+('Triumph - FTI Terminal',                  NOW()),
+('Triumph - Hagonoy',                       NOW()),
+('Triumph - Tenement',                      NOW()),
+('FTI Terminal - MOA',                      NOW());
 
 -- Resolve current route IDs into session variables
 SELECT @r1_bagumbayan_pasig := `id` FROM `route_definitions`
@@ -184,12 +190,88 @@ SELECT @lrt2_recto_antipolo    := `id` FROM `route_definitions`
 SELECT @mrt3_north_taft       := `id` FROM `route_definitions`
     WHERE `name` = 'MRT-3 North Avenue to Taft Avenue'   LIMIT 1;
 
+-- Triumph routes (predefined road routes)
+SELECT @triumph_arca_south   := `id` FROM `route_definitions` WHERE `name` = 'Triumph - Arca South'   LIMIT 1;
+SELECT @triumph_c5_waterfun  := `id` FROM `route_definitions` WHERE `name` = 'Triumph - C5 Waterfun'  LIMIT 1;
+SELECT @triumph_fti_terminal := `id` FROM `route_definitions` WHERE `name` = 'Triumph - FTI Terminal' LIMIT 1;
+SELECT @triumph_hagonoy      := `id` FROM `route_definitions` WHERE `name` = 'Triumph - Hagonoy'      LIMIT 1;
+SELECT @triumph_tenement     := `id` FROM `route_definitions` WHERE `name` = 'Triumph - Tenement'     LIMIT 1;
+SELECT @fti_terminal_moa     := `id` FROM `route_definitions` WHERE `name` = 'FTI Terminal - MOA'     LIMIT 1;
+
 -- Update route types for LRT/MRT routes (now that table and routes exist)
 UPDATE `route_definitions` SET `route_type` = 'lrt' 
 WHERE `name` IN ('LRT-1 Roosevelt to Baclaran', 'LRT-2 Recto to Antipolo');
 
 UPDATE `route_definitions` SET `route_type` = 'mrt' 
 WHERE `name` = 'MRT-3 North Avenue to Taft Avenue';
+
+-- Ensure Triumph routes are marked as road routes (default, but explicit for clarity)
+UPDATE `route_definitions` SET `route_type` = 'road'
+WHERE `name` IN (
+  'Triumph - Arca South',
+  'Triumph - C5 Waterfun',
+  'Triumph - FTI Terminal',
+  'Triumph - Hagonoy',
+  'Triumph - Tenement',
+  'FTI Terminal - MOA'
+);
+
+-- ----------------------------------------------------------
+--  Triumph predefined routes (stops + coordinates)
+--  Insert stops only if the route has no stops yet.
+-- ----------------------------------------------------------
+
+INSERT INTO `route_stops` (`route_definition_id`, `stop_name`, `latitude`, `longitude`, `stop_order`)
+SELECT * FROM (
+  SELECT @triumph_arca_south, 'Triumph',   14.50510100, 121.05254600, 0 UNION ALL
+  SELECT @triumph_arca_south, 'Palengke',  14.50189700, 121.04950100, 1 UNION ALL
+  SELECT @triumph_arca_south, 'United',    14.50127900, 121.04475700, 2 UNION ALL
+  SELECT @triumph_arca_south, 'Arca South',14.50571000, 121.03877900, 3
+) AS t
+WHERE @triumph_arca_south IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM `route_stops` WHERE `route_definition_id` = @triumph_arca_south LIMIT 1);
+
+INSERT INTO `route_stops` (`route_definition_id`, `stop_name`, `latitude`, `longitude`, `stop_order`)
+SELECT * FROM (
+  SELECT @triumph_c5_waterfun, 'Triumph',             14.50504300, 121.05270900, 0 UNION ALL
+  SELECT @triumph_c5_waterfun, 'Brgy. Central Signal',14.51096700, 121.05671800, 1 UNION ALL
+  SELECT @triumph_c5_waterfun, 'C5 Waterfun',         14.51577900, 121.05181900, 2
+) AS t
+WHERE @triumph_c5_waterfun IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM `route_stops` WHERE `route_definition_id` = @triumph_c5_waterfun LIMIT 1);
+
+INSERT INTO `route_stops` (`route_definition_id`, `stop_name`, `latitude`, `longitude`, `stop_order`)
+SELECT * FROM (
+  SELECT @triumph_fti_terminal, 'Triumph',      14.50508500, 121.05255400, 0 UNION ALL
+  SELECT @triumph_fti_terminal, 'FTI Terminal', 14.50654400, 121.04076400, 1
+) AS t
+WHERE @triumph_fti_terminal IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM `route_stops` WHERE `route_definition_id` = @triumph_fti_terminal LIMIT 1);
+
+INSERT INTO `route_stops` (`route_definition_id`, `stop_name`, `latitude`, `longitude`, `stop_order`)
+SELECT * FROM (
+  SELECT @triumph_hagonoy, 'Triumph', 14.50454500, 121.05304200, 0 UNION ALL
+  SELECT @triumph_hagonoy, 'Hagonoy', 14.50871200, 121.06565300, 1
+) AS t
+WHERE @triumph_hagonoy IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM `route_stops` WHERE `route_definition_id` = @triumph_hagonoy LIMIT 1);
+
+INSERT INTO `route_stops` (`route_definition_id`, `stop_name`, `latitude`, `longitude`, `stop_order`)
+SELECT * FROM (
+  SELECT @triumph_tenement, 'Triumph',  14.50507500, 121.05255900, 0 UNION ALL
+  SELECT @triumph_tenement, 'Tenement', 14.50735000, 121.03703700, 1
+) AS t
+WHERE @triumph_tenement IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM `route_stops` WHERE `route_definition_id` = @triumph_tenement LIMIT 1);
+
+INSERT INTO `route_stops` (`route_definition_id`, `stop_name`, `latitude`, `longitude`, `stop_order`)
+SELECT * FROM (
+  SELECT @fti_terminal_moa, 'FTI Terminal', 14.50700000, 121.04134200, 0 UNION ALL
+  SELECT @fti_terminal_moa, 'Rotonda',      14.53772100, 121.00111900, 1 UNION ALL
+  SELECT @fti_terminal_moa, 'MOA',          14.53507000, 120.98370100, 2
+) AS t
+WHERE @fti_terminal_moa IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM `route_stops` WHERE `route_definition_id` = @fti_terminal_moa LIMIT 1);
 
 -- ----------------------------------------------------------
 --  Route 1: Bagumbayan - Pasig (17 reports, 2 verified)
