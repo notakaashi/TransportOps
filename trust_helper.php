@@ -66,12 +66,12 @@ function calculateTrustScore($userId) {
             SELECT 
                 COUNT(*) as total_reports,
                 SUM(CASE WHEN verification_count >= 3 THEN 1 ELSE 0 END) as verified_reports,
-                SUM(CASE WHEN status = 'rejected' THEN 1 ELSE 0 END) as rejected_reports,
+                SUM(CASE WHEN user_reports.status = 'rejected' THEN 1 ELSE 0 END) as rejected_reports,
                 SUM(
                     CASE
-                        WHEN is_verified = 0
-                             AND IFNULL(peer_verifications, 0) = 0
-                             AND timestamp < DATE_SUB(NOW(), INTERVAL 1 HOUR)
+                        WHEN user_reports.is_verified = 0
+                             AND IFNULL(user_reports.peer_verifications, 0) = 0
+                             AND user_reports.timestamp < DATE_SUB(NOW(), INTERVAL 1 HOUR)
                         THEN 1 ELSE 0
                     END
                 ) as expired_reports
