@@ -155,9 +155,24 @@ CREATE TABLE IF NOT EXISTS `trust_score_logs` (
 -- Initialise any existing users that have no trust score
 UPDATE `users` SET `trust_score` = 50.00 WHERE `trust_score` IS NULL;
 
--- Align report status column with is_verified flag
 UPDATE `reports` SET `status` = 'verified' WHERE `is_verified` = 1 AND `status` = 'pending';
 UPDATE `reports` SET `status` = 'pending'  WHERE `is_verified` = 0 AND `status` = 'pending';
+
+-- Add rejections column to reports table if not exists
+-- The following block checks if the column exists before adding it
+DELIMITER //
+CREATE PROCEDURE add_rejections_column_if_not_exists()
+BEGIN
+    IF NOT EXISTS (
+        SELECT * FROM INFORMATION_SCHEMA.COLUMNS 
+        WHERE table_name = 'reports' AND column_name = 'rejections'
+    ) THEN
+        ALTER TABLE reports ADD COLUMN rejections INT DEFAULT 0 NOT NULL;
+    END IF;
+END //
+DELIMITER ;
+CALL add_rejections_column_if_not_exists();
+DROP PROCEDURE IF EXISTS add_rejections_column_if_not_exists;
 
 -- ============================================================
 --  CURRENT ACTIVE ROUTES FROM PRODUCTION DATABASE
