@@ -40,15 +40,15 @@ $today_routes = 0;
 
 try {
     $pdo = getDBConnection();
-    
+
     // Test basic database connection
     error_log("Database connection successful");
-    
+
     // Test basic reports count
     $stmt = $pdo->query("SELECT COUNT(*) as total FROM reports");
     $total_test = $stmt->fetch(PDO::FETCH_ASSOC);
-    error_log("Total reports in DB: " . $total_test['total']);
-    
+    error_log("Total reports in DB: " . $total_test["total"]);
+
     $stmt = $pdo->query("SELECT COUNT(*) as count FROM reports");
     $result = $stmt->fetch(PDO::FETCH_ASSOC);
     $total_reports = isset($result["count"]) ? (int) $result["count"] : 0;
@@ -83,9 +83,11 @@ try {
         LIMIT 10
     ");
     $recent_reports = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    
+
     // Debug: Check if reports are being fetched
-    error_log("Admin Dashboard - Recent reports count: " . count($recent_reports));
+    error_log(
+        "Admin Dashboard - Recent reports count: " . count($recent_reports),
+    );
     if (!empty($recent_reports)) {
         error_log("First report data: " . print_r($recent_reports[0], true));
     }
@@ -108,11 +110,11 @@ try {
         $count = $stmt->fetch(PDO::FETCH_ASSOC)["count"];
         $reports_over_time[] = $count;
     }
-    
+
     // Debug reports over time
     error_log("Reports over time: " . json_encode($reports_over_time));
     error_log("Total reports in DB: " . array_sum($reports_over_time));
-    
+
     // Ensure we always have some data for chart
     if (empty($reports_over_time) || array_sum($reports_over_time) == 0) {
         $reports_over_time = [1, 0, 0, 0, 0, 0, 0, 0]; // Show 1 report today
@@ -120,7 +122,9 @@ try {
 
     // Today's counts for metrics
     $today = date("Y-m-d");
-    $stmt = $pdo->prepare("SELECT COUNT(*) as count FROM reports WHERE DATE(timestamp) = ?");
+    $stmt = $pdo->prepare(
+        "SELECT COUNT(*) as count FROM reports WHERE DATE(timestamp) = ?",
+    );
     $stmt->execute([$today]);
     $today_reports = (int) $stmt->fetch(PDO::FETCH_ASSOC)["count"];
 
@@ -131,12 +135,16 @@ try {
     $stmt->execute([$today]);
     $today_delays = (int) $stmt->fetch(PDO::FETCH_ASSOC)["count"];
 
-    $stmt = $pdo->prepare("SELECT COUNT(*) as count FROM users WHERE DATE(created_at) = ?");
+    $stmt = $pdo->prepare(
+        "SELECT COUNT(*) as count FROM users WHERE DATE(created_at) = ?",
+    );
     $stmt->execute([$today]);
     $today_users = (int) $stmt->fetch(PDO::FETCH_ASSOC)["count"];
 
     try {
-        $stmt = $pdo->prepare("SELECT COUNT(*) as count FROM route_definitions WHERE DATE(created_at) = ?");
+        $stmt = $pdo->prepare(
+            "SELECT COUNT(*) as count FROM route_definitions WHERE DATE(created_at) = ?",
+        );
         $stmt->execute([$today]);
         $today_routes = (int) $stmt->fetch(PDO::FETCH_ASSOC)["count"];
     } catch (PDOException $e) {
@@ -145,8 +153,8 @@ try {
 
     // Get delay trends by reason (top reasons)
     $stmt = $pdo->query("
-        SELECT 
-            CASE 
+        SELECT
+            CASE
                 WHEN delay_reason IS NULL OR delay_reason = '' THEN 'Unspecified'
                 ELSE delay_reason
             END AS delay_reason,
@@ -163,7 +171,7 @@ try {
         $stmt = $pdo->query("
             SELECT HOUR(NOW()) as hour, 0 as heavy_count, 0 as moderate_count, 0 as light_count, 1 as total_reports
             UNION
-            SELECT HOUR(timestamp) as hour, 
+            SELECT HOUR(timestamp) as hour,
                    SUM(CASE WHEN crowd_level = 'Heavy' THEN 1 ELSE 0 END) as heavy_count,
                    SUM(CASE WHEN crowd_level = 'Moderate' THEN 1 ELSE 0 END) as moderate_count,
                    SUM(CASE WHEN crowd_level = 'Light' THEN 1 ELSE 0 END) as light_count,
@@ -776,6 +784,60 @@ function formatHourRangeLabel($hour)
 
         /* ── Notif count label ──────────────────────────── */
         #report-notification-count { font-size: 0.78rem; color: #64748b; font-weight: 500; }
+
+        /* ── Export date-range modal ─────────────────────── */
+        .export-modal-desc {
+            font-size: 0.82rem; color: #64748b; margin-bottom: 1.1rem; line-height: 1.5;
+        }
+        .export-date-row {
+            display: grid; grid-template-columns: 1fr 1fr; gap: 0.85rem;
+            margin-bottom: 1.1rem;
+        }
+        .export-date-field { display: flex; flex-direction: column; gap: 0.35rem; }
+        .export-date-field label {
+            font-size: 0.78rem; font-weight: 600; color: #475569; letter-spacing: 0.02em;
+        }
+        .export-date-field input[type="date"] {
+            padding: 0.5rem 0.65rem;
+            border: 1.5px solid #e2e8f0;
+            border-radius: 0.5rem;
+            font-size: 0.82rem; color: #1e293b;
+            background: #f8fafc;
+            outline: none;
+            transition: border-color 0.15s, box-shadow 0.15s;
+            width: 100%; box-sizing: border-box;
+        }
+        .export-date-field input[type="date"]:focus {
+            border-color: #22335C;
+            box-shadow: 0 0 0 3px rgba(34,51,92,0.1);
+            background: #fff;
+        }
+        .export-preset-label {
+            font-size: 0.75rem; font-weight: 600; color: #94a3b8;
+            text-transform: uppercase; letter-spacing: 0.05em;
+            margin-bottom: 0.5rem;
+        }
+        .export-presets {
+            display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.25rem;
+        }
+        .export-preset-btn {
+            padding: 0.3rem 0.75rem;
+            border: 1.5px solid #e2e8f0;
+            border-radius: 0.4rem;
+            font-size: 0.75rem; font-weight: 600; color: #475569;
+            background: #f8fafc; cursor: pointer;
+            transition: all 0.15s ease;
+        }
+        .export-preset-btn:hover {
+            border-color: #22335C; color: #22335C; background: rgba(34,51,92,0.06);
+        }
+        .export-preset-btn.active {
+            border-color: #22335C; color: #fff;
+            background: #22335C;
+        }
+        .export-modal-divider {
+            border: none; border-top: 1px solid #f1f5f9; margin: 1rem 0;
+        }
     </style>
 </head>
 <body>
@@ -1004,12 +1066,12 @@ function formatHourRangeLabel($hour)
                 ); ?> — here's what's happening today.</p>
             </div>
             <div style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;">
-                <a href="admin_export_analytics.php" class="btn-primary" title="Download a PDF summary of the dashboard analytics">
+                <button type="button" onclick="openExportModal()" class="btn-primary" title="Choose a date range and export analytics as PDF">
                     <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v10m0 0l3-3m-3 3l-3-3M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"/>
                     </svg>
                     Export Analytics (PDF)
-                </a>
+                </button>
                 <div class="date-chip">
                     <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
@@ -1089,7 +1151,10 @@ function formatHourRangeLabel($hour)
                                 $total_reports,
                             ); ?></div>
                             <div class="metric-label">Total Reports</div>
-                            <div class="metric-change <?php echo $today_reports > 0 ? "positive" : "neutral"; ?>"><?php echo $today_reports; ?> today</div>
+                            <div class="metric-change <?php echo $today_reports >
+                            0
+                                ? "positive"
+                                : "neutral"; ?>"><?php echo $today_reports; ?> today</div>
                         </div>
                     </div>
 
@@ -1105,7 +1170,10 @@ function formatHourRangeLabel($hour)
                                 $active_delays,
                             ); ?></div>
                             <div class="metric-label">Active Delays</div>
-                            <div class="metric-change <?php echo $today_delays > 0 ? "negative" : "neutral"; ?>"><?php echo $today_delays; ?> today</div>
+                            <div class="metric-change <?php echo $today_delays >
+                            0
+                                ? "negative"
+                                : "neutral"; ?>"><?php echo $today_delays; ?> today</div>
                         </div>
                     </div>
 
@@ -1121,7 +1189,10 @@ function formatHourRangeLabel($hour)
                                 $total_users,
                             ); ?></div>
                             <div class="metric-label">Total Users</div>
-                            <div class="metric-change <?php echo $today_users > 0 ? "positive" : "neutral"; ?>"><?php echo $today_users; ?> today</div>
+                            <div class="metric-change <?php echo $today_users >
+                            0
+                                ? "positive"
+                                : "neutral"; ?>"><?php echo $today_users; ?> today</div>
                         </div>
                     </div>
 
@@ -1201,7 +1272,10 @@ function formatHourRangeLabel($hour)
                     $maxRep = 0;
                     $maxDel = 0;
                     foreach ($hourly_trends as $r) {
-                        $maxRep = max($maxRep, (int) ($r["total_reports"] ?? 0));
+                        $maxRep = max(
+                            $maxRep,
+                            (int) ($r["total_reports"] ?? 0),
+                        );
                         $maxDel = max($maxDel, (int) ($r["total_delays"] ?? 0));
                     }
                     ?>
@@ -1221,13 +1295,24 @@ function formatHourRangeLabel($hour)
                                     $hour = (int) ($row["hour"] ?? 0);
                                     $rep = (int) ($row["total_reports"] ?? 0);
                                     $del = (int) ($row["total_delays"] ?? 0);
-                                    $repPct = $maxRep > 0 ? round(($rep / $maxRep) * 100) : 0;
-                                    $delPct = $maxDel > 0 ? round(($del / $maxDel) * 100) : 0;
-                                    $isHot = $top_delay_hour !== null && $hour === (int) $top_delay_hour && $del > 0;
+                                    $repPct =
+                                        $maxRep > 0
+                                            ? round(($rep / $maxRep) * 100)
+                                            : 0;
+                                    $delPct =
+                                        $maxDel > 0
+                                            ? round(($del / $maxDel) * 100)
+                                            : 0;
+                                    $isHot =
+                                        $top_delay_hour !== null &&
+                                        $hour === (int) $top_delay_hour &&
+                                        $del > 0;
                                     ?>
                                     <tr>
                                         <td style="font-weight:700;color:#1e293b;white-space:nowrap;">
-                                            <?php echo htmlspecialchars(formatHourRangeLabel($hour)); ?>
+                                            <?php echo htmlspecialchars(
+                                                formatHourRangeLabel($hour),
+                                            ); ?>
                                         </td>
                                         <td style="min-width:220px;">
                                             <div style="display:flex;align-items:center;justify-content:space-between;gap:0.75rem;">
@@ -1272,7 +1357,9 @@ function formatHourRangeLabel($hour)
                             <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
                         </svg>
                     </div>
-                    <span class="card-title">Recent Reports (<?php echo count($recent_reports); ?>)</span>
+                    <span class="card-title">Recent Reports (<?php echo count(
+                        $recent_reports,
+                    ); ?>)</span>
                     <span id="report-notification-badge" class="badge badge-new" style="display:none;">New</span>
                 </div>
                 <div style="display:flex;align-items:center;gap:0.75rem;">
@@ -1492,6 +1579,75 @@ function formatHourRangeLabel($hour)
             </a>
             <button type="button" id="reportModalCloseBtn" style="display:inline-flex;align-items:center;gap:0.4rem;padding:0.45rem 1.1rem;background:#f1f5f9;color:#475569;border-radius:0.5rem;font-size:0.78rem;font-weight:600;border:none;cursor:pointer;transition:background 0.15s;">
                 Close
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- ═══ EXPORT DATE RANGE MODAL ══════════════════════════ -->
+<div class="modal-wrap" id="exportModal" aria-modal="true" role="dialog">
+    <div class="modal-box">
+        <div class="modal-head">
+            <div style="display:flex;align-items:center;gap:0.6rem;">
+                <div class="card-icon ci-blue">
+                    <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v10m0 0l3-3m-3 3l-3-3M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"/>
+                    </svg>
+                </div>
+                <span class="modal-head-title">Export Analytics PDF</span>
+            </div>
+            <button class="modal-close-btn" id="exportModalClose" aria-label="Close">
+                <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+            </button>
+        </div>
+        <div class="modal-body">
+            <p class="export-modal-desc">
+                Select the date range for the analytics report. All metrics, charts, and tables in the exported PDF will be filtered to this period.
+            </p>
+
+            <!-- Quick presets -->
+            <div class="export-preset-label">Quick select</div>
+            <div class="export-presets">
+                <button type="button" class="export-preset-btn" data-preset="7">Last 7 days</button>
+                <button type="button" class="export-preset-btn active" data-preset="30">Last 30 days</button>
+                <button type="button" class="export-preset-btn" data-preset="90">Last 90 days</button>
+                <button type="button" class="export-preset-btn" data-preset="this_month">This month</button>
+                <button type="button" class="export-preset-btn" data-preset="last_month">Last month</button>
+                <button type="button" class="export-preset-btn" data-preset="this_year">This year</button>
+            </div>
+
+            <hr class="export-modal-divider">
+
+            <!-- Custom date inputs -->
+            <form id="exportForm" action="admin_export_analytics.php" method="GET" target="_blank">
+                <div class="export-date-row">
+                    <div class="export-date-field">
+                        <label for="exportDateFrom">From</label>
+                        <input type="date" name="date_from" id="exportDateFrom"
+                               value="<?php echo date(
+                                   "Y-m-d",
+                                   strtotime("-29 days"),
+                               ); ?>">
+                    </div>
+                    <div class="export-date-field">
+                        <label for="exportDateTo">To</label>
+                        <input type="date" name="date_to" id="exportDateTo"
+                               value="<?php echo date("Y-m-d"); ?>">
+                    </div>
+                </div>
+            </form>
+        </div>
+        <div class="modal-foot">
+            <button type="submit" form="exportForm" class="btn-primary" id="exportSubmitBtn">
+                <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v10m0 0l3-3m-3 3l-3-3M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"/>
+                </svg>
+                Generate PDF
+            </button>
+            <button type="button" id="exportModalCloseBtn" style="display:inline-flex;align-items:center;gap:0.4rem;padding:0.45rem 1.1rem;background:#f1f5f9;color:#475569;border-radius:0.5rem;font-size:0.78rem;font-weight:600;border:none;cursor:pointer;transition:background 0.15s;">
+                Cancel
             </button>
         </div>
     </div>
@@ -1799,6 +1955,132 @@ function formatHourRangeLabel($hour)
             if (e.key === 'Escape') closeModal();
         });
     })();
+
+    /* ── Export date-range modal ─────────────────────────── */
+    (function () {
+        const exportModal    = document.getElementById('exportModal');
+        const exportClose    = document.getElementById('exportModalClose');
+        const exportCloseBtn = document.getElementById('exportModalCloseBtn');
+        const dateFrom       = document.getElementById('exportDateFrom');
+        const dateTo         = document.getElementById('exportDateTo');
+        const presetBtns     = document.querySelectorAll('.export-preset-btn');
+
+        /* helpers */
+        function fmt(d) {
+            const y = d.getFullYear();
+            const m = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            return y + '-' + m + '-' + day;
+        }
+
+        function applyPreset(preset) {
+            const today = new Date();
+            let from, to;
+            to = new Date(today);
+
+            if (preset === '7') {
+                from = new Date(today);
+                from.setDate(today.getDate() - 6);
+            } else if (preset === '30') {
+                from = new Date(today);
+                from.setDate(today.getDate() - 29);
+            } else if (preset === '90') {
+                from = new Date(today);
+                from.setDate(today.getDate() - 89);
+            } else if (preset === 'this_month') {
+                from = new Date(today.getFullYear(), today.getMonth(), 1);
+                to   = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+            } else if (preset === 'last_month') {
+                from = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+                to   = new Date(today.getFullYear(), today.getMonth(), 0);
+            } else if (preset === 'this_year') {
+                from = new Date(today.getFullYear(), 0, 1);
+                to   = new Date(today.getFullYear(), 11, 31);
+            }
+
+            if (from && to) {
+                dateFrom.value = fmt(from);
+                dateTo.value   = fmt(to);
+            }
+        }
+
+        /* mark active preset based on current input values */
+        function syncActivePreset() {
+            const today = new Date();
+            const curFrom = dateFrom.value;
+            const curTo   = dateTo.value;
+
+            let matched = null;
+            presetBtns.forEach(function (btn) {
+                const p = btn.getAttribute('data-preset');
+                const tmp = { from: '', to: '' };
+                const t = new Date(today);
+                const d = new Date(today);
+
+                if (p === '7')          { d.setDate(t.getDate()-6);  tmp.from = fmt(d); tmp.to = fmt(t); }
+                else if (p === '30')    { d.setDate(t.getDate()-29); tmp.from = fmt(d); tmp.to = fmt(t); }
+                else if (p === '90')    { d.setDate(t.getDate()-89); tmp.from = fmt(d); tmp.to = fmt(t); }
+                else if (p === 'this_month')  { tmp.from = fmt(new Date(t.getFullYear(), t.getMonth(), 1)); tmp.to = fmt(new Date(t.getFullYear(), t.getMonth()+1, 0)); }
+                else if (p === 'last_month')  { tmp.from = fmt(new Date(t.getFullYear(), t.getMonth()-1, 1)); tmp.to = fmt(new Date(t.getFullYear(), t.getMonth(), 0)); }
+                else if (p === 'this_year')   { tmp.from = fmt(new Date(t.getFullYear(), 0, 1)); tmp.to = fmt(new Date(t.getFullYear(), 11, 31)); }
+
+                const isMatch = tmp.from === curFrom && tmp.to === curTo;
+                btn.classList.toggle('active', isMatch);
+                if (isMatch) matched = p;
+            });
+        }
+
+        /* preset button clicks */
+        presetBtns.forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                applyPreset(this.getAttribute('data-preset'));
+                presetBtns.forEach(function (b) { b.classList.remove('active'); });
+                btn.classList.add('active');
+            });
+        });
+
+        /* deactivate preset when user manually changes dates */
+        [dateFrom, dateTo].forEach(function (inp) {
+            inp.addEventListener('change', syncActivePreset);
+        });
+
+        /* validate: from must not exceed to */
+        document.getElementById('exportForm').addEventListener('submit', function (e) {
+            if (dateFrom.value && dateTo.value && dateFrom.value > dateTo.value) {
+                e.preventDefault();
+                dateFrom.style.borderColor = '#ef4444';
+                dateTo.style.borderColor   = '#ef4444';
+                dateFrom.title = 'Start date must be before end date';
+                setTimeout(function () {
+                    dateFrom.style.borderColor = '';
+                    dateTo.style.borderColor   = '';
+                }, 2000);
+            }
+        });
+
+        /* open / close */
+        window.openExportModal = function () {
+            syncActivePreset();
+            exportModal.classList.add('open');
+            document.body.style.overflow = 'hidden';
+            dateFrom.focus();
+        };
+
+        function closeExportModal() {
+            exportModal.classList.remove('open');
+            document.body.style.overflow = '';
+        }
+
+        exportClose.addEventListener('click',    closeExportModal);
+        exportCloseBtn.addEventListener('click', closeExportModal);
+        exportModal.addEventListener('click', function (e) {
+            if (e.target === exportModal) closeExportModal();
+        });
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape' && exportModal.classList.contains('open')) closeExportModal();
+        });
+    })();
+
 }); // Close DOM ready event
 </script>
 
