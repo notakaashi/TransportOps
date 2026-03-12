@@ -79,6 +79,22 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                         $_SESSION["user_email"] = $user["email"];
                         $_SESSION["role"] = $user["role"];
                         $_SESSION["profile_image"] = $user["profile_image"];
+                        // Detect first-ever login and update last_login timestamp
+                        try {
+                            $fl = $pdo->prepare(
+                                "SELECT last_login FROM users WHERE id = ?",
+                            );
+                            $fl->execute([$user["id"]]);
+                            $flRow = $fl->fetch(PDO::FETCH_ASSOC);
+                            if ($flRow && $flRow["last_login"] === null) {
+                                $_SESSION["is_first_login"] = true;
+                            }
+                            $pdo->prepare(
+                                "UPDATE users SET last_login = NOW() WHERE id = ?",
+                            )->execute([$user["id"]]);
+                        } catch (PDOException $e) {
+                            // last_login column may not exist in older installs – silently ignore
+                        }
                         $redirect =
                             $_SESSION["redirect_after_login"] ??
                             "user_dashboard.php";
@@ -138,6 +154,8 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                         $_SESSION["user_email"] = $reg_email;
                         $_SESSION["role"] = "Commuter";
                         $_SESSION["profile_image"] = null;
+                        // Brand-new account — always a first login
+                        $_SESSION["is_first_login"] = true;
                         header("Location: user_dashboard.php");
                         exit();
                     }
@@ -183,6 +201,22 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                         $_SESSION["user_email"] = $user["email"];
                         $_SESSION["role"] = $user["role"];
                         $_SESSION["profile_image"] = $user["profile_image"];
+                        // Detect first-ever login and update last_login timestamp
+                        try {
+                            $fl = $pdo->prepare(
+                                "SELECT last_login FROM users WHERE id = ?",
+                            );
+                            $fl->execute([$user["id"]]);
+                            $flRow = $fl->fetch(PDO::FETCH_ASSOC);
+                            if ($flRow && $flRow["last_login"] === null) {
+                                $_SESSION["is_first_login"] = true;
+                            }
+                            $pdo->prepare(
+                                "UPDATE users SET last_login = NOW() WHERE id = ?",
+                            )->execute([$user["id"]]);
+                        } catch (PDOException $e) {
+                            // last_login column may not exist in older installs – silently ignore
+                        }
                         header("Location: admin_dashboard.php");
                         exit();
                     }

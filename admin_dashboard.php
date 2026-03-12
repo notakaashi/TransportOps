@@ -1061,7 +1061,7 @@ function formatHourRangeLabel($hour)
         <div class="page-header">
             <div>
                 <h1 class="page-title">Dashboard</h1>
-                <p class="page-subtitle">Welcome back, <?php echo htmlspecialchars(
+                <p class="page-subtitle">Welcome, <?php echo htmlspecialchars(
                     $_SESSION["user_name"],
                 ); ?> — here's what's happening today.</p>
             </div>

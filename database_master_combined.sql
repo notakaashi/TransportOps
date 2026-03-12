@@ -31,6 +31,7 @@ CREATE TABLE IF NOT EXISTS `users` (
     `is_active`     TINYINT(1)   NOT NULL DEFAULT 1,
     `trust_score`   DECIMAL(5,2)          DEFAULT 50.00,
     `created_at`    TIMESTAMP             DEFAULT CURRENT_TIMESTAMP,
+    `last_login`    DATETIME              DEFAULT NULL,
     PRIMARY KEY (`id`),
     UNIQUE KEY  `uq_email`          (`email`),
     INDEX       `idx_email`         (`email`),
@@ -164,7 +165,7 @@ DELIMITER //
 CREATE PROCEDURE add_rejections_column_if_not_exists()
 BEGIN
     IF NOT EXISTS (
-        SELECT * FROM INFORMATION_SCHEMA.COLUMNS 
+        SELECT * FROM INFORMATION_SCHEMA.COLUMNS
         WHERE table_name = 'reports' AND column_name = 'rejections'
     ) THEN
         ALTER TABLE reports ADD COLUMN rejections INT DEFAULT 0 NOT NULL;
@@ -216,10 +217,10 @@ SELECT @triumph_tenement     := `id` FROM `route_definitions` WHERE `name` = 'Tr
 SELECT @fti_terminal_moa     := `id` FROM `route_definitions` WHERE `name` = 'FTI Terminal - MOA'     LIMIT 1;
 
 -- Update route types for LRT/MRT routes (now that table and routes exist)
-UPDATE `route_definitions` SET `route_type` = 'lrt' 
+UPDATE `route_definitions` SET `route_type` = 'lrt'
 WHERE `name` IN ('LRT-1 Roosevelt to Baclaran', 'LRT-2 Recto to Antipolo');
 
-UPDATE `route_definitions` SET `route_type` = 'mrt' 
+UPDATE `route_definitions` SET `route_type` = 'mrt'
 WHERE `name` = 'MRT-3 North Avenue to Taft Avenue';
 
 -- Ensure Triumph routes are marked as road routes (default, but explicit for clarity)
@@ -406,4 +407,3 @@ INSERT IGNORE INTO `route_stops` (`route_definition_id`, `stop_name`, `latitude`
 (@mrt3_north_taft, 'Ayala',             14.5490, 121.0283, 11),
 (@mrt3_north_taft, 'Magallanes',         14.5420, 121.0195, 12),
 (@mrt3_north_taft, 'Taft Avenue',       14.5377, 121.0022, 13);
-

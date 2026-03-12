@@ -614,7 +614,7 @@ function timeAgo(string $timestamp): string
                     <?= $user_role ?>
                 </div>
                 <h1 class="hero-title">
-                    Welcome back,<br>
+                    Welcome,<br>
                     <span class="gold"><?= htmlspecialchars(
                         $first_name,
                     ) ?>.</span>

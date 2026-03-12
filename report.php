@@ -88,6 +88,11 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         : 0;
     $crowd_level = $_POST["crowd_level"] ?? "";
     $delay_reason = trim($_POST["delay_reason"] ?? "");
+    if ($delay_reason === "Other") {
+        $other_reason = trim($_POST["other_reason"] ?? "");
+        $delay_reason =
+            $other_reason !== "" ? "Other: " . $other_reason : "Other";
+    }
     $latitude =
         isset($_POST["latitude"]) && $_POST["latitude"] !== ""
             ? (float) $_POST["latitude"]
@@ -168,7 +173,10 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                         // Update user's trust score for submitting a report
                         require_once "trust_helper.php";
                         // Recalculate trust score after submitting (computed from overall history)
-                        updateUserTrustScore($_SESSION["user_id"], "Trust score recalculated (report submitted)");
+                        updateUserTrustScore(
+                            $_SESSION["user_id"],
+                            "Trust score recalculated (report submitted)",
+                        );
 
                         $success =
                             "Report submitted successfully! Thank you for your contribution.";
@@ -361,6 +369,34 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             outline: none;
             border-color: var(--gold);
             box-shadow: 0 0 0 3px rgba(251,192,97,0.22);
+        }
+        .other-reason-box {
+            display: none;
+            margin-top: 0.6rem;
+        }
+        .other-reason-box textarea {
+            width: 100%;
+            padding: 0.7rem 1rem;
+            background: rgba(255,255,255,0.92);
+            border: 1.5px solid rgba(34,51,92,0.15);
+            border-radius: 0.65rem;
+            font-size: 0.9rem;
+            font-weight: 500;
+            color: var(--navy);
+            font-family: 'Inter', sans-serif;
+            resize: vertical;
+            min-height: 4.5rem;
+            transition: border-color 0.2s, box-shadow 0.2s;
+            box-sizing: border-box;
+        }
+        .other-reason-box textarea:focus {
+            outline: none;
+            border-color: var(--gold);
+            box-shadow: 0 0 0 3px rgba(251,192,97,0.22);
+        }
+        .other-reason-box textarea::placeholder {
+            color: #94a3b8;
+            font-weight: 400;
         }
 
         /* ── Crowd Level Cards ────────────────────────────── */
@@ -696,7 +732,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                     <label for="delay_reason" class="form-label">
                         Reason for Delay <span class="opt">(optional)</span>
                     </label>
-                    <select id="delay_reason" name="delay_reason" class="form-select">
+                    <select id="delay_reason" name="delay_reason" class="form-select" onchange="toggleOtherReason(this)">
                         <option value="">No delay</option>
                         <option value="Traffic jam">Traffic jam / Road congestion</option>
                         <option value="Mechanical issues">Mechanical or vehicle issues</option>
@@ -705,6 +741,9 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                         <option value="Accident">Accident on route</option>
                         <option value="Other">Other (please specify below)</option>
                     </select>
+                    <div class="other-reason-box" id="other_reason_box">
+                        <textarea id="other_reason" name="other_reason" placeholder="Please describe the reason for the delay…" maxlength="300"></textarea>
+                    </div>
                 </div>
 
                 <!-- Location -->
@@ -826,6 +865,20 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     }
 
     /* ── Form Validation ── */
+    function toggleOtherReason(sel) {
+        var box = document.getElementById('other_reason_box');
+        var ta  = document.getElementById('other_reason');
+        if (sel.value === 'Other') {
+            box.style.display = 'block';
+            ta.required = true;
+            ta.focus();
+        } else {
+            box.style.display = 'none';
+            ta.required = false;
+            ta.value = '';
+        }
+    }
+
     function validateForm() {
         var cat        = document.getElementById('categoryFilter');
         var catVal     = cat && !cat.disabled ? cat.value : '';
@@ -833,10 +886,13 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         var crowdLevel = document.querySelector('input[name="crowd_level"]:checked');
         var lat        = document.getElementById('latitude').value;
         var lng        = document.getElementById('longitude').value;
+        var delayReason = document.getElementById('delay_reason').value;
+        var otherReason = document.getElementById('other_reason').value.trim();
         if (cat && !cat.disabled && !catVal) { alert('Please select a category.'); return false; }
         if (!routeId)    { alert('Please select a route.');          return false; }
         if (!crowdLevel) { alert('Please select a crowd level.');     return false; }
         if (!lat || !lng){ alert('Please set your location on the map or use the GPS button.'); return false; }
+        if (delayReason === 'Other' && !otherReason) { alert('Please specify the other reason for the delay.'); return false; }
         return true;
     }
 
