@@ -50,10 +50,12 @@ CREATE TABLE IF NOT EXISTS `route_definitions` (
     `id`         INT(11)      NOT NULL AUTO_INCREMENT,
     `name`       VARCHAR(255) NOT NULL,
     `route_type`  ENUM('road', 'lrt', 'mrt') DEFAULT 'road',
+    `vehicle_category` ENUM('tricycle','jeepney','rail') NOT NULL DEFAULT 'jeepney',
     `created_at` TIMESTAMP             DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),
     UNIQUE KEY `idx_route_def_name` (`name`),
-    INDEX `idx_route_type` (`route_type`)
+    INDEX `idx_route_type` (`route_type`),
+    INDEX `idx_vehicle_category` (`vehicle_category`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ============================================================
@@ -215,6 +217,22 @@ WHERE `name` IN (
   'Triumph - Tenement',
   'FTI Terminal - MOA'
 );
+
+-- Vehicle category assignment
+UPDATE `route_definitions`
+SET `vehicle_category` = 'rail'
+WHERE `route_type` IN ('lrt', 'mrt')
+   OR `name` LIKE 'LRT-%'
+   OR `name` LIKE 'MRT-%';
+
+UPDATE `route_definitions`
+SET `vehicle_category` = 'tricycle'
+WHERE `name` LIKE 'Triumph - %';
+
+-- Explicit overrides
+UPDATE `route_definitions`
+SET `vehicle_category` = 'jeepney'
+WHERE `name` = 'FTI Terminal - MOA';
 
 -- ----------------------------------------------------------
 --  Triumph predefined routes (stops + coordinates)

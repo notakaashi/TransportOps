@@ -16,12 +16,51 @@ if (!isset($_SESSION['user_id'])) {
 
 try {
     $pdo = getDBConnection();
-    $stmt = $pdo->query("
-        SELECT id, name, created_at
-        FROM route_definitions
-        ORDER BY name
-    ");
-    $routes = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $allowedCategories = ["tricycle", "jeepney", "rail"];
+    $category = isset($_GET["category"]) ? strtolower(trim((string) $_GET["category"])) : "";
+    if (!in_array($category, $allowedCategories, true)) {
+        $category = "";
+    }
+
+    try {
+        if ($category !== "") {
+            $stmt = $pdo->prepare("
+                SELECT id, name, vehicle_category, created_at
+                FROM route_definitions
+                WHERE vehicle_category = ?
+                ORDER BY name
+            ");
+            $stmt->execute([$category]);
+        } else {
+            $stmt = $pdo->query("
+                SELECT id, name, vehicle_category, created_at
+                FROM route_definitions
+                ORDER BY name
+            ");
+        }
+        $routes = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) {
+        // Backwards compatibility if vehicle_category isn't present yet.
+        if ($category !== "") {
+            $stmt = $pdo->prepare("
+                SELECT id, name, created_at
+                FROM route_definitions
+                ORDER BY name
+            ");
+            $stmt->execute();
+        } else {
+            $stmt = $pdo->query("
+                SELECT id, name, created_at
+                FROM route_definitions
+                ORDER BY name
+            ");
+        }
+        $routes = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        foreach ($routes as &$r) {
+            $r["vehicle_category"] = null;
+        }
+        unset($r);
+    }
 
     $stmt = $pdo->query("
         SELECT id, route_definition_id, stop_name, latitude, longitude, stop_order
@@ -45,6 +84,7 @@ try {
 
     foreach ($routes as &$r) {
         $r['id'] = (int)$r['id'];
+        $r['vehicle_category'] = $r['vehicle_category'] ?? null;
         $r['stops'] = $stopsByRoute[$r['id']] ?? [];
         usort($r['stops'], function ($a, $b) { return $a['stop_order'] - $b['stop_order']; });
     }

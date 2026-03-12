@@ -29,10 +29,41 @@ if ($is_logged_in) {
 // Fetch routes with stops
 try {
     $pdo = getDBConnection();
-    $stmt = $pdo->query(
-        "SELECT id, name, created_at FROM route_definitions ORDER BY name",
-    );
-    $routes = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $allowedCategories = ["tricycle", "jeepney", "rail"];
+    $selectedCategory = isset($_GET["category"])
+        ? strtolower(trim((string) $_GET["category"]))
+        : "all";
+    if ($selectedCategory !== "all" && !in_array($selectedCategory, $allowedCategories, true)) {
+        $selectedCategory = "all";
+    }
+
+    try {
+        if ($selectedCategory !== "all") {
+            $stmt = $pdo->prepare(
+                "SELECT id, name, vehicle_category, created_at
+                 FROM route_definitions
+                 WHERE vehicle_category = ?
+                 ORDER BY name",
+            );
+            $stmt->execute([$selectedCategory]);
+        } else {
+            $stmt = $pdo->query(
+                "SELECT id, name, vehicle_category, created_at FROM route_definitions ORDER BY name",
+            );
+        }
+        $routes = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) {
+        // Backwards compatibility if vehicle_category isn't present yet.
+        $stmt = $pdo->query(
+            "SELECT id, name, created_at FROM route_definitions ORDER BY name",
+        );
+        $routes = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        foreach ($routes as &$r) {
+            $r["vehicle_category"] = null;
+        }
+        unset($r);
+        $selectedCategory = "all";
+    }
 
     $stmt = $pdo->query(
         "SELECT id, route_definition_id, stop_name, latitude, longitude, stop_order FROM route_stops ORDER BY route_definition_id, stop_order",
@@ -56,6 +87,7 @@ try {
 
     foreach ($routes as &$r) {
         $r["id"] = (int) $r["id"];
+        $r["vehicle_category"] = $r["vehicle_category"] ?? null;
         $r["stops"] = $stopsByRoute[$r["id"]] ?? [];
         usort($r["stops"], fn($a, $b) => $a["stop_order"] - $b["stop_order"]);
     }
@@ -63,6 +95,7 @@ try {
 } catch (PDOException $e) {
     error_log("Routes error: " . $e->getMessage());
     $routes = [];
+    $selectedCategory = "all";
 }
 
 $totalStops = array_sum(array_map(fn($r) => count($r["stops"]), $routes));
@@ -531,6 +564,34 @@ body {
 <!-- ======== MAIN CONTENT ======== -->
 <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
 
+    <!-- Category filter -->
+    <div class="flex items-center justify-between flex-wrap gap-3 mb-6 reveal">
+        <div class="flex items-center gap-2">
+            <span class="sec-eyebrow">Category</span>
+            <select id="categoryFilter"
+                class="px-3 py-2 rounded-xl border border-gray-200 bg-white/80 text-sm font-semibold"
+                style="backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);">
+                <option value="all" <?= $selectedCategory === "all"
+                    ? "selected"
+                    : "" ?>>All</option>
+                <option value="tricycle" <?= $selectedCategory === "tricycle"
+                    ? "selected"
+                    : "" ?>>Tricycle</option>
+                <option value="jeepney" <?= $selectedCategory === "jeepney"
+                    ? "selected"
+                    : "" ?>>Jeepney</option>
+                <option value="rail" <?= $selectedCategory === "rail"
+                    ? "selected"
+                    : "" ?>>MRT/LRT</option>
+            </select>
+        </div>
+        <p class="text-sm" style="color:#94a3b8;">
+            Showing <strong style="color:var(--navy);"><?= count(
+                $routes,
+            ) ?></strong> route<?= count($routes) !== 1 ? "s" : "" ?>
+        </p>
+    </div>
+
     <!-- Tab bar -->
     <div class="flex items-center justify-between flex-wrap gap-4 mb-8 reveal">
         <div class="tab-bar">
@@ -676,6 +737,7 @@ body {
 <!-- ======== SCRIPTS ======== -->
 <script>
     const routesData = <?= json_encode($routes) ?>;
+    const selectedCategory = <?= json_encode($selectedCategory) ?>;
     let individualMaps = {};
     let combinedMap    = null;
     let combinedLayers = {};
@@ -788,6 +850,19 @@ body {
 
     // Boot
     setTimeout(initializeIndividualMaps, 150);
+
+    // Category filter (reload with query param)
+    (function () {
+        var sel = document.getElementById("categoryFilter");
+        if (!sel) return;
+        sel.addEventListener("change", function () {
+            var val = sel.value || "all";
+            var url = new URL(window.location.href);
+            if (val === "all") url.searchParams.delete("category");
+            else url.searchParams.set("category", val);
+            window.location.href = url.toString();
+        });
+    })();
 </script>
 
 <script>

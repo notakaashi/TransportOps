@@ -8,21 +8,57 @@ require_once "trust_badge_helper.php";
 $is_logged_in = isset($_SESSION["user_id"]);
 $user_profile_data = ["profile_image" => null];
 $selectedRoute = isset($_GET["route"]) ? $_GET["route"] : "";
+$selectedCategory = isset($_GET["category"])
+    ? strtolower(trim((string) $_GET["category"]))
+    : "";
+$allowedCategories = ["tricycle", "jeepney", "rail"];
+if (!in_array($selectedCategory, $allowedCategories, true)) {
+    $selectedCategory = "";
+}
 try {
     $pdo = getDBConnection();
 
     // Get all available routes for filtering
-    $routesStmt = $pdo->query("
-        SELECT name as route_name
-        FROM route_definitions
-        ORDER BY name
-    ");
-    $availableRoutes = $routesStmt->fetchAll(PDO::FETCH_COLUMN);
+    $availableRoutes = [];
+    $hasVehicleCategory = true;
+    try {
+        if ($selectedCategory !== "") {
+            $routesStmt = $pdo->prepare("
+                SELECT name as route_name
+                FROM route_definitions
+                WHERE vehicle_category = ?
+                ORDER BY name
+            ");
+            $routesStmt->execute([$selectedCategory]);
+        } else {
+            $routesStmt = $pdo->query("
+                SELECT name as route_name
+                FROM route_definitions
+                ORDER BY name
+            ");
+        }
+        $availableRoutes = $routesStmt->fetchAll(PDO::FETCH_COLUMN);
+    } catch (PDOException $e) {
+        // Backwards compatibility if vehicle_category doesn't exist yet.
+        $hasVehicleCategory = false;
+        $routesStmt = $pdo->query("
+            SELECT name as route_name
+            FROM route_definitions
+            ORDER BY name
+        ");
+        $availableRoutes = $routesStmt->fetchAll(PDO::FETCH_COLUMN);
+        $selectedCategory = "";
+    }
 
     // Build reports query with route filter
     // Only show recent reports on the live map (last 1 hour)
     $whereClause = "WHERE r.latitude IS NOT NULL AND r.longitude IS NOT NULL AND r.timestamp >= DATE_SUB(NOW(), INTERVAL 1 HOUR)";
     $params = [];
+
+    if (!empty($selectedCategory) && $hasVehicleCategory) {
+        $whereClause .= " AND rd.vehicle_category = ?";
+        $params[] = $selectedCategory;
+    }
 
     if (!empty($selectedRoute)) {
         $whereClause .= " AND rd.name = ?";
@@ -68,6 +104,8 @@ try {
 } catch (PDOException $e) {
     error_log("Reports map error: " . $e->getMessage());
     $reports = [];
+    $availableRoutes = [];
+    $hasVehicleCategory = false;
 }
 ?>
 <!DOCTYPE html>
@@ -580,7 +618,30 @@ try {
 
             <!-- Route Filter -->
             <div class="glass-card p-4">
-                <label for="routeFilter" class="form-label">Filter by Route</label>
+                <label for="categoryFilter" class="form-label">Choose Category</label>
+                <select id="categoryFilter" class="form-select" <?= !$hasVehicleCategory
+                    ? "disabled"
+                    : "" ?>>
+                    <option value="">All Categories</option>
+                    <option value="tricycle" <?= $selectedCategory === "tricycle"
+                        ? "selected"
+                        : "" ?>>Tricycle</option>
+                    <option value="jeepney" <?= $selectedCategory === "jeepney"
+                        ? "selected"
+                        : "" ?>>Jeepney</option>
+                    <option value="rail" <?= $selectedCategory === "rail"
+                        ? "selected"
+                        : "" ?>>MRT/LRT</option>
+                </select>
+                <?php if (!$hasVehicleCategory): ?>
+                    <p style="font-size:0.72rem;color:#94a3b8;line-height:1.4;margin-top:0.5rem;">
+                        Category filter is unavailable until you run the latest DB update.
+                    </p>
+                <?php endif; ?>
+
+                <hr class="panel-divider">
+
+                <label for="routeFilter" class="form-label">Choose Route</label>
                 <select id="routeFilter" class="form-select">
                     <option value="">All Routes</option>
                     <?php foreach ($availableRoutes as $route): ?>
@@ -928,7 +989,18 @@ try {
     addReportMarkers();
 
     /* Route filter */
+    const categoryFilter = document.getElementById('categoryFilter');
     const routeFilter = document.getElementById('routeFilter');
+    if (categoryFilter && !categoryFilter.disabled) {
+        categoryFilter.addEventListener('change', function (e) {
+            const url = new URL(window.location);
+            if (e.target.value) url.searchParams.set('category', e.target.value);
+            else url.searchParams.delete('category');
+            // Reset route whenever category changes to avoid mismatched selection
+            url.searchParams.delete('route');
+            window.location.href = url.toString();
+        });
+    }
     if (routeFilter) {
         routeFilter.addEventListener('change', function (e) {
             const url = new URL(window.location);
