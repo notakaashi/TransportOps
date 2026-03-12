@@ -435,12 +435,12 @@ body {
                     <a href="<?= $is_logged_in
                         ? "user_dashboard.php"
                         : "index.php" ?>" class="nav-link">Home</a>
-                    <a href="about.php"       class="nav-link">About</a>
                     <?php if ($is_logged_in): ?>
                     <a href="report.php"      class="nav-link">Submit Report</a>
                     <?php endif; ?>
                     <a href="reports_map.php" class="nav-link">Reports Map</a>
                     <a href="routes.php"      class="nav-link active">Routes</a>
+                    <a href="about.php"       class="nav-link">About</a>
                 </div>
                 <!-- Mobile menu -->
                 <div id="mobileMenu"
@@ -449,12 +449,12 @@ body {
                     <a href="<?= $is_logged_in
                         ? "user_dashboard.php"
                         : "index.php" ?>" class="nav-link-mobile">Home</a>
-                    <a href="about.php"       class="nav-link-mobile">About</a>
                     <?php if ($is_logged_in): ?>
                     <a href="report.php"      class="nav-link-mobile">Submit Report</a>
                     <?php endif; ?>
                     <a href="reports_map.php" class="nav-link-mobile">Reports Map</a>
                     <a href="routes.php"      class="nav-link-mobile active">Routes</a>
+                    <a href="about.php"       class="nav-link-mobile">About</a>
                 </div>
             </div>
 

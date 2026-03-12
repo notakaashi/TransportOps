@@ -15,6 +15,13 @@ $allowedCategories = ["tricycle", "jeepney", "rail"];
 if (!in_array($selectedCategory, $allowedCategories, true)) {
     $selectedCategory = "";
 }
+$selectedRange = isset($_GET["range"])
+    ? strtolower(trim((string) $_GET["range"]))
+    : "hour";
+$allowedRanges = ["hour", "day", "week", "all"];
+if (!in_array($selectedRange, $allowedRanges, true)) {
+    $selectedRange = "hour";
+}
 try {
     $pdo = getDBConnection();
 
@@ -51,8 +58,19 @@ try {
     }
 
     // Build reports query with route filter
-    // Only show recent reports on the live map (last 1 hour)
-    $whereClause = "WHERE r.latitude IS NOT NULL AND r.longitude IS NOT NULL AND r.timestamp >= DATE_SUB(NOW(), INTERVAL 1 HOUR)";
+    // Time range filter
+    $timeWhere = "";
+    if ($selectedRange === "hour") {
+        $timeWhere = " AND r.timestamp >= DATE_SUB(NOW(), INTERVAL 1 HOUR)";
+    } elseif ($selectedRange === "day") {
+        $timeWhere = " AND r.timestamp >= DATE_SUB(NOW(), INTERVAL 1 DAY)";
+    } elseif ($selectedRange === "week") {
+        $timeWhere = " AND r.timestamp >= DATE_SUB(NOW(), INTERVAL 7 DAY)";
+    } else {
+        $timeWhere = "";
+    }
+
+    $whereClause = "WHERE r.latitude IS NOT NULL AND r.longitude IS NOT NULL" . $timeWhere;
     $params = [];
 
     if (!empty($selectedCategory) && $hasVehicleCategory) {
@@ -469,12 +487,12 @@ try {
                     <a href="<?= $is_logged_in
                         ? "user_dashboard.php"
                         : "index.php" ?>" class="nav-link">Home</a>
-                    <a href="about.php"       class="nav-link">About</a>
                     <?php if ($is_logged_in): ?>
                     <a href="report.php"      class="nav-link">Submit Report</a>
                     <?php endif; ?>
                     <a href="reports_map.php" class="nav-link active">Reports Map</a>
                     <a href="routes.php"      class="nav-link">Routes</a>
+                    <a href="about.php"       class="nav-link">About</a>
                 </div>
                 <div id="mobileMenu"
                      class="md:hidden hidden absolute top-full left-0 right-0 mt-2 flex flex-col gap-1 px-4 py-3 z-20 rounded-2xl"
@@ -482,12 +500,12 @@ try {
                     <a href="<?= $is_logged_in
                         ? "user_dashboard.php"
                         : "index.php" ?>" class="nav-link-mobile">Home</a>
-                    <a href="about.php"       class="nav-link-mobile">About</a>
                     <?php if ($is_logged_in): ?>
                     <a href="report.php"      class="nav-link-mobile">Submit Report</a>
                     <?php endif; ?>
                     <a href="reports_map.php" class="nav-link-mobile active">Reports Map</a>
                     <a href="routes.php"      class="nav-link-mobile">Routes</a>
+                    <a href="about.php"       class="nav-link-mobile">About</a>
                 </div>
             </div>
 
@@ -611,6 +629,31 @@ try {
                 </div>
             </div>
             <div id="map" style="height:560px;"></div>
+            <!-- Location enable (moved under the map) -->
+            <div class="px-6 py-4" style="border-top:1px solid rgba(34,51,92,0.08);">
+                <div class="sec-eyebrow mb-2">Verification</div>
+                <?php if ($is_logged_in): ?>
+                    <p style="font-size:0.78rem;color:#64748b;line-height:1.55;margin-bottom:0.85rem;">
+                        <strong style="color:var(--navy);">How to verify:</strong>
+                        Enable your location and be within 500m of the report, then click Verify in the marker popup.
+                        <em style="color:#94a3b8;">Commuter accounts only.</em>
+                    </p>
+                    <button id="enableLocationBtn" class="btn-location">
+                        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                            <circle cx="12" cy="12" r="3"/>
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 2v3m0 14v3M2 12h3m14 0h3"/>
+                        </svg>
+                        Enable My Location
+                    </button>
+                    <p id="locationStatus" style="font-size:0.75rem;color:#64748b;margin-top:0.6rem;min-height:1em;line-height:1.5;"></p>
+                <?php else: ?>
+                    <p style="font-size:0.78rem;color:#64748b;line-height:1.55;margin-bottom:0.85rem;">
+                        Login to enable your location and verify reports.
+                    </p>
+                    <a href="login.php" class="btn-navy mb-2">Login to Verify Reports</a>
+                    <a href="register.php" class="btn-outline">Create a Free Account</a>
+                <?php endif; ?>
+            </div>
         </div>
 
         <!-- ── Sidebar ────────────────────────────── -->
@@ -618,6 +661,24 @@ try {
 
             <!-- Route Filter -->
             <div class="glass-card p-4">
+                <label for="rangeFilter" class="form-label">Reports Time Range</label>
+                <select id="rangeFilter" class="form-select">
+                    <option value="hour" <?= $selectedRange === "hour"
+                        ? "selected"
+                        : "" ?>>Past hour</option>
+                    <option value="day" <?= $selectedRange === "day"
+                        ? "selected"
+                        : "" ?>>Past day</option>
+                    <option value="week" <?= $selectedRange === "week"
+                        ? "selected"
+                        : "" ?>>Past week</option>
+                    <option value="all" <?= $selectedRange === "all"
+                        ? "selected"
+                        : "" ?>>All time</option>
+                </select>
+
+                <hr class="panel-divider">
+
                 <label for="categoryFilter" class="form-label">Choose Category</label>
                 <select id="categoryFilter" class="form-select" <?= !$hasVehicleCategory
                     ? "disabled"
@@ -686,34 +747,6 @@ try {
                 <div id="reportsList" class="flex flex-col gap-2 overflow-y-auto" style="max-height:320px;">
                     <!-- Populated by JS -->
                 </div>
-            </div>
-
-            <!-- Verification Panel -->
-            <div class="glass-card p-4">
-                <div class="sec-eyebrow mb-3">Verification</div>
-                <?php if ($is_logged_in): ?>
-                    <p style="font-size:0.78rem;color:#64748b;line-height:1.55;margin-bottom:0.85rem;">
-                        <strong style="color:var(--navy);">How to verify:</strong><br>
-                        1. Click <em>Enable My Location</em> below.<br>
-                        2. Be within 500m of the report.<br>
-                        3. Click Verify on the map popup.<br>
-                        <em style="color:#94a3b8;">Commuter accounts only.</em>
-                    </p>
-                    <button id="enableLocationBtn" class="btn-location">
-                        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
-                            <circle cx="12" cy="12" r="3"/>
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 2v3m0 14v3M2 12h3m14 0h3"/>
-                        </svg>
-                        Enable My Location
-                    </button>
-                    <p id="locationStatus" style="font-size:0.75rem;color:#64748b;margin-top:0.6rem;min-height:1em;line-height:1.5;"></p>
-                <?php else: ?>
-                    <p style="font-size:0.78rem;color:#64748b;line-height:1.55;margin-bottom:0.85rem;">
-                        Want to verify crowd reports and help the community?
-                    </p>
-                    <a href="login.php" class="btn-navy mb-2">Login to Verify Reports</a>
-                    <a href="register.php" class="btn-outline">Create a Free Account</a>
-                <?php endif; ?>
             </div>
 
         </div><!-- /sidebar -->
@@ -989,8 +1022,17 @@ try {
     addReportMarkers();
 
     /* Route filter */
+    const rangeFilter = document.getElementById('rangeFilter');
     const categoryFilter = document.getElementById('categoryFilter');
     const routeFilter = document.getElementById('routeFilter');
+
+    if (rangeFilter) {
+        rangeFilter.addEventListener('change', function (e) {
+            const url = new URL(window.location);
+            url.searchParams.set('range', e.target.value || 'hour');
+            window.location.href = url.toString();
+        });
+    }
     if (categoryFilter && !categoryFilter.disabled) {
         categoryFilter.addEventListener('change', function (e) {
             const url = new URL(window.location);

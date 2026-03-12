@@ -387,12 +387,12 @@ body {
                     <?php if ($viewerLoggedIn): ?>
                     <a href="user_dashboard.php" class="nav-link">Home</a>
                     <?php endif; ?>
-                    <a href="about.php"       class="nav-link">About</a>
                     <?php if ($viewerLoggedIn): ?>
                     <a href="report.php"      class="nav-link">Submit Report</a>
                     <a href="reports_map.php" class="nav-link">Reports Map</a>
                     <a href="routes.php"      class="nav-link">Routes</a>
                     <?php endif; ?>
+                    <a href="about.php"       class="nav-link">About</a>
                 </div>
                 <div id="mobileMenu"
                      class="md:hidden hidden absolute top-full left-0 right-0 mt-2 flex flex-col gap-1 px-4 py-3 z-20 rounded-2xl"
@@ -400,12 +400,12 @@ body {
                     <?php if ($viewerLoggedIn): ?>
                     <a href="user_dashboard.php" class="nav-link-mobile">Home</a>
                     <?php endif; ?>
-                    <a href="about.php"       class="nav-link-mobile">About</a>
                     <?php if ($viewerLoggedIn): ?>
                     <a href="report.php"      class="nav-link-mobile">Submit Report</a>
                     <a href="reports_map.php" class="nav-link-mobile">Reports Map</a>
                     <a href="routes.php"      class="nav-link-mobile">Routes</a>
                     <?php endif; ?>
+                    <a href="about.php"       class="nav-link-mobile">About</a>
                 </div>
             </div>
 

@@ -491,19 +491,19 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 </a>
                 <div class="hidden md:flex gap-1">
                     <a href="user_dashboard.php" class="nav-link">Home</a>
-                    <a href="about.php"          class="nav-link">About</a>
                     <a href="report.php"         class="nav-link active">Submit Report</a>
                     <a href="reports_map.php"    class="nav-link">Reports Map</a>
                     <a href="routes.php"         class="nav-link">Routes</a>
+                    <a href="about.php"          class="nav-link">About</a>
                 </div>
                 <div id="mobileMenu"
                      class="md:hidden hidden absolute top-full left-0 right-0 mt-2 flex flex-col gap-1 px-4 py-3 z-20 rounded-2xl"
                      style="background:rgba(25,40,74,0.97);backdrop-filter:blur(18px);border:1px solid rgba(255,255,255,0.12);box-shadow:0 8px 32px rgba(15,28,54,0.4);">
                     <a href="user_dashboard.php" class="nav-link-mobile">Home</a>
-                    <a href="about.php"          class="nav-link-mobile">About</a>
                     <a href="report.php"         class="nav-link-mobile active">Submit Report</a>
                     <a href="reports_map.php"    class="nav-link-mobile">Reports Map</a>
                     <a href="routes.php"         class="nav-link-mobile">Routes</a>
+                    <a href="about.php"          class="nav-link-mobile">About</a>
                 </div>
             </div>
 

@@ -376,12 +376,12 @@ if ($is_logged_in && isset($_SESSION["user_id"])) {
                     <a href="<?= $is_logged_in
                         ? "user_dashboard.php"
                         : "index.php" ?>" class="nav-link">Home</a>
-                    <a href="about.php" class="nav-link active">About</a>
                     <?php if ($is_logged_in): ?>
                     <a href="report.php" class="nav-link">Submit Report</a>
                     <?php endif; ?>
                     <a href="reports_map.php" class="nav-link">Reports Map</a>
                     <a href="routes.php" class="nav-link">Routes</a>
+                    <a href="about.php" class="nav-link active">About</a>
                 </div>
                 <!-- Mobile dropdown -->
                 <div id="mobileMenu" class="md:hidden hidden absolute top-full left-0 right-0 mt-2 flex flex-col gap-1 px-4 py-3 z-20 rounded-2xl"
@@ -389,12 +389,12 @@ if ($is_logged_in && isset($_SESSION["user_id"])) {
                     <a href="<?= $is_logged_in
                         ? "user_dashboard.php"
                         : "index.php" ?>" class="nav-link-mobile">Home</a>
-                    <a href="about.php" class="nav-link-mobile active">About</a>
                     <?php if ($is_logged_in): ?>
                     <a href="report.php" class="nav-link-mobile">Submit Report</a>
                     <?php endif; ?>
                     <a href="reports_map.php" class="nav-link-mobile">Reports Map</a>
                     <a href="routes.php" class="nav-link-mobile">Routes</a>
+                    <a href="about.php" class="nav-link-mobile active">About</a>
                 </div>
             </div>
 
