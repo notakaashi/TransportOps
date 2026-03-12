@@ -19,6 +19,14 @@ if ($_SESSION["role"] !== "Admin") {
 $error = "";
 $success = "";
 $routes_with_stops = [];
+$selectedCategory = isset($_GET["category"])
+    ? strtolower(trim((string) $_GET["category"]))
+    : "";
+$allowedCategories = ["tricycle", "jeepney", "rail"];
+if (!in_array($selectedCategory, $allowedCategories, true)) {
+    $selectedCategory = "";
+}
+$hasVehicleCategory = true;
 
 try {
     $pdo = getDBConnection();
@@ -167,10 +175,34 @@ if (!$error) {
         }
     }
 
-    $stmt = $pdo->query(
-        "SELECT id, name, created_at FROM route_definitions ORDER BY name",
-    );
-    $routes_with_stops = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    try {
+        if ($selectedCategory !== "") {
+            $stmt = $pdo->prepare(
+                "SELECT id, name, vehicle_category, created_at
+                 FROM route_definitions
+                 WHERE vehicle_category = ?
+                 ORDER BY name",
+            );
+            $stmt->execute([$selectedCategory]);
+        } else {
+            $stmt = $pdo->query(
+                "SELECT id, name, vehicle_category, created_at FROM route_definitions ORDER BY name",
+            );
+        }
+        $routes_with_stops = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) {
+        // Backwards compatibility if vehicle_category doesn't exist yet
+        $hasVehicleCategory = false;
+        $selectedCategory = "";
+        $stmt = $pdo->query(
+            "SELECT id, name, created_at FROM route_definitions ORDER BY name",
+        );
+        $routes_with_stops = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        foreach ($routes_with_stops as &$rr) {
+            $rr["vehicle_category"] = null;
+        }
+        unset($rr);
+    }
     foreach ($routes_with_stops as &$r) {
         $stmt = $pdo->prepare(
             "SELECT id, stop_name, latitude, longitude, stop_order FROM route_stops WHERE route_definition_id = ? ORDER BY stop_order",
@@ -212,6 +244,41 @@ if (!$error) {
                 <?php endif; ?>
 
                 <?php if (!$error): ?>
+                <!-- Category filter -->
+                <div class="mt-6 glass-card rounded-2xl p-4">
+                    <div class="flex flex-wrap items-end gap-4">
+                        <div class="min-w-[220px]">
+                            <label for="categoryFilter" class="block text-sm font-medium text-gray-700 mb-1">Category</label>
+                            <select id="categoryFilter" class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm" <?= !$hasVehicleCategory
+                                ? "disabled"
+                                : "" ?>>
+                                <option value="" <?= $selectedCategory === ""
+                                    ? "selected"
+                                    : "" ?>>All</option>
+                                <option value="tricycle" <?= $selectedCategory === "tricycle"
+                                    ? "selected"
+                                    : "" ?>>Tricycle</option>
+                                <option value="jeepney" <?= $selectedCategory === "jeepney"
+                                    ? "selected"
+                                    : "" ?>>Jeepney</option>
+                                <option value="rail" <?= $selectedCategory === "rail"
+                                    ? "selected"
+                                    : "" ?>>MRT/LRT</option>
+                            </select>
+                            <?php if (!$hasVehicleCategory): ?>
+                                <p class="text-xs text-gray-500 mt-1">Category filter needs the latest DB update.</p>
+                            <?php endif; ?>
+                        </div>
+                        <div class="text-sm text-gray-500">
+                            Showing <strong class="text-gray-800"><?php echo count(
+                                $routes_with_stops,
+                            ); ?></strong> route<?php echo count($routes_with_stops) === 1
+    ? ""
+    : "s"; ?>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Create new route -->
                 <div class="mt-6 glass-card rounded-2xl p-6">
                     <h3 class="text-xl font-semibold text-gray-800 mb-4">Create new route</h3>
@@ -1017,6 +1084,19 @@ if (!$error) {
             const emptyState = document.getElementById('route-empty-state');
             if (emptyState) emptyState.classList.remove('hidden');
         }
+
+        // Category filter reload
+        (function () {
+            var sel = document.getElementById('categoryFilter');
+            if (!sel || sel.disabled) return;
+            sel.addEventListener('change', function () {
+                var url = new URL(window.location.href);
+                if (sel.value) url.searchParams.set('category', sel.value);
+                else url.searchParams.delete('category');
+                // keep highlight if present
+                window.location.href = url.toString();
+            });
+        })();
     </script>
     <?php include "admin_sidebar_js.php"; ?>
 </body>

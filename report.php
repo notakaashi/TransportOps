@@ -19,12 +19,13 @@ if (!isset($_SESSION["user_id"])) {
 $error = "";
 $success = "";
 $routes_list = [];
+$hasVehicleCategory = true;
 
 // Fetch available routes (from route_definitions with at least one stop)
 try {
     $pdo = getDBConnection();
     $stmt = $pdo->query("
-        SELECT rd.id, rd.name
+        SELECT rd.id, rd.name, rd.vehicle_category
         FROM route_definitions rd
         INNER JOIN (SELECT route_definition_id FROM route_stops GROUP BY route_definition_id) rs ON rs.route_definition_id = rd.id
         ORDER BY rd.name
@@ -43,7 +44,24 @@ try {
         $user_profile_data = ["profile_image" => null];
     }
 } catch (PDOException $e) {
-    error_log("Error fetching routes: " . $e->getMessage());
+    // Backwards compatibility if vehicle_category isn't present yet
+    try {
+        $hasVehicleCategory = false;
+        $pdo = getDBConnection();
+        $stmt = $pdo->query("
+            SELECT rd.id, rd.name
+            FROM route_definitions rd
+            INNER JOIN (SELECT route_definition_id FROM route_stops GROUP BY route_definition_id) rs ON rs.route_definition_id = rd.id
+            ORDER BY rd.name
+        ");
+        $routes_list = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        foreach ($routes_list as &$r) {
+            $r["vehicle_category"] = null;
+        }
+        unset($r);
+    } catch (PDOException $e2) {
+        error_log("Error fetching routes: " . $e2->getMessage());
+    }
     $user_profile_data = ["profile_image" => null];
 }
 
@@ -594,6 +612,26 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
                 <!-- Route -->
                 <div>
+                    <label for="categoryFilter" class="form-label">
+                        Choose Category <span class="opt">(required)</span>
+                    </label>
+                    <select id="categoryFilter" required class="form-select" <?= !$hasVehicleCategory
+                        ? "disabled"
+                        : "" ?>>
+                        <option value="">Please choose a category...</option>
+                        <option value="tricycle">Tricycle</option>
+                        <option value="jeepney">Jeepney</option>
+                        <option value="rail">MRT/LRT</option>
+                    </select>
+                    <?php if (!$hasVehicleCategory): ?>
+                        <p style="font-size:0.8rem;color:#d97706;margin-top:0.4rem;">
+                            Category filter is unavailable until the latest DB update is applied.
+                        </p>
+                    <?php endif; ?>
+                </div>
+
+                <!-- Route -->
+                <div>
                     <label for="route_definition_id" class="form-label">
                         Choose a Route <span class="opt">(required)</span>
                     </label>
@@ -601,6 +639,9 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                         <option value="">Please choose a route...</option>
                         <?php foreach ($routes_list as $r): ?>
                             <option value="<?= (int) $r["id"] ?>"
+                                    data-category="<?= htmlspecialchars(
+                                        (string) ($r["vehicle_category"] ?? ""),
+                                    ) ?>"
                                     data-route="<?= htmlspecialchars(
                                         $r["name"],
                                     ) ?>">
@@ -786,10 +827,13 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
     /* ── Form Validation ── */
     function validateForm() {
+        var cat        = document.getElementById('categoryFilter');
+        var catVal     = cat && !cat.disabled ? cat.value : '';
         var routeId    = document.getElementById('route_definition_id').value;
         var crowdLevel = document.querySelector('input[name="crowd_level"]:checked');
         var lat        = document.getElementById('latitude').value;
         var lng        = document.getElementById('longitude').value;
+        if (cat && !cat.disabled && !catVal) { alert('Please select a category.'); return false; }
         if (!routeId)    { alert('Please select a route.');          return false; }
         if (!crowdLevel) { alert('Please select a crowd level.');     return false; }
         if (!lat || !lng){ alert('Please set your location on the map or use the GPS button.'); return false; }
@@ -888,6 +932,30 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             .then(function (res) { return res.json(); })
             .then(function (data) { window.reportPageRoutes = data.routes || []; })
             .catch(function () { window.reportPageRoutes = []; });
+
+        function filterRoutesByCategory(category) {
+            var sel = document.getElementById('route_definition_id');
+            if (!sel) return;
+            // reset route selection whenever category changes
+            sel.value = '';
+            // hide/show options
+            Array.prototype.forEach.call(sel.options, function (opt) {
+                if (!opt.value) return; // keep placeholder
+                var optCat = (opt.getAttribute('data-category') || '').toLowerCase();
+                opt.hidden = category ? (optCat !== category) : true;
+            });
+        }
+
+        var categorySel = document.getElementById('categoryFilter');
+        if (categorySel && !categorySel.disabled) {
+            categorySel.addEventListener('change', function () {
+                var cat = (this.value || '').toLowerCase();
+                filterRoutesByCategory(cat);
+                if (routeLayer) { map.removeLayer(routeLayer); routeLayer = null; }
+            });
+            // Start with no routes shown until category chosen
+            filterRoutesByCategory('');
+        }
 
         document.getElementById('route_definition_id').addEventListener('change', function () {
             var opt = this.options[this.selectedIndex];

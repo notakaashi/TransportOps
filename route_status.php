@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 /**
  * Route Status Overview
  * Displays routes from route_definitions with report counts. Select a route to edit or delete.
@@ -20,14 +20,47 @@ if ($_SESSION["role"] !== "Admin") {
 $routes = [];
 $delayed_route_ids = [];
 $selected_route_id = isset($_GET["route_id"]) ? (int) $_GET["route_id"] : null;
+$delay_window_minutes = 60; // how long a delay keeps a route "Delayed"
+$selectedCategory = isset($_GET["category"])
+    ? strtolower(trim((string) $_GET["category"]))
+    : "";
+$allowedCategories = ["tricycle", "jeepney", "rail"];
+if (!in_array($selectedCategory, $allowedCategories, true)) {
+    $selectedCategory = "";
+}
+$hasVehicleCategory = true;
 
 try {
     $pdo = getDBConnection();
 
-    $stmt = $pdo->query(
-        "SELECT id, name, created_at FROM route_definitions ORDER BY name",
-    );
-    $routes = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    try {
+        if ($selectedCategory !== "") {
+            $stmt = $pdo->prepare(
+                "SELECT id, name, vehicle_category, created_at
+                 FROM route_definitions
+                 WHERE vehicle_category = ?
+                 ORDER BY name",
+            );
+            $stmt->execute([$selectedCategory]);
+        } else {
+            $stmt = $pdo->query(
+                "SELECT id, name, vehicle_category, created_at FROM route_definitions ORDER BY name",
+            );
+        }
+        $routes = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) {
+        // Backwards compatibility if vehicle_category doesn't exist yet
+        $hasVehicleCategory = false;
+        $selectedCategory = "";
+        $stmt = $pdo->query(
+            "SELECT id, name, created_at FROM route_definitions ORDER BY name",
+        );
+        $routes = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        foreach ($routes as &$rr) {
+            $rr["vehicle_category"] = null;
+        }
+        unset($rr);
+    }
 
     foreach ($routes as &$r) {
         $rid = (int) $r["id"];
@@ -50,9 +83,9 @@ try {
         $stmt = $pdo->prepare("
             SELECT COUNT(*) as c FROM reports
             WHERE route_definition_id = ? AND delay_reason IS NOT NULL AND delay_reason != ''
-            AND timestamp >= DATE_SUB(NOW(), INTERVAL 1 HOUR)
+            AND timestamp >= DATE_SUB(NOW(), INTERVAL ? MINUTE)
         ");
-        $stmt->execute([$rid]);
+        $stmt->execute([$rid, $delay_window_minutes]);
         $r["delayed_count"] = (int) $stmt->fetchColumn();
     }
     unset($r);
@@ -61,7 +94,8 @@ try {
         SELECT route_definition_id, COUNT(*) as delayed_count
         FROM reports
         WHERE route_definition_id IS NOT NULL AND delay_reason IS NOT NULL AND delay_reason != ''
-        AND timestamp >= DATE_SUB(NOW(), INTERVAL 1 HOUR)
+        AND timestamp >= DATE_SUB(NOW(), INTERVAL {$delay_window_minutes} MINUTE)
+        GROUP BY route_definition_id
     ");
     $delayed_route_ids = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
 } catch (PDOException $e) {
@@ -92,6 +126,37 @@ try {
 
                 <!-- Route selector -->
                 <div class="mb-6 glass-card rounded-2xl p-4">
+                    <div class="flex flex-wrap items-end justify-between gap-3 mb-3">
+                        <div class="min-w-[220px]">
+                            <label for="categoryFilter" class="block text-sm font-medium text-[#1e3a8a] mb-2">Category</label>
+                            <select id="categoryFilter" class="px-4 py-2 border border-[#d1d5db] rounded-md focus:ring-[#fbbf24] focus:border-[#fbbf24] text-sm w-full" <?= !$hasVehicleCategory
+                                ? "disabled"
+                                : "" ?>>
+                                <option value="" <?= $selectedCategory === ""
+                                    ? "selected"
+                                    : "" ?>>All</option>
+                                <option value="tricycle" <?= $selectedCategory === "tricycle"
+                                    ? "selected"
+                                    : "" ?>>Tricycle</option>
+                                <option value="jeepney" <?= $selectedCategory === "jeepney"
+                                    ? "selected"
+                                    : "" ?>>Jeepney</option>
+                                <option value="rail" <?= $selectedCategory === "rail"
+                                    ? "selected"
+                                    : "" ?>>MRT/LRT</option>
+                            </select>
+                            <?php if (!$hasVehicleCategory): ?>
+                                <p class="text-xs text-[#64748b] mt-1">Category filter needs the latest DB update.</p>
+                            <?php endif; ?>
+                        </div>
+                        <div class="text-sm text-[#64748b]">
+                            Showing <strong class="text-[#1e3a8a]"><?php echo count(
+                                $routes,
+                            ); ?></strong> route<?php echo count($routes) === 1
+    ? ""
+    : "s"; ?>
+                        </div>
+                    </div>
                     <label for="routeSelect" class="block text-sm font-medium text-[#1e3a8a] mb-2">Select a route to edit or delete</label>
                     <div class="flex flex-wrap items-center gap-3">
                         <select id="routeSelect" class="px-4 py-2 border border-[#d1d5db] rounded-md focus:ring-[#fbbf24] focus:border-[#fbbf24] text-sm">
@@ -175,7 +240,7 @@ try {
                                     <?php if ($has_delays): ?>
                                         <div class="pt-3 border-t border-[#e5e7eb]">
                                             <div class="flex justify-between items-center">
-                                                <span class="text-sm text-red-600 font-medium">Delays (last hour)</span>
+                                                <span class="text-sm text-red-600 font-medium">Delays (last <?php echo (int) ($delay_window_minutes / 60); ?> hours)</span>
                                                 <span class="font-semibold text-red-600"><?php echo $delayed_count; ?></span>
                                             </div>
                                         </div>
@@ -220,10 +285,27 @@ try {
                 }
             }
             sel.addEventListener('change', function() {
-                if (sel.value) window.location = 'route_status.php?route_id=' + sel.value;
+                if (sel.value) {
+                    var url = new URL(window.location.href);
+                    url.searchParams.set('route_id', sel.value);
+                    window.location = url.toString();
+                }
                 update();
             });
             update();
+        })();
+
+        (function () {
+            var sel = document.getElementById('categoryFilter');
+            if (!sel || sel.disabled) return;
+            sel.addEventListener('change', function () {
+                var url = new URL(window.location.href);
+                if (sel.value) url.searchParams.set('category', sel.value);
+                else url.searchParams.delete('category');
+                // reset selected route when changing category
+                url.searchParams.delete('route_id');
+                window.location = url.toString();
+            });
         })();
 
         (function () {

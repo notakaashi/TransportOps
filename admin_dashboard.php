@@ -28,6 +28,9 @@ $recent_reports = [];
 $users_data = [];
 $delay_trends = [];
 $peak_hours = [];
+$hourly_trends = [];
+$top_report_hour = null;
+$top_delay_hour = null;
 
 // Initialize today counts for metrics
 $today_reports = 0;
@@ -176,6 +179,41 @@ try {
         error_log("Peak hours query failed: " . $e->getMessage());
         $peak_hours = [];
     }
+
+    // Hourly trends (last 7 days): which hour gets most reports / delays
+    try {
+        $stmt = $pdo->query("
+            SELECT
+                HOUR(`timestamp`) AS hour,
+                COUNT(*) AS total_reports,
+                SUM(CASE WHEN delay_reason IS NOT NULL AND delay_reason != '' THEN 1 ELSE 0 END) AS total_delays
+            FROM reports
+            WHERE `timestamp` >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+            GROUP BY HOUR(`timestamp`)
+            ORDER BY hour ASC
+        ");
+        $hourly_trends = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $maxReports = 0;
+        $maxDelays = 0;
+        foreach ($hourly_trends as $row) {
+            $rep = (int) ($row["total_reports"] ?? 0);
+            $del = (int) ($row["total_delays"] ?? 0);
+            if ($rep > $maxReports) {
+                $maxReports = $rep;
+                $top_report_hour = (int) $row["hour"];
+            }
+            if ($del > $maxDelays) {
+                $maxDelays = $del;
+                $top_delay_hour = (int) $row["hour"];
+            }
+        }
+    } catch (Exception $e) {
+        error_log("Hourly trends query failed: " . $e->getMessage());
+        $hourly_trends = [];
+        $top_report_hour = null;
+        $top_delay_hour = null;
+    }
 } catch (PDOException $e) {
     error_log("Dashboard error: " . $e->getMessage());
 }
@@ -222,6 +260,15 @@ function getInitials($name)
         return strtoupper(substr($parts[0], 0, 1) . substr($parts[1], 0, 1));
     }
     return strtoupper(substr($name, 0, 2));
+}
+
+function formatHourRangeLabel($hour)
+{
+    $h = (int) $hour;
+    $start = date("g A", strtotime(sprintf("%02d:00", $h)));
+    $endHour = ($h + 1) % 24;
+    $end = date("g A", strtotime(sprintf("%02d:00", $endHour)));
+    return $start . "–" . $end;
 }
 ?>
 <!DOCTYPE html>
@@ -1114,6 +1161,97 @@ function getInitials($name)
                         </div>
                     </div>
                 </div>
+            </div>
+        </div>
+
+        <!-- ── View Trend: Hourly Reports/Delays ───────────── -->
+        <div class="card">
+            <div class="card-header">
+                <div class="card-title-wrap">
+                    <div class="card-icon ci-purple">
+                        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                    </div>
+                    <span class="card-title">View Trend — Peak Hours (Last 7 Days)</span>
+                </div>
+                <span style="font-size:0.78rem;color:#64748b;font-weight:600;">
+                    <?php if ($top_delay_hour !== null): ?>
+                        Most delays: <strong style="color:#1e293b;"><?php echo htmlspecialchars(
+                            formatHourRangeLabel($top_delay_hour),
+                        ); ?></strong>
+                    <?php else: ?>
+                        No trend data yet
+                    <?php endif; ?>
+                </span>
+            </div>
+            <div class="card-body">
+                <?php if (empty($hourly_trends)): ?>
+                    <div style="color:#94a3b8;font-size:0.86rem;">Not enough reports yet to calculate hourly trends.</div>
+                <?php else: ?>
+                    <?php
+                    $maxRep = 0;
+                    $maxDel = 0;
+                    foreach ($hourly_trends as $r) {
+                        $maxRep = max($maxRep, (int) ($r["total_reports"] ?? 0));
+                        $maxDel = max($maxDel, (int) ($r["total_delays"] ?? 0));
+                    }
+                    ?>
+                    <div style="overflow-x:auto;">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Hour</th>
+                                    <th>Reports</th>
+                                    <th>Delays</th>
+                                    <th>Delay hotspot</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($hourly_trends as $row): ?>
+                                    <?php
+                                    $hour = (int) ($row["hour"] ?? 0);
+                                    $rep = (int) ($row["total_reports"] ?? 0);
+                                    $del = (int) ($row["total_delays"] ?? 0);
+                                    $repPct = $maxRep > 0 ? round(($rep / $maxRep) * 100) : 0;
+                                    $delPct = $maxDel > 0 ? round(($del / $maxDel) * 100) : 0;
+                                    $isHot = $top_delay_hour !== null && $hour === (int) $top_delay_hour && $del > 0;
+                                    ?>
+                                    <tr>
+                                        <td style="font-weight:700;color:#1e293b;white-space:nowrap;">
+                                            <?php echo htmlspecialchars(formatHourRangeLabel($hour)); ?>
+                                        </td>
+                                        <td style="min-width:220px;">
+                                            <div style="display:flex;align-items:center;justify-content:space-between;gap:0.75rem;">
+                                                <span style="font-weight:700;"><?php echo $rep; ?></span>
+                                                <span style="font-size:0.75rem;color:#94a3b8;"><?php echo $repPct; ?>%</span>
+                                            </div>
+                                            <div class="bar-track"><div class="bar-fill bar-orange" style="width: <?php echo $repPct; ?>%;"></div></div>
+                                        </td>
+                                        <td style="min-width:220px;">
+                                            <div style="display:flex;align-items:center;justify-content:space-between;gap:0.75rem;">
+                                                <span style="font-weight:700;"><?php echo $del; ?></span>
+                                                <span style="font-size:0.75rem;color:#94a3b8;"><?php echo $delPct; ?>%</span>
+                                            </div>
+                                            <div class="bar-track"><div class="bar-fill bar-red" style="width: <?php echo $delPct; ?>%;"></div></div>
+                                        </td>
+                                        <td>
+                                            <?php if ($isHot): ?>
+                                                <span class="badge badge-heavy"><span class="badge-dot"></span>Hotspot</span>
+                                            <?php else: ?>
+                                                <span style="color:#94a3b8;font-size:0.82rem;">—</span>
+                                            <?php endif; ?>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div style="margin-top:0.85rem;color:#64748b;font-size:0.78rem;line-height:1.5;">
+                        <strong style="color:#1e293b;">How to read:</strong>
+                        Reports = volume of uploads in that hour. Delays = reports with a delay reason. “Hotspot” marks the hour with the most delays.
+                    </div>
+                <?php endif; ?>
             </div>
         </div>
 
