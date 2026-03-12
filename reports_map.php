@@ -994,7 +994,10 @@ try {
                 ? `<a href="login.php" style="display:inline-block;margin-top:0.4rem;padding:0.3rem 0.7rem;font-size:0.72rem;background:#22335C;color:#fff;border-radius:0.4rem;text-decoration:none;font-weight:700;">Login to verify</a>`
                 : (userRole === 'Commuter')
                     ? (canVerify
-                        ? `<button data-report-id="${r.id}" class="verify-btn" style="margin-top:0.4rem;padding:0.3rem 0.7rem;font-size:0.72rem;background:#FBC061;color:#0f1c36;border-radius:0.4rem;border:none;cursor:pointer;font-weight:700;">Verify (${distance.toFixed(1)}km away)</button>`
+                        ? `<div style="display:flex; gap:0.5rem; margin-top:0.4rem;">
+                               <button data-report-id="${r.id}" class="verify-btn" style="flex:1;padding:0.3rem 0.7rem;font-size:0.72rem;background:#FBC061;color:#0f1c36;border-radius:0.4rem;border:none;cursor:pointer;font-weight:700;">Verify</button>
+                               <button data-report-id="${r.id}" class="reject-btn" style="flex:1;padding:0.3rem 0.7rem;font-size:0.72rem;background:#fee2e2;color:#991b1b;border-radius:0.4rem;border:none;cursor:pointer;font-weight:700;">Reject</button>
+                           </div>`
                         : (userLocation
                             ? `<span style="font-size:0.72rem;color:#94a3b8;margin-top:0.3rem;display:block;">Too far (${distance.toFixed(1)}km — must be &lt;0.5km)</span>`
                             : `<span style="font-size:0.72rem;color:#d97706;margin-top:0.3rem;display:block;">Enable location to verify</span>`))
@@ -1132,6 +1135,40 @@ try {
     }
 
     document.addEventListener('click', async function (e) {
+        if (e.target.classList.contains('reject-btn')) {
+            const btn = e.target;
+            const reportId = btn.getAttribute('data-report-id');
+            try {
+                btn.disabled = true;
+                btn.style.opacity = '0.85';
+                btn.textContent = 'Rejecting…';
+                const res = await fetch('reject_report.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ report_id: reportId }),
+                    credentials: 'same-origin'
+                });
+                const data = await res.json();
+                if (!res.ok || !data.success) {
+                    showToast('error', 'Rejection failed', (data && data.error) ? data.error : 'Please try again.', 5200);
+                    btn.disabled = false;
+                    btn.style.opacity = '';
+                    btn.textContent = 'Reject';
+                    return;
+                }
+                showToast('success', 'Report Rejected', `You have successfully rejected the report. Rejections: ${data.rejections}/3.`, { timeoutMs: 0, onClose: () => window.location.reload() });
+                btn.textContent = 'Rejected';
+            } catch (err) {
+                console.error(err);
+                showToast('error', 'Something went wrong', 'An error occurred while rejecting. Please try again.', 5200);
+                if (e.target) {
+                    e.target.disabled = false;
+                    e.target.style.opacity = '';
+                    e.target.textContent = 'Reject';
+                }
+            }
+        }
+
         if (!e.target.classList.contains('verify-btn')) return;
         if (!userLocation) { showToast('info', 'Enable location', 'Turn on your location to verify reports within 500m.', 4500); return; }
         const btn = e.target;

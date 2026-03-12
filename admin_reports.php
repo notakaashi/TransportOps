@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 require_once "auth_helper.php";
 secureSessionStart();
 require_once "db.php";
@@ -345,20 +345,25 @@ try {
                                                     </span>
                                                 </td>
                                                 <td>
-                                                    <?php $verified =
-                                                        (int) $report[
-                                                            "is_verified"
-                                                        ] === 1; ?>
-                                                    <span class="abadge <?php echo $verified
-                                                        ? "abadge-verified"
-                                                        : "abadge-unverified"; ?>">
-                                                        <?php echo $verified
-                                                            ? "Verified"
-                                                            : "Pending"; ?>
+                                                    <?php 
+                                                        $verified = (int) $report["is_verified"] === 1;
+                                                        $status = $report['status'];
+                                                        $statusClass = 'abadge-unverified';
+                                                        if ($status === 'verified') {
+                                                            $statusClass = 'abadge-verified';
+                                                        } else if ($status === 'rejected') {
+                                                            $statusClass = 'abadge-heavy';
+                                                        }
+                                                    ?>
+                                                    <span class="abadge <?php echo $statusClass; ?>">
+                                                        <?php echo ucfirst($status); ?>
                                                     </span>
-                                                    <div style="font-size:0.7rem;color:#94a3b8;margin-top:2px;"><?php echo (int) ($report[
-                                                        "peer_verifications"
-                                                    ] ?? 0); ?>/3</div>
+                                                    <div style="font-size:0.7rem;color:#94a3b8;margin-top:2px;">
+                                                        Verifications: <?php echo (int) ($report["peer_verifications"] ?? 0); ?>/3
+                                                    </div>
+                                                    <div style="font-size:0.7rem;color:#94a3b8;margin-top:2px;">
+                                                        Rejections: <?php echo (int) ($report["rejections"] ?? 0); ?>/3
+                                                    </div>
                                                 </td>
                                                 <td>
                                                     <?php if (
