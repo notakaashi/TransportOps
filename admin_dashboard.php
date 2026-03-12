@@ -1003,11 +1003,19 @@ function formatHourRangeLabel($hour)
                     $_SESSION["user_name"],
                 ); ?> — here's what's happening today.</p>
             </div>
-            <div class="date-chip">
-                <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
-                </svg>
-                <span id="liveDateChip"><?php echo date("M d, Y"); ?></span>
+            <div style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;">
+                <a href="admin_export_analytics.php" class="btn-primary" title="Download a PDF summary of the dashboard analytics">
+                    <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v10m0 0l3-3m-3 3l-3-3M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"/>
+                    </svg>
+                    Export Analytics (PDF)
+                </a>
+                <div class="date-chip">
+                    <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                    </svg>
+                    <span id="liveDateChip"><?php echo date("M d, Y"); ?></span>
+                </div>
             </div>
         </div>
 
