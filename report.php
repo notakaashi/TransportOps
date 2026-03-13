@@ -433,6 +433,26 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         .crowd-card.active-moderate .crowd-dot-moderate { background: #ca8a04; }
         .crowd-card.active-heavy    .crowd-dot-heavy    { background: #dc2626; }
 
+        .crowd-name { font-size: 0.9rem; font-weight: 700; }
+        .crowd-desc { font-size: 0.75rem; color: #64748b; margin-top: 0.5rem; }
+
+        @media (max-width: 480px) {
+            .crowd-card {
+                padding: 0.7rem 0.4rem 0.6rem;
+                min-height: unset;
+            }
+            .crowd-dot {
+                width: 9px; height: 9px;
+            }
+            .crowd-name {
+                font-size: 0.7rem;
+            }
+            .crowd-desc {
+                font-size: 0.65rem;
+                margin-top: 0.3rem;
+            }
+        }
+
         /* ── Location Panel ───────────────────────────────── */
         .location-panel {
             background: rgba(34,51,92,0.04);
@@ -699,29 +719,29 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
                         <label class="crowd-card" id="card-light" for="cl-light">
                             <input type="radio" name="crowd_level" value="Light" required id="cl-light">
-                            <div class="flex items-center gap-2">
+                            <div class="flex items-center gap-1">
                                 <span class="crowd-dot crowd-dot-light" style="color:#16a34a;"></span>
-                                <span style="font-weight:700;color:#16a34a;font-size:0.9rem;">Light</span>
+                                <span class="crowd-name" style="color:#16a34a;">Light</span>
                             </div>
-                            <div style="font-size:0.75rem;color:#64748b;margin-top:0.5rem;">Comfortable seating</div>
+                            <div class="crowd-desc">Comfortable seating</div>
                         </label>
 
                         <label class="crowd-card" id="card-moderate" for="cl-moderate">
                             <input type="radio" name="crowd_level" value="Moderate" required id="cl-moderate">
-                            <div class="flex items-center gap-2">
+                            <div class="flex items-center gap-1">
                                 <span class="crowd-dot crowd-dot-moderate" style="color:#ca8a04;"></span>
-                                <span style="font-weight:700;color:#ca8a04;font-size:0.9rem;">Moderate</span>
+                                <span class="crowd-name" style="color:#ca8a04;">Moderate</span>
                             </div>
-                            <div style="font-size:0.75rem;color:#64748b;margin-top:0.5rem;">Limited seating</div>
+                            <div class="crowd-desc">Limited seating</div>
                         </label>
 
                         <label class="crowd-card" id="card-heavy" for="cl-heavy">
                             <input type="radio" name="crowd_level" value="Heavy" required id="cl-heavy">
-                            <div class="flex items-center gap-2">
+                            <div class="flex items-center gap-1">
                                 <span class="crowd-dot crowd-dot-heavy" style="color:#dc2626;"></span>
-                                <span style="font-weight:700;color:#dc2626;font-size:0.9rem;">Heavy</span>
+                                <span class="crowd-name" style="color:#dc2626;">Heavy</span>
                             </div>
-                            <div style="font-size:0.75rem;color:#64748b;margin-top:0.5rem;">Crowded</div>
+                            <div class="crowd-desc">Crowded</div>
                         </label>
 
                     </div>
@@ -989,17 +1009,46 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             .then(function (data) { window.reportPageRoutes = data.routes || []; })
             .catch(function () { window.reportPageRoutes = []; });
 
+        // Cache all route options once on page load so we can rebuild the list
+        var routeSelect = document.getElementById('route_definition_id');
+        var _allRouteOptions = [];
+        if (routeSelect) {
+            Array.prototype.forEach.call(routeSelect.options, function (opt) {
+                if (!opt.value) return; // skip placeholder
+                _allRouteOptions.push({
+                    value: opt.value,
+                    text:  opt.text,
+                    category: (opt.getAttribute('data-category') || '').toLowerCase(),
+                    route:    opt.getAttribute('data-route') || ''
+                });
+            });
+        }
+
         function filterRoutesByCategory(category) {
             var sel = document.getElementById('route_definition_id');
             if (!sel) return;
-            // reset route selection whenever category changes
+
+            // Reset current selection and clear map
             sel.value = '';
-            // hide/show options
-            Array.prototype.forEach.call(sel.options, function (opt) {
-                if (!opt.value) return; // keep placeholder
-                var optCat = (opt.getAttribute('data-category') || '').toLowerCase();
-                opt.hidden = category ? (optCat !== category) : true;
-            });
+
+            // Remove every option except the placeholder (index 0)
+            while (sel.options.length > 1) {
+                sel.remove(1);
+            }
+
+            // Re-add only the options that match the chosen category
+            if (category) {
+                _allRouteOptions.forEach(function (data) {
+                    if (data.category === category) {
+                        var opt = document.createElement('option');
+                        opt.value = data.value;
+                        opt.text  = data.text;
+                        opt.setAttribute('data-category', data.category);
+                        opt.setAttribute('data-route',    data.route);
+                        sel.appendChild(opt);
+                    }
+                });
+            }
         }
 
         var categorySel = document.getElementById('categoryFilter');

@@ -58,7 +58,6 @@ $top_delay_hour = null;
 try {
     $pdo = getDBConnection();
 
-    /* reports & delays filtered to the selected range */
     $s = $pdo->prepare(
         "SELECT COUNT(*) FROM reports WHERE DATE(timestamp) BETWEEN ? AND ?",
     );
@@ -72,7 +71,6 @@ try {
     $s->execute([$date_from, $date_to]);
     $active_delays = (int) $s->fetchColumn();
 
-    /* users and routes are system-wide totals */
     $total_users = (int) $pdo
         ->query("SELECT COUNT(*) FROM users")
         ->fetchColumn();
@@ -84,13 +82,11 @@ try {
         $total_routes = 0;
     }
 
-    /* ── reports-over-time: dynamic grouping based on range length ── */
     $start_dt = new DateTime($date_from);
     $end_dt = new DateTime($date_to);
     $diff_days = (int) $start_dt->diff($end_dt)->days + 1;
 
     if ($diff_days <= 31) {
-        /* daily */
         $range_chart_label = "Reports Per Day";
         for ($d = clone $start_dt; $d <= $end_dt; $d->modify("+1 day")) {
             $dayStr = $d->format("Y-m-d");
@@ -103,17 +99,16 @@ try {
                 "count" => (int) $s->fetchColumn(),
             ];
         }
+        // Limit to last 30 days to prevent chart overcrowding
+        if (count($reports_over_time) > 30) {
+            $reports_over_time = array_slice($reports_over_time, -30);
+        }
     } elseif ($diff_days <= 180) {
-        /* weekly */
         $range_chart_label = "Reports Per Week";
         $s = $pdo->prepare(
-            "SELECT YEARWEEK(timestamp, 1) AS wk,
-                    MIN(DATE(timestamp)) AS wk_start,
-                    COUNT(*) AS cnt
-             FROM reports
-             WHERE DATE(timestamp) BETWEEN ? AND ?
-             GROUP BY YEARWEEK(timestamp, 1)
-             ORDER BY wk",
+            "SELECT YEARWEEK(timestamp,1) AS wk, MIN(DATE(timestamp)) AS wk_start, COUNT(*) AS cnt
+             FROM reports WHERE DATE(timestamp) BETWEEN ? AND ?
+             GROUP BY YEARWEEK(timestamp,1) ORDER BY wk",
         );
         $s->execute([$date_from, $date_to]);
         foreach ($s->fetchAll(PDO::FETCH_ASSOC) as $wr) {
@@ -122,16 +117,16 @@ try {
                 "count" => (int) $wr["cnt"],
             ];
         }
+        // Limit to last 26 weeks to prevent chart overcrowding
+        if (count($reports_over_time) > 26) {
+            $reports_over_time = array_slice($reports_over_time, -26);
+        }
     } else {
-        /* monthly */
         $range_chart_label = "Reports Per Month";
         $s = $pdo->prepare(
-            "SELECT DATE_FORMAT(timestamp, '%Y-%m') AS mo,
-                    COUNT(*) AS cnt
-             FROM reports
-             WHERE DATE(timestamp) BETWEEN ? AND ?
-             GROUP BY DATE_FORMAT(timestamp, '%Y-%m')
-             ORDER BY mo",
+            "SELECT DATE_FORMAT(timestamp,'%Y-%m') AS mo, COUNT(*) AS cnt
+             FROM reports WHERE DATE(timestamp) BETWEEN ? AND ?
+             GROUP BY DATE_FORMAT(timestamp,'%Y-%m') ORDER BY mo",
         );
         $s->execute([$date_from, $date_to]);
         foreach ($s->fetchAll(PDO::FETCH_ASSOC) as $mr) {
@@ -140,15 +135,18 @@ try {
                 "count" => (int) $mr["cnt"],
             ];
         }
+        // Limit to last 24 months to prevent chart overcrowding
+        if (count($reports_over_time) > 24) {
+            $reports_over_time = array_slice($reports_over_time, -24);
+        }
     }
 
-    /* recent reports in range */
     $s = $pdo->prepare(
         'SELECT r.crowd_level, r.delay_reason, r.timestamp,
                 u.name AS user_name, u.role AS user_role,
                 rd.name AS route_name
          FROM reports r
-         LEFT JOIN users u  ON r.user_id = u.id
+         LEFT JOIN users u  ON r.user_id  = u.id
          LEFT JOIN route_definitions rd ON r.route_definition_id = rd.id
          WHERE DATE(r.timestamp) BETWEEN ? AND ?
          ORDER BY r.timestamp DESC LIMIT 12',
@@ -156,31 +154,23 @@ try {
     $s->execute([$date_from, $date_to]);
     $recent_reports = $s->fetchAll(PDO::FETCH_ASSOC);
 
-    /* delay trends in range */
     $s = $pdo->prepare(
-        'SELECT COALESCE(NULLIF(delay_reason,""),"Unspecified") AS delay_reason,
-                COUNT(*) AS count
-         FROM reports
-         WHERE DATE(timestamp) BETWEEN ? AND ?
-         GROUP BY delay_reason
-         ORDER BY count DESC LIMIT 7',
+        'SELECT COALESCE(NULLIF(delay_reason,""),"Unspecified") AS delay_reason, COUNT(*) AS count
+         FROM reports WHERE DATE(timestamp) BETWEEN ? AND ?
+         GROUP BY delay_reason ORDER BY count DESC LIMIT 7',
     );
     $s->execute([$date_from, $date_to]);
     $delay_trends = $s->fetchAll(PDO::FETCH_ASSOC);
 
-    /* hourly trends in range */
     $s = $pdo->prepare(
         'SELECT HOUR(timestamp) AS hour,
                 COUNT(*) AS total_reports,
                 SUM(CASE WHEN delay_reason IS NOT NULL AND delay_reason != "" THEN 1 ELSE 0 END) AS total_delays
-         FROM reports
-         WHERE DATE(timestamp) BETWEEN ? AND ?
-         GROUP BY HOUR(timestamp)
-         ORDER BY hour',
+         FROM reports WHERE DATE(timestamp) BETWEEN ? AND ?
+         GROUP BY HOUR(timestamp) ORDER BY hour',
     );
     $s->execute([$date_from, $date_to]);
     $rows = $s->fetchAll(PDO::FETCH_ASSOC);
-
     $maxDel = 0;
     foreach ($rows as $r) {
         $d = (int) ($r["total_delays"] ?? 0);
@@ -189,24 +179,25 @@ try {
             $top_delay_hour = (int) $r["hour"];
         }
     }
-    $hourly_trends = $rows;
+    // Limit hourly trends to prevent excessive pages
+    $hourly_trends = array_slice($rows, 0, 24); // Max 24 hours
 } catch (PDOException $e) {
     die("DB error: " . htmlspecialchars($e->getMessage()));
 }
 
 /* ══════════════════════════════════════════════════
-   FPDF subclass
+   FPDF subclass  –  clean, simplified design
    ══════════════════════════════════════════════════ */
 class AnalyticsPDF extends FPDF
 {
-    /* palette */
+    /* ── palette ── */
     const NAVY = [33, 51, 92];
     const GOLD = [251, 192, 97];
     const SLATE = [91, 123, 153];
     const WHITE = [255, 255, 255];
     const DARK = [30, 41, 59];
     const MUTED = [100, 116, 139];
-    const LIGHT = [237, 240, 247];
+    const LIGHT = [241, 244, 248];
     const GREEN = [22, 163, 74];
     const RED = [220, 38, 38];
     const PURPLE = [124, 58, 237];
@@ -216,181 +207,37 @@ class AnalyticsPDF extends FPDF
     public string $reportDate = "";
     public string $adminName = "";
 
-    /* ── filled circle ── */
-    public function FilledCircle(float $cx, float $cy, float $r): void
-    {
-        $k = $this->k;
-        $hp = $this->h;
-        $c = (4 / 3) * (sqrt(2) - 1) * $r;
-        $this->_out(sprintf("%.2F %.2F m", ($cx + $r) * $k, ($hp - $cy) * $k));
-        $this->_out(
-            sprintf(
-                "%.2F %.2F %.2F %.2F %.2F %.2F c",
-                ($cx + $r) * $k,
-                ($hp - ($cy - $c)) * $k,
-                ($cx + $c) * $k,
-                ($hp - ($cy - $r)) * $k,
-                $cx * $k,
-                ($hp - ($cy - $r)) * $k,
-            ),
-        );
-        $this->_out(
-            sprintf(
-                "%.2F %.2F %.2F %.2F %.2F %.2F c",
-                ($cx - $c) * $k,
-                ($hp - ($cy - $r)) * $k,
-                ($cx - $r) * $k,
-                ($hp - ($cy - $c)) * $k,
-                ($cx - $r) * $k,
-                ($hp - $cy) * $k,
-            ),
-        );
-        $this->_out(
-            sprintf(
-                "%.2F %.2F %.2F %.2F %.2F %.2F c",
-                ($cx - $r) * $k,
-                ($hp - ($cy + $c)) * $k,
-                ($cx - $c) * $k,
-                ($hp - ($cy + $r)) * $k,
-                $cx * $k,
-                ($hp - ($cy + $r)) * $k,
-            ),
-        );
-        $this->_out(
-            sprintf(
-                "%.2F %.2F %.2F %.2F %.2F %.2F c f",
-                ($cx + $c) * $k,
-                ($hp - ($cy + $r)) * $k,
-                ($cx + $r) * $k,
-                ($hp - ($cy + $c)) * $k,
-                ($cx + $r) * $k,
-                ($hp - $cy) * $k,
-            ),
-        );
-    }
-
-    /* ── rounded rectangle ── */
-    public function RoundedRect(
-        float $x,
-        float $y,
-        float $w,
-        float $h,
-        float $r,
-        string $style = "",
-    ): void {
-        $op = match ($style) {
-            "F" => "f",
-            "FD", "DF" => "B",
-            default => "S",
-        };
-        $k = $this->k;
-        $hp = $this->h;
-        $c = (4 / 3) * (sqrt(2) - 1);
-        $this->_out(sprintf("%.2F %.2F m", ($x + $r) * $k, ($hp - $y) * $k));
-        $this->_out(
-            sprintf("%.2F %.2F l", ($x + $w - $r) * $k, ($hp - $y) * $k),
-        );
-        $this->_out(
-            sprintf(
-                "%.2F %.2F %.2F %.2F %.2F %.2F c",
-                ($x + $w - $r + $c * $r) * $k,
-                ($hp - $y) * $k,
-                ($x + $w) * $k,
-                ($hp - ($y + $r - $c * $r)) * $k,
-                ($x + $w) * $k,
-                ($hp - ($y + $r)) * $k,
-            ),
-        );
-        $this->_out(
-            sprintf("%.2F %.2F l", ($x + $w) * $k, ($hp - ($y + $h - $r)) * $k),
-        );
-        $this->_out(
-            sprintf(
-                "%.2F %.2F %.2F %.2F %.2F %.2F c",
-                ($x + $w) * $k,
-                ($hp - ($y + $h - $r + $c * $r)) * $k,
-                ($x + $w - $r + $c * $r) * $k,
-                ($hp - ($y + $h)) * $k,
-                ($x + $w - $r) * $k,
-                ($hp - ($y + $h)) * $k,
-            ),
-        );
-        $this->_out(
-            sprintf("%.2F %.2F l", ($x + $r) * $k, ($hp - ($y + $h)) * $k),
-        );
-        $this->_out(
-            sprintf(
-                "%.2F %.2F %.2F %.2F %.2F %.2F c",
-                ($x + $r - $c * $r) * $k,
-                ($hp - ($y + $h)) * $k,
-                $x * $k,
-                ($hp - ($y + $h - $r + $c * $r)) * $k,
-                $x * $k,
-                ($hp - ($y + $h - $r)) * $k,
-            ),
-        );
-        $this->_out(sprintf("%.2F %.2F l", $x * $k, ($hp - ($y + $r)) * $k));
-        $this->_out(
-            sprintf(
-                "%.2F %.2F %.2F %.2F %.2F %.2F c %s",
-                $x * $k,
-                ($hp - ($y + $r - $c * $r)) * $k,
-                ($x + $r - $c * $r) * $k,
-                ($hp - $y) * $k,
-                ($x + $r) * $k,
-                ($hp - $y) * $k,
-                $op,
-            ),
-        );
-    }
-
     /* ── page header ── */
     public function Header(): void
     {
-        /* navy banner */
+        // Navy bar
         $this->SetFillColor(...self::NAVY);
-        $this->Rect(0, 0, 210, 22, "F");
-        /* gold rule */
+        $this->Rect(0, 0, 210, 20, "F");
+        // Gold accent rule
         $this->SetFillColor(...self::GOLD);
-        $this->Rect(0, 22, 210, 2.5, "F");
+        $this->Rect(0, 20, 210, 2, "F");
 
-        /* icon box */
-        $this->SetFillColor(...self::GOLD);
-        $this->RoundedRect(8, 3, 16, 16, 2.5, "F");
-        /* bus body */
-        $this->SetFillColor(...self::NAVY);
-        $this->Rect(10, 6, 11, 6.5, "F");
-        /* windows */
-        $this->SetFillColor(220, 230, 245);
-        $this->Rect(10.8, 6.8, 3.5, 3.2, "F");
-        $this->Rect(15.2, 6.8, 3.8, 3.2, "F");
-        /* wheels */
-        $this->SetFillColor(...self::NAVY);
-        $this->FilledCircle(12.2, 12.9, 1.4);
-        $this->FilledCircle(18.9, 12.9, 1.4);
-        $this->SetFillColor(...self::GOLD);
-        $this->FilledCircle(12.2, 12.9, 0.6);
-        $this->FilledCircle(18.9, 12.9, 0.6);
-
-        /* brand name */
-        $this->SetFont("Helvetica", "B", 11.5);
+        // Brand name
+        $this->SetFont("Helvetica", "B", 11);
         $this->SetTextColor(...self::WHITE);
-        $this->SetXY(27, 4);
-        $this->Cell(80, 7, "TransportOps", 0, 0, "L");
-        $this->SetFont("Helvetica", "", 6.5);
-        $this->SetTextColor(150, 170, 210);
-        $this->SetXY(27, 11);
-        $this->Cell(80, 5, "ADMIN ANALYTICS SYSTEM", 0, 0, "L");
+        $this->SetXY(10, 4);
+        $this->Cell(80, 6, "TransportOps", 0, 0, "L");
 
-        /* right: report label */
-        $this->SetFont("Helvetica", "B", 9);
-        $this->SetTextColor(...self::GOLD);
-        $this->SetXY(110, 4.5);
-        $this->Cell(90, 6, "Analytics Export Report", 0, 0, "R");
-        $this->SetFont("Helvetica", "", 7);
-        $this->SetTextColor(150, 170, 210);
-        $this->SetXY(110, 11);
-        $this->Cell(90, 5, $this->reportDate, 0, 0, "R");
+        // Sub-label
+        $this->SetFont("Helvetica", "", 6);
+        $this->SetTextColor(160, 180, 220);
+        $this->SetXY(10, 11);
+        $this->Cell(80, 4, "ADMIN ANALYTICS EXPORT", 0, 0, "L");
+
+        // Right: report date
+        $this->SetFont("Helvetica", "", 6.5);
+        $this->SetTextColor(180, 200, 230);
+        $this->SetXY(100, 8);
+        $this->Cell(100, 5, $this->reportDate, 0, 0, "R");
+
+        // Reset cursor to content start so nothing drawn in Header()
+        // causes the first content block to overlap the page header.
+        $this->SetXY($this->lMargin, $this->tMargin);
     }
 
     /* ── page footer ── */
@@ -398,12 +245,12 @@ class AnalyticsPDF extends FPDF
     {
         $this->SetFillColor(...self::GOLD);
         $this->Rect(0, $this->GetPageHeight() - 10, 210, 0.5, "F");
-        $this->SetY(-9);
-        $this->SetFont("Helvetica", "", 7);
+        $this->SetY(-8);
+        $this->SetFont("Helvetica", "", 6.5);
         $this->SetTextColor(...self::MUTED);
         $this->Cell(
             0,
-            0,
+            5,
             "TransportOps Admin  |  " .
                 $this->reportDate .
                 "  |  Page " .
@@ -419,23 +266,22 @@ class AnalyticsPDF extends FPDF
     public function SectionHeading(string $title, array $accent): void
     {
         $this->Ln(3);
-        $x = $this->GetX();
         $y = $this->GetY();
-        /* accent bar */
+        // Left accent bar
         $this->SetFillColor(...$accent);
-        $this->Rect($x, $y, 4, 9, "F");
-        /* background */
-        $this->SetFillColor(237, 240, 247);
-        $this->Rect($x + 4, $y, 186, 9, "F");
-        /* title */
-        $this->SetFont("Helvetica", "B", 9.5);
+        $this->Rect(10, $y, 3, 8, "F");
+        // Light background
+        $this->SetFillColor(245, 247, 252);
+        $this->Rect(13, $y, 187, 8, "F");
+        // Title
+        $this->SetFont("Helvetica", "B", 9);
         $this->SetTextColor(...self::NAVY);
-        $this->SetXY($x + 9, $y + 2);
-        $this->Cell(0, 5, $title, 0, 1);
+        $this->SetXY(18, $y + 1.5);
+        $this->Cell(182, 5, $title, 0, 1);
         $this->Ln(3);
     }
 
-    /* ── KPI card  (left accent bar design – no stripe rendering issues) ── */
+    /* ── KPI card  (flat – top accent strip, no rounded-corner hacks) ── */
     public function KPICard(
         float $x,
         float $y,
@@ -446,34 +292,41 @@ class AnalyticsPDF extends FPDF
         string $sub,
         array $accent,
     ): void {
-        /* card bg */
+        // White card with accent-colored border
         $this->SetFillColor(255, 255, 255);
-        $this->SetDrawColor(218, 225, 238);
-        $this->RoundedRect($x, $y, $w, $h, 2.5, "FD");
-        /* left accent bar */
+        $this->SetDrawColor(...$accent);
+        $this->SetLineWidth(0.5);
+        $this->Rect($x, $y, $w, $h, "FD");
+        $this->SetLineWidth(0.2);
+        // Thicker colored top strip
         $this->SetFillColor(...$accent);
-        $this->Rect($x, $y, 4, $h, "F");
-        /* round the left corners by overdrawing with card color on leftmost 2px */
-        $this->SetFillColor(255, 255, 255);
-        $this->Rect($x, $y, 2, $h, "F");
-        $this->SetFillColor(...$accent);
-        $this->RoundedRect($x, $y, 4, $h, 2, "F");
-
-        /* value */
-        $this->SetFont("Helvetica", "B", 16);
-        $this->SetTextColor(...self::DARK);
-        $this->SetXY($x + 4, $y + 4);
-        $this->Cell($w - 4, 9, $val, 0, 0, "C");
-        /* label */
-        $this->SetFont("Helvetica", "", 7.5);
-        $this->SetTextColor(...self::MUTED);
-        $this->SetXY($x + 4, $y + 14);
-        $this->Cell($w - 4, 5, $label, 0, 0, "C");
-        /* sub note */
-        $this->SetFont("Helvetica", "B", 6.5);
+        $this->Rect($x, $y, $w, 5, "F");
+        // Light tinted bottom area for sub-note
+        $tr = (int) ($accent[0] * 0.1 + 255 * 0.9);
+        $tg = (int) ($accent[1] * 0.1 + 255 * 0.9);
+        $tb = (int) ($accent[2] * 0.1 + 255 * 0.9);
+        $this->SetFillColor($tr, $tg, $tb);
+        $this->Rect($x, $y + $h - 7, $w, 7, "F");
+        // Soft divider above sub-note
+        $this->SetDrawColor(...$accent);
+        $this->SetLineWidth(0.15);
+        $this->Line($x + 4, $y + $h - 7, $x + $w - 4, $y + $h - 7);
+        $this->SetLineWidth(0.2);
+        // Value (accent colored, bold)
+        $this->SetFont("Helvetica", "B", 15);
         $this->SetTextColor(...$accent);
-        $this->SetXY($x + 4, $y + 19.5);
-        $this->Cell($w - 4, 4, $sub, 0, 0, "C");
+        $this->SetXY($x, $y + 6);
+        $this->Cell($w, 8, $val, 0, 0, "C");
+        // Label (muted)
+        $this->SetFont("Helvetica", "", 7);
+        $this->SetTextColor(...self::MUTED);
+        $this->SetXY($x, $y + 14.5);
+        $this->Cell($w, 4.5, $label, 0, 0, "C");
+        // Sub note (accent, in tinted area)
+        $this->SetFont("Helvetica", "B", 6);
+        $this->SetTextColor(...$accent);
+        $this->SetXY($x, $y + $h - 5.5);
+        $this->Cell($w, 4, $sub, 0, 0, "C");
     }
 
     /* ── stat pill ── */
@@ -484,21 +337,33 @@ class AnalyticsPDF extends FPDF
         float $h,
         string $val,
         string $label,
+        array $accent = [33, 51, 92],
     ): void {
-        $this->SetFillColor(246, 248, 252);
-        $this->SetDrawColor(215, 222, 235);
-        $this->RoundedRect($x, $y, $w, $h, 2.5, "FD");
-        $this->SetFont("Helvetica", "B", 13);
-        $this->SetTextColor(...self::NAVY);
+        // Very light tinted background (subtle wash)
+        $tr = (int) ($accent[0] * 0.07 + 255 * 0.93);
+        $tg = (int) ($accent[1] * 0.07 + 255 * 0.93);
+        $tb = (int) ($accent[2] * 0.07 + 255 * 0.93);
+        $this->SetFillColor($tr, $tg, $tb);
+        $this->SetDrawColor(...$accent);
+        $this->SetLineWidth(0.4);
+        $this->Rect($x, $y, $w, $h, "FD");
+        $this->SetLineWidth(0.2);
+        // Left accent bar
+        $this->SetFillColor(...$accent);
+        $this->Rect($x, $y, 3, $h, "F");
+        // Value (accent colored)
+        $this->SetFont("Helvetica", "B", 12);
+        $this->SetTextColor(...$accent);
         $this->SetXY($x, $y + 2);
-        $this->Cell($w, 7, $val, 0, 0, "C");
-        $this->SetFont("Helvetica", "", 7);
+        $this->Cell($w, 6, $val, 0, 0, "C");
+        // Label
+        $this->SetFont("Helvetica", "", 6.5);
         $this->SetTextColor(...self::MUTED);
-        $this->SetXY($x, $y + 9.5);
+        $this->SetXY($x, $y + 9);
         $this->Cell($w, 4, $label, 0, 0, "C");
     }
 
-    /* ── horizontal bar ── */
+    /* ── horizontal bar (simple rects, no bezier) ── */
     public function HBar(
         float $x,
         float $y,
@@ -506,20 +371,13 @@ class AnalyticsPDF extends FPDF
         float $pct,
         array $color,
     ): void {
-        /* track */
+        // Track
         $this->SetFillColor(225, 230, 242);
-        $this->RoundedRect($x, $y, $maxW, 3.5, 1, "F");
-        /* fill */
+        $this->Rect($x, $y, $maxW, 3, "F");
+        // Fill
         if ($pct > 0) {
             $this->SetFillColor(...$color);
-            $this->RoundedRect(
-                $x,
-                $y,
-                max(2.5, ($maxW * $pct) / 100),
-                3.5,
-                1,
-                "F",
-            );
+            $this->Rect($x, $y, max(2, ($maxW * $pct) / 100), 3, "F");
         }
     }
 
@@ -537,66 +395,72 @@ class AnalyticsPDF extends FPDF
             return;
         }
 
-        /* chart area */
+        // Chart background
         $this->SetFillColor(247, 249, 253);
         $this->SetDrawColor(220, 228, 240);
-        $this->RoundedRect($x, $y, $w, $h, 2, "FD");
+        $this->Rect($x, $y, $w, $h, "FD");
 
         $maxV = max(1, max(array_column($data, "count")));
         $padL = 5;
         $padR = 4;
         $padT = 7;
-        $padB = 9;
+        $padB = 10;
         $areaW = $w - $padL - $padR;
         $areaH = $h - $padT - $padB;
         $slot = $areaW / $n;
-        $bW = max(3, $slot * 0.65);
+        $bW = max(2.5, $slot * 0.62);
 
-        /* light grid lines */
-        $this->SetDrawColor(220, 228, 240);
-        $this->SetLineWidth(0.15);
+        // Horizontal grid lines
+        $this->SetDrawColor(215, 222, 235);
+        $this->SetLineWidth(0.12);
         for ($g = 1; $g <= 3; $g++) {
             $gy = $y + $padT + $areaH - ($areaH * $g) / 4;
             $this->Line($x + $padL, $gy, $x + $padL + $areaW, $gy);
         }
         $this->SetLineWidth(0.2);
 
+        // Smart label interval to avoid crowding
+        $labelEvery = 1;
+        if ($n > 25) {
+            $labelEvery = 7;
+        } elseif ($n > 15) {
+            $labelEvery = 5;
+        } elseif ($n > 10) {
+            $labelEvery = 3;
+        } elseif ($n > 6) {
+            $labelEvery = 2;
+        }
+
         for ($i = 0; $i < $n; $i++) {
             $v = (int) $data[$i]["count"];
-            $bH = $v > 0 ? max(2, ($v / $maxV) * $areaH) : 0;
+            $bH = $v > 0 ? max(1.5, ($v / $maxV) * $areaH) : 0;
             $bx = $x + $padL + $i * $slot + ($slot - $bW) / 2;
             $by = $y + $padT + $areaH - $bH;
 
             if ($bH > 0) {
-                /* bar */
                 $this->SetFillColor(...$color);
-                $this->RoundedRect($bx, $by, $bW, $bH, min(1.2, $bW / 4), "F");
-                /* subtle top highlight */
-                $hi = [
-                    min(255, $color[0] + 45),
-                    min(255, $color[1] + 45),
-                    min(255, $color[2] + 55),
-                ];
-                $this->SetFillColor(...$hi);
-                $hiH = min(2.5, $bH * 0.35);
-                $this->RoundedRect($bx, $by, $bW, $hiH, min(1.2, $bW / 4), "F");
-                /* value above bar */
-                $this->SetFont("Helvetica", "B", 5.5);
-                $this->SetTextColor(...self::NAVY);
-                $this->SetXY($bx - 1, max($y + 1, $by - 5));
-                $this->Cell($bW + 2, 4.5, (string) $v, 0, 0, "C");
+                $this->Rect($bx, $by, $bW, $bH, "F");
+                // Value above bar (only when tall enough)
+                if ($bH > 5) {
+                    $this->SetFont("Helvetica", "B", 5);
+                    $this->SetTextColor(...self::NAVY);
+                    $this->SetXY($bx - 2, max($y + 1.5, $by - 5));
+                    $this->Cell($bW + 4, 4, (string) $v, 0, 0, "C");
+                }
             }
 
-            /* date label */
-            $this->SetFont("Helvetica", "", 5);
-            $this->SetTextColor(...self::MUTED);
-            $this->SetXY($bx - 2, $y + $padT + $areaH + 1.5);
-            $this->Cell($bW + 4, 4, $data[$i]["date"], 0, 0, "C");
+            // Date label — skipped on crowded charts
+            if ($i % $labelEvery === 0) {
+                $this->SetFont("Helvetica", "", 5);
+                $this->SetTextColor(...self::MUTED);
+                $this->SetXY($bx - 2, $y + $padT + $areaH + 1.5);
+                $this->Cell($bW + 4, 4, $data[$i]["date"], 0, 0, "C");
+            }
         }
 
-        /* baseline */
+        // Baseline
         $this->SetDrawColor(...$color);
-        $this->SetLineWidth(0.4);
+        $this->SetLineWidth(0.35);
         $this->Line(
             $x + $padL,
             $y + $padT + $areaH,
@@ -613,38 +477,43 @@ class AnalyticsPDF extends FPDF
         $y0 = $this->GetY();
         $tw = array_sum(array_column($cols, "w"));
         $this->SetFillColor(...self::NAVY);
-        $this->Rect($x0, $y0, $tw, 8, "F");
-        $this->SetFont("Helvetica", "B", 7.5);
+        $this->Rect($x0, $y0, $tw, 7.5, "F");
+        $this->SetFont("Helvetica", "B", 7);
         $this->SetTextColor(...self::WHITE);
+        $curX = $x0;
         foreach ($cols as $c) {
-            $this->Cell($c["w"], 8, $c["label"], 0, 0, $c["align"] ?? "L");
+            $this->SetXY($curX, $y0);
+            $this->Cell($c["w"], 7.5, $c["label"], 0, 0, $c["align"] ?? "L");
+            $curX += $c["w"];
         }
-        $this->Ln();
+        $this->SetXY($x0, $y0 + 7.5);
     }
 
-    /* ── table row ── */
+    /* ── table row (explicit X tracking – no drift) ── */
     public function TRow(array $cells, int $idx): void
     {
         $x0 = $this->GetX();
         $y0 = $this->GetY();
         $tw = array_sum(array_column($cells, "w"));
-        $rowH = 7.5;
-        /* alternating bg */
+        $rowH = 7;
+
         if ($idx % 2 === 0) {
             $this->SetFillColor(246, 248, 252);
             $this->Rect($x0, $y0, $tw, $rowH, "F");
         }
-        /* bottom divider */
         $this->SetDrawColor(220, 228, 240);
         $this->Line($x0, $y0 + $rowH, $x0 + $tw, $y0 + $rowH);
-        /* cells */
+
+        $curX = $x0;
         foreach ($cells as $c) {
-            $this->SetFont("Helvetica", $c["style"] ?? "", 7.5);
             $col = $c["color"] ?? self::DARK;
+            $this->SetFont("Helvetica", $c["style"] ?? "", 7);
             $this->SetTextColor($col[0], $col[1], $col[2]);
+            $this->SetXY($curX, $y0 + 0.5);
             $this->Cell($c["w"], $rowH, $c["v"], 0, 0, $c["align"] ?? "L");
+            $curX += $c["w"];
         }
-        $this->Ln();
+        $this->SetXY($x0, $y0 + $rowH);
     }
 
     /* ── color helpers ── */
@@ -687,35 +556,37 @@ $pdf->reportDate =
     "Period: " . $range_label . "  |  Exported: " . date("M j, Y  H:i");
 $pdf->adminName = $_SESSION["user_name"] ?? "Admin";
 $pdf->AliasNbPages();
-$pdf->SetMargins(10, 28, 10);
-$pdf->SetAutoPageBreak(true, 15);
+$pdf->SetMargins(10, 26, 10);
+$pdf->SetAutoPageBreak(true, 14);
 $pdf->AddPage();
 
-/* usable area constants */
-$pW = 190; /* page usable width  (210 - 10 - 10) */
-$sX = 10; /* left margin */
+$pW = 190; // usable page width
+$sX = 10; // left margin
 
 /* ─────────────────────────────────────────────────
-   HERO STRIP
+   TITLE STRIP
    ───────────────────────────────────────────────── */
 $hy = $pdf->GetY();
-$pdf->SetFillColor(237, 240, 247);
-$pdf->Rect($sX, $hy, $pW, 24, "F");
+
+// Navy background
 $pdf->SetFillColor(33, 51, 92);
-$pdf->Rect($sX, $hy, 4.5, 24, "F");
+$pdf->Rect($sX, $hy, $pW, 22, "F");
+// Gold bottom rule
 $pdf->SetFillColor(251, 192, 97);
-$pdf->Rect($sX + 4.5, $hy + 22.5, $pW - 4.5, 1.2, "F");
+$pdf->Rect($sX, $hy + 21, $pW, 1, "F");
 
-$pdf->SetFont("Helvetica", "B", 13);
-$pdf->SetTextColor(33, 51, 92);
-$pdf->SetXY($sX + 9, $hy + 2.5);
-$pdf->Cell(132, 7, "Dashboard Analytics Report", 0, 0, "L");
+// Report title
+$pdf->SetFont("Helvetica", "B", 12);
+$pdf->SetTextColor(255, 255, 255);
+$pdf->SetXY($sX + 6, $hy + 3.5);
+$pdf->Cell($pW - 12, 7, "Dashboard Analytics Report", 0, 0, "L");
 
-$pdf->SetFont("Helvetica", "", 7.5);
-$pdf->SetTextColor(100, 116, 139);
-$pdf->SetXY($sX + 9, $hy + 10);
+// Exported by
+$pdf->SetFont("Helvetica", "", 7);
+$pdf->SetTextColor(160, 180, 220);
+$pdf->SetXY($sX + 6, $hy + 11);
 $pdf->Cell(
-    132,
+    $pW - 12,
     5,
     "Exported by " . $pdf->adminName . "   |   " . date("D, M j, Y   H:i"),
     0,
@@ -723,41 +594,29 @@ $pdf->Cell(
     "L",
 );
 
-$pdf->SetFont("Helvetica", "B", 7.5);
-$pdf->SetTextColor(33, 51, 92);
-$pdf->SetXY($sX + 9, $hy + 16);
-$pdf->Cell(17, 4.5, "Period:", 0, 0, "L");
-$pdf->SetFont("Helvetica", "", 7.5);
-$pdf->SetTextColor(91, 123, 153);
-$pdf->SetXY($sX + 26, $hy + 16);
-$pdf->Cell(115, 4.5, $range_label, 0, 0, "L");
-
-/* date badge – right side */
-$pdf->SetFillColor(33, 51, 92);
-$pdf->RoundedRect(151, $hy + 3, 48, 17, 2.5, "F");
-$pdf->SetFillColor(251, 192, 97);
-$pdf->Rect(151, $hy + 13, 48, 0.8, "F");
-$pdf->SetFont("Helvetica", "B", 7);
+// Period
+$pdf->SetFont("Helvetica", "B", 6.5);
 $pdf->SetTextColor(251, 192, 97);
-$pdf->SetXY(151, $hy + 5);
-$pdf->Cell(48, 5, strtoupper(date("D, M j Y")), 0, 0, "C");
-$pdf->SetFont("Helvetica", "", 6);
-$pdf->SetTextColor(150, 170, 210);
-$pdf->SetXY(151, $hy + 14.5);
-$pdf->Cell(48, 4, "EXPORT DATE", 0, 0, "C");
+$pdf->SetXY($sX + 6, $hy + 17);
+$pdf->Cell(14, 4, "Period:", 0, 0, "L");
+$pdf->SetFont("Helvetica", "", 6.5);
+$pdf->SetTextColor(180, 200, 230);
+$pdf->SetXY($sX + 20, $hy + 17);
+$pdf->Cell($pW - 26, 4, $range_label, 0, 0, "L");
 
-$pdf->SetY($hy + 30);
+$pdf->SetY($hy + 28);
 
 /* ─────────────────────────────────────────────────
    SECTION 1 – KPI CARDS
-   4 cards × 44mm + 3 gaps × 2.67mm = 182mm  (fits in 190mm)
+   4 × 44 mm + 3 gaps = 190 mm
    ───────────────────────────────────────────────── */
 $pdf->SectionHeading("System Overview", [33, 51, 92]);
 
 $cW = 44;
-$cH = 28;
-$cGap = 2.67;
+$cH = 26;
+$cGap = (190 - 4 * $cW) / 3;
 $cY = $pdf->GetY();
+
 $dRate = round(($active_delays / max($total_reports, 1)) * 100, 1);
 $kpis = [
     [
@@ -775,7 +634,7 @@ $kpis = [
     [
         number_format($total_users),
         "Registered Users",
-        "total registered",
+        "system-wide total",
         [124, 58, 237],
     ],
     [
@@ -797,17 +656,16 @@ foreach ($kpis as $i => $k) {
         $k[3],
     );
 }
-$pdf->SetY($cY + $cH + 5);
+$pdf->SetY($cY + $cH + 8);
 
-/* derived stats pills
- 3 × 60mm + 2 × 5mm gap = 190mm  ✓ */
+/* Stat pills: 3 × 60 mm + 2 × 5 mm gap = 190 mm */
 $rpu = round($total_reports / max($total_users, 1), 1);
 $rpr = round($total_reports / max($total_routes, 1), 1);
 $sy = $pdf->GetY();
 $pW3 = 60;
 $pGap = 5;
-$pH = 14;
-$pdf->StatPill($sX, $sy, $pW3, $pH, $dRate . "%", "Delay Rate");
+$pH = 13;
+$pdf->StatPill($sX, $sy, $pW3, $pH, $dRate . "%", "Delay Rate", [220, 38, 38]);
 $pdf->StatPill(
     $sX + $pW3 + $pGap,
     $sy,
@@ -815,6 +673,7 @@ $pdf->StatPill(
     $pH,
     (string) $rpu,
     "Reports / User",
+    [37, 99, 235],
 );
 $pdf->StatPill(
     $sX + ($pW3 + $pGap) * 2,
@@ -823,35 +682,44 @@ $pdf->StatPill(
     $pH,
     (string) $rpr,
     "Reports / Route",
+    [124, 58, 237],
 );
-$pdf->SetY($sy + $pH + 6);
+$pdf->SetY($sy + $pH + 8);
 
 /* ─────────────────────────────────────────────────
    SECTION 2 – REPORTS OVER TIME  (bar chart)
-   chart width = $pW = 190mm
    ───────────────────────────────────────────────── */
-$pdf->SectionHeading(
-    "Reports Over Time  (" . $range_chart_label . "  |  " . $range_label . ")",
-    [37, 99, 235],
-);
-$pdf->BarChart($sX, $pdf->GetY(), $pW, 50, $reports_over_time, [37, 99, 235]);
-$pdf->SetY($pdf->GetY() + 56);
+// Check if we need a new page for this section
+if ($pdf->GetY() > 220) {
+    $pdf->AddPage();
+}
+$pdf->SectionHeading($range_chart_label . "  (" . $range_label . ")", [
+    37,
+    99,
+    235,
+]);
+$pdf->BarChart($sX, $pdf->GetY(), $pW, 48, $reports_over_time, [37, 99, 235]);
+$pdf->SetY($pdf->GetY() + 58);
 
 /* ─────────────────────────────────────────────────
    SECTION 3 – DELAY TRENDS
-   Columns: Reason(70) + Count(15) + Share(20) + Bar(85) = 190mm ✓
+   Reason(75) + Count(16) + Share(20) + Bar(79) = 190 mm
    ───────────────────────────────────────────────── */
+// Check if we need a new page for this section
+if ($pdf->GetY() > 200) {
+    $pdf->AddPage();
+}
 $pdf->SectionHeading("Delay Trends Breakdown", [220, 38, 38]);
 
 if (empty($delay_trends)) {
-    $pdf->SetFont("Helvetica", "", 8.5);
+    $pdf->SetFont("Helvetica", "", 8);
     $pdf->SetTextColor(100, 116, 139);
-    $pdf->Cell(0, 8, "No delay data available.", 0, 1);
+    $pdf->Cell(0, 8, "No delay data available for this period.", 0, 1);
 } else {
-    $dLW = 70;
-    $dCW = 15;
+    $dLW = 75;
+    $dCW = 16;
     $dSW = 20;
-    $dBW = 85; /* total = 190 */
+    $dBW = 79;
     $maxCnt = max(1, max(array_column($delay_trends, "count")));
 
     $pdf->THead([
@@ -862,7 +730,7 @@ if (empty($delay_trends)) {
     ]);
 
     foreach ($delay_trends as $idx => $row) {
-        $reason = clip($row["delay_reason"] ?? "Unspecified", 32);
+        $reason = clip($row["delay_reason"] ?? "Unspecified", 44);
         $cnt = (int) $row["count"];
         $sharePct = round(($cnt / max($total_reports, 1)) * 100, 1);
         $barColor = $pdf->delayPalette($idx);
@@ -882,43 +750,41 @@ if (empty($delay_trends)) {
             $ry + $rowH,
         );
 
-        /* reason */
-        $pdf->SetFont("Helvetica", "", 7.5);
+        $pdf->SetFont("Helvetica", "", 7);
         $pdf->SetTextColor(30, 41, 59);
         $pdf->SetXY($rx, $ry + 0.5);
         $pdf->Cell($dLW, $rowH, $reason, 0, 0, "L");
 
-        /* count */
-        $pdf->SetFont("Helvetica", "B", 7.5);
+        $pdf->SetFont("Helvetica", "B", 7);
         $pdf->SetTextColor($barColor[0], $barColor[1], $barColor[2]);
         $pdf->SetXY($rx + $dLW, $ry + 0.5);
         $pdf->Cell($dCW, $rowH, (string) $cnt, 0, 0, "C");
 
-        /* share */
-        $pdf->SetFont("Helvetica", "", 7.5);
+        $pdf->SetFont("Helvetica", "", 7);
         $pdf->SetTextColor(100, 116, 139);
         $pdf->SetXY($rx + $dLW + $dCW, $ry + 0.5);
         $pdf->Cell($dSW, $rowH, $sharePct . "%", 0, 0, "C");
 
-        /* bar */
-        $barPct = round(($cnt / $maxCnt) * 100);
         $pdf->HBar(
             $rx + $dLW + $dCW + $dSW + 2,
-            $ry + 2.3,
+            $ry + 2.5,
             $dBW - 4,
-            $barPct,
+            round(($cnt / $maxCnt) * 100),
             $barColor,
         );
-
-        $pdf->SetY($ry + $rowH);
+        $pdf->SetXY($rx, $ry + $rowH);
     }
 }
-$pdf->Ln(5);
+$pdf->Ln(3);
 
 /* ─────────────────────────────────────────────────
    SECTION 4 – PEAK HOUR ANALYSIS
-   Columns: Hour(35) + Reps(13) + RepBar(47) + Dels(13) + DelBar(47) + Hot(35) = 190mm ✓
+   Hour(38) + Rep#(14) + RepBar(40) + Del#(14) + DelBar(40) + Status(44) = 190 mm
    ───────────────────────────────────────────────── */
+// Check if we need a new page for this section
+if ($pdf->GetY() > 180) {
+    $pdf->AddPage();
+}
 $pdf->SectionHeading("Peak Hour Analysis  (" . $range_label . ")", [
     124,
     58,
@@ -926,27 +792,26 @@ $pdf->SectionHeading("Peak Hour Analysis  (" . $range_label . ")", [
 ]);
 
 if (empty($hourly_trends)) {
-    $pdf->SetFont("Helvetica", "", 8.5);
+    $pdf->SetFont("Helvetica", "", 8);
     $pdf->SetTextColor(100, 116, 139);
     $pdf->Cell(0, 8, "Not enough data to calculate hourly trends.", 0, 1);
 } else {
-    $hHour = 35;
-    $hRN = 13;
-    $hRB = 47;
-    $hDN = 13;
-    $hDB = 47;
-    $hHot = 35;
-    /* verify: 35+13+47+13+47+35 = 190 */
+    $hH = 38;
+    $hRN = 14;
+    $hRB = 40;
+    $hDN = 14;
+    $hDB = 40;
+    $hSt = 44;
     $maxRep = max(1, max(array_column($hourly_trends, "total_reports")));
     $maxDel = max(1, max(array_column($hourly_trends, "total_delays")));
 
     $pdf->THead([
-        ["label" => "Hour Range", "w" => $hHour, "align" => "L"],
+        ["label" => "Hour Range", "w" => $hH, "align" => "L"],
         ["label" => "Reports", "w" => $hRN, "align" => "C"],
         ["label" => "Volume", "w" => $hRB, "align" => "L"],
         ["label" => "Delays", "w" => $hDN, "align" => "C"],
         ["label" => "Delay Bar", "w" => $hDB, "align" => "L"],
-        ["label" => "Status", "w" => $hHot, "align" => "C"],
+        ["label" => "Status", "w" => $hSt, "align" => "C"],
     ]);
 
     foreach ($hourly_trends as $idx => $row) {
@@ -958,11 +823,10 @@ if (empty($hourly_trends)) {
         $repPct = round(($rep / $maxRep) * 100);
         $delPct = round(($del / $maxDel) * 100);
         $rowH = 8;
+        $tw = $hH + $hRN + $hRB + $hDN + $hDB + $hSt;
         $rx = $pdf->GetX();
         $ry = $pdf->GetY();
-        $tw = $hHour + $hRN + $hRB + $hDN + $hDB + $hHot;
 
-        /* row bg */
         if ($isHot) {
             $pdf->SetFillColor(255, 243, 243);
             $pdf->Rect($rx, $ry, $tw, $rowH, "F");
@@ -973,108 +837,112 @@ if (empty($hourly_trends)) {
         $pdf->SetDrawColor(220, 228, 240);
         $pdf->Line($rx, $ry + $rowH, $rx + $tw, $ry + $rowH);
 
-        /* hour label */
-        $pdf->SetFont("Helvetica", $isHot ? "B" : "", 7.5);
+        // Hour label
+        $pdf->SetFont("Helvetica", $isHot ? "B" : "", 7);
         $pdf->SetTextColor(30, 41, 59);
         $pdf->SetXY($rx, $ry + 0.5);
-        $pdf->Cell($hHour, $rowH, fmtHour($hour), 0, 0, "L");
+        $pdf->Cell($hH, $rowH, fmtHour($hour), 0, 0, "L");
 
-        /* report count */
-        $pdf->SetFont("Helvetica", "B", 7.5);
+        // Report count
+        $pdf->SetFont("Helvetica", "B", 7);
         $pdf->SetTextColor(37, 99, 235);
-        $pdf->SetXY($rx + $hHour, $ry + 0.5);
+        $pdf->SetXY($rx + $hH, $ry + 0.5);
         $pdf->Cell($hRN, $rowH, (string) $rep, 0, 0, "C");
 
-        /* report bar */
-        $pdf->HBar($rx + $hHour + $hRN + 1, $ry + 2.3, $hRB - 2, $repPct, [
+        // Report bar
+        $pdf->HBar($rx + $hH + $hRN + 1, $ry + 2.5, $hRB - 2, $repPct, [
             37,
             99,
             235,
         ]);
 
-        /* delay count */
-        $pdf->SetFont("Helvetica", "B", 7.5);
+        // Delay count
+        $pdf->SetFont("Helvetica", "B", 7);
         $pdf->SetTextColor(220, 38, 38);
-        $pdf->SetXY($rx + $hHour + $hRN + $hRB, $ry + 0.5);
+        $pdf->SetXY($rx + $hH + $hRN + $hRB, $ry + 0.5);
         $pdf->Cell($hDN, $rowH, (string) $del, 0, 0, "C");
 
-        /* delay bar */
+        // Delay bar
         $pdf->HBar(
-            $rx + $hHour + $hRN + $hRB + $hDN + 1,
-            $ry + 2.3,
+            $rx + $hH + $hRN + $hRB + $hDN + 1,
+            $ry + 2.5,
             $hDB - 2,
             $delPct,
             [220, 38, 38],
         );
 
-        /* hotspot badge */
-        $bx = $rx + $hHour + $hRN + $hRB + $hDN + $hDB;
+        // Status badge
+        $bx = $rx + $hH + $hRN + $hRB + $hDN + $hDB;
         if ($isHot) {
             $pdf->SetFillColor(220, 38, 38);
-            $pdf->RoundedRect($bx + 4, $ry + 1.8, 27, 5, 1.5, "F");
+            $pdf->Rect($bx + 5, $ry + 2, 34, 5, "F");
             $pdf->SetFont("Helvetica", "B", 6);
             $pdf->SetTextColor(255, 255, 255);
-            $pdf->SetXY($bx + 4, $ry + 3);
-            $pdf->Cell(27, 3.5, "HOTSPOT", 0, 0, "C");
+            $pdf->SetXY($bx + 5, $ry + 3.2);
+            $pdf->Cell(34, 3.5, "PEAK HOTSPOT", 0, 0, "C");
         } else {
-            $pdf->SetFont("Helvetica", "", 7.5);
+            $pdf->SetFont("Helvetica", "", 7);
             $pdf->SetTextColor(200, 210, 225);
             $pdf->SetXY($bx, $ry + 0.5);
-            $pdf->Cell($hHot, $rowH, "-", 0, 0, "C");
+            $pdf->Cell($hSt, $rowH, "-", 0, 0, "C");
         }
 
-        $pdf->SetY($ry + $rowH);
+        $pdf->SetXY($rx, $ry + $rowH);
     }
 }
-$pdf->Ln(5);
+$pdf->Ln(3);
 
 /* ─────────────────────────────────────────────────
    SECTION 5 – RECENT REPORTS
-   Columns: DateTime(28) + User(40) + Role(20) + Route(38) + Crowd(22) + Delay(42) = 190mm ✓
+   Date(28) + User(38) + Role(22) + Route(40) + Crowd(22) + Delay(40) = 190 mm
    ───────────────────────────────────────────────── */
+// Check if we need a new page for this section
+if ($pdf->GetY() > 160) {
+    $pdf->AddPage();
+}
 $pdf->SectionHeading("Recent Reports  (Last 12 in Period)", [91, 123, 153]);
 
 if (empty($recent_reports)) {
-    $pdf->SetFont("Helvetica", "", 8.5);
+    $pdf->SetFont("Helvetica", "", 8);
     $pdf->SetTextColor(100, 116, 139);
-    $pdf->Cell(0, 8, "No reports found.", 0, 1);
+    $pdf->Cell(0, 8, "No reports found for this period.", 0, 1);
 } else {
     $pdf->THead([
         ["label" => "Date & Time", "w" => 28, "align" => "L"],
-        ["label" => "User", "w" => 40, "align" => "L"],
-        ["label" => "Role", "w" => 20, "align" => "L"],
-        ["label" => "Route", "w" => 38, "align" => "L"],
+        ["label" => "User", "w" => 38, "align" => "L"],
+        ["label" => "Role", "w" => 22, "align" => "L"],
+        ["label" => "Route", "w" => 40, "align" => "L"],
         ["label" => "Crowd", "w" => 22, "align" => "C"],
-        ["label" => "Delay Reason", "w" => 42, "align" => "L"],
+        ["label" => "Delay Reason", "w" => 40, "align" => "L"],
     ]);
 
     foreach ($recent_reports as $idx => $r) {
         $ts = strtotime($r["timestamp"] ?? "now");
-        $dt = date("M d", $ts) . " " . date("H:i", $ts);
-        $user = clip($r["user_name"] ?? "N/A", 20);
+        $dt = date("M d", $ts) . "  " . date("H:i", $ts);
+        $user = clip($r["user_name"] ?? "N/A", 22);
         $role = $r["user_role"] ?? "";
-        $route = clip($r["route_name"] ?? "N/A", 20);
+        $route = clip($r["route_name"] ?? "N/A", 24);
         $crowd = $r["crowd_level"] ?? "-";
-        $delay = clip($r["delay_reason"] ?? "-", 24);
+        $delay = clip($r["delay_reason"] ?? "-", 23);
 
         $pdf->TRow(
             [
                 ["v" => $dt, "w" => 28, "style" => "", "color" => [30, 41, 59]],
                 [
                     "v" => $user,
-                    "w" => 40,
+                    "w" => 38,
                     "style" => "B",
                     "color" => [30, 41, 59],
                 ],
                 [
                     "v" => $role,
-                    "w" => 20,
+                    "w" => 22,
                     "style" => "",
                     "color" => $pdf->roleColor($role),
                 ],
                 [
                     "v" => $route,
-                    "w" => 38,
+                    "w" => 40,
                     "style" => "",
                     "color" => [30, 41, 59],
                 ],
@@ -1087,7 +955,7 @@ if (empty($recent_reports)) {
                 ],
                 [
                     "v" => $delay,
-                    "w" => 42,
+                    "w" => 40,
                     "style" => "",
                     "color" => [100, 116, 139],
                 ],
@@ -1096,11 +964,15 @@ if (empty($recent_reports)) {
         );
     }
 }
-$pdf->Ln(5);
+$pdf->Ln(3);
 
 /* ─────────────────────────────────────────────────
-   SECTION 6 – USER BREAKDOWN
+   SECTION 6 – REGISTERED USERS OVERVIEW
    ───────────────────────────────────────────────── */
+// Check if we need a new page for this section
+if ($pdf->GetY() > 140) {
+    $pdf->AddPage();
+}
 $pdf->SectionHeading("Registered Users Overview", [251, 192, 97]);
 
 try {
@@ -1113,7 +985,6 @@ try {
     $roleRows = [];
 }
 
-$rY = $pdf->GetY();
 $roleMap = [
     "Admin" => [220, 38, 38],
     "Driver" => [37, 99, 235],
@@ -1122,38 +993,36 @@ $roleMap = [
 $pillW = 58;
 $pillH = 16;
 $pillGap = 4;
+$rY = $pdf->GetY();
 
 foreach ($roleRows as $ri => $rr) {
     $rc = $roleMap[$rr["role"]] ?? [91, 123, 153];
     $px = $sX + $ri * ($pillW + $pillGap);
 
-    /* pill */
     $pdf->SetFillColor(255, 255, 255);
     $pdf->SetDrawColor(215, 222, 235);
-    $pdf->RoundedRect($px, $rY, $pillW, $pillH, 2.5, "FD");
-    /* left accent */
-    $pdf->SetFillColor($rc[0], $rc[1], $rc[2]);
-    $pdf->RoundedRect($px, $rY, 4, $pillH, 2, "F");
-    $pdf->Rect($px + 2, $rY, 2, $pillH, "F");
+    $pdf->Rect($px, $rY, $pillW, $pillH, "FD");
 
-    /* count */
+    // Left accent strip
+    $pdf->SetFillColor($rc[0], $rc[1], $rc[2]);
+    $pdf->Rect($px, $rY, $pillW, 3, "F");
+
     $pdf->SetFont("Helvetica", "B", 12);
     $pdf->SetTextColor($rc[0], $rc[1], $rc[2]);
-    $pdf->SetXY($px + 6, $rY + 2);
-    $pdf->Cell($pillW - 6, 7, number_format((int) $rr["cnt"]), 0, 0, "C");
+    $pdf->SetXY($px, $rY + 4.5);
+    $pdf->Cell($pillW, 6, number_format((int) $rr["cnt"]), 0, 0, "C");
 
-    /* role label */
-    $pdf->SetFont("Helvetica", "", 7);
+    $pdf->SetFont("Helvetica", "", 6.5);
     $pdf->SetTextColor(100, 116, 139);
-    $pdf->SetXY($px + 6, $rY + 9.5);
-    $pdf->Cell($pillW - 6, 4.5, $rr["role"] . "s", 0, 0, "C");
+    $pdf->SetXY($px, $rY + 11);
+    $pdf->Cell($pillW, 4, $rr["role"] . "s", 0, 0, "C");
 }
 
-/* total label beside pills */
+// Total label
 $afterX = $sX + count($roleRows) * ($pillW + $pillGap) + 2;
 $pdf->SetFont("Helvetica", "B", 8);
 $pdf->SetTextColor(33, 51, 92);
-$pdf->SetXY($afterX, $rY + 5.5);
+$pdf->SetXY($afterX, $rY + 6);
 $pdf->Cell(
     50,
     5,
@@ -1163,20 +1032,24 @@ $pdf->Cell(
     "L",
 );
 
-$pdf->SetY($rY + $pillH + 6);
+$pdf->SetY($rY + $pillH + 5);
 
 /* ─────────────────────────────────────────────────
    SECTION 7 – SUMMARY & NOTES
    ───────────────────────────────────────────────── */
+// Check if we need a new page for this section
+if ($pdf->GetY() > 120) {
+    $pdf->AddPage();
+}
 $pdf->SectionHeading("Summary & Notes", [33, 51, 92]);
 
 $smY = $pdf->GetY();
-$pdf->SetFillColor(237, 240, 247);
+$pdf->SetFillColor(245, 247, 252);
 $pdf->SetDrawColor(215, 222, 235);
-$pdf->RoundedRect($sX, $smY, $pW, 30, 3, "FD");
-/* navy left bar */
+$pdf->Rect($sX, $smY, $pW, 30, "FD");
+// Navy left bar
 $pdf->SetFillColor(33, 51, 92);
-$pdf->Rect($sX, $smY, 4, 30, "F");
+$pdf->Rect($sX, $smY, 3.5, 30, "F");
 
 $notes = [
     "Delay rate: " .
@@ -1185,21 +1058,21 @@ $notes = [
     number_format($active_delays) .
     " of " .
     number_format($total_reports) .
-    " reports have a delay reason).",
+    " reports had a delay reason).",
     "Peak delay hour: " .
     ($top_delay_hour !== null
         ? fmtHour($top_delay_hour)
         : "Insufficient data") .
     ".",
     "Avg " . $rpu . " report(s) per user  |  " . $rpr . " report(s) per route.",
-    "This report was generated automatically by TransportOps Admin Analytics.",
+    "Generated automatically by TransportOps Admin Analytics.",
 ];
 
 $pdf->SetXY($sX + 8, $smY + 3);
 foreach ($notes as $note) {
-    /* gold bullet */
+    // Gold square bullet
     $pdf->SetFillColor(251, 192, 97);
-    $pdf->FilledCircle($sX + 10.5, $pdf->GetY() + 3, 1.3);
+    $pdf->Rect($sX + 9, $pdf->GetY() + 2, 2, 2, "F");
     $pdf->SetFont("Helvetica", "", 7.5);
     $pdf->SetTextColor(30, 41, 59);
     $pdf->SetX($sX + 14);
