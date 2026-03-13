@@ -210,9 +210,28 @@ try {
     <title>User Management - Transport Operations System</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <?php include "admin_layout_head.php"; ?>
+    <style>
+        /* ── Scrollable table wrapper (max 8 rows visible) ── */
+        .um-scroll-wrap {
+            max-height: 475px;
+            overflow-y: auto;
+            overflow-x: auto;
+        }
+        .um-scroll-wrap thead th {
+            position: sticky;
+            top: 0;
+            z-index: 3;
+            background: #f1f4f8;
+            box-shadow: 0 1px 0 rgba(34,51,92,0.08);
+        }
+        .um-scroll-wrap::-webkit-scrollbar { width: 5px; height: 5px; }
+        .um-scroll-wrap::-webkit-scrollbar-track { background: rgba(34,51,92,0.04); border-radius: 999px; }
+        .um-scroll-wrap::-webkit-scrollbar-thumb { background: rgba(34,51,92,0.22); border-radius: 999px; }
+        .um-scroll-wrap::-webkit-scrollbar-thumb:hover { background: rgba(34,51,92,0.38); border-radius: 999px; }
+    </style>
 </head>
 <body>
-    <?php include "admin_sidebar.php" ?>
+    <?php include "admin_sidebar.php"; ?>
 
     <!-- ═══ MAIN CONTENT ════════════════════════════════════ -->
     <main class="main-area">
@@ -248,7 +267,7 @@ try {
                                     $users,
                                 ); ?>)</h3>
                             </div>
-                            <div class="overflow-x-auto">
+                            <div class="um-scroll-wrap">
                                 <table class="min-w-full divide-y divide-gray-200">
                                     <thead class="bg-white/30">
                                         <tr>
@@ -516,4 +535,3 @@ try {
     <?php include "admin_sidebar_js.php"; ?>
 </body>
 </html>
-

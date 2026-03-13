@@ -685,6 +685,25 @@ function formatHourRangeLabel($hour)
         ::-webkit-scrollbar-thumb { background: rgba(34,51,92,0.18); border-radius: 999px; }
         ::-webkit-scrollbar-thumb:hover { background: rgba(34,51,92,0.32); }
 
+        /* ── Scrollable table wrapper (max 5 rows visible) ── */
+        .scrollable-table-wrap {
+            max-height: 340px;
+            overflow-y: auto;
+            overflow-x: auto;
+            border-radius: 0 0 0.75rem 0.75rem;
+        }
+        .scrollable-table-wrap thead th {
+            position: sticky;
+            top: 0;
+            z-index: 3;
+            background: #f1f4f8;
+            box-shadow: 0 1px 0 rgba(34,51,92,0.08);
+        }
+        .scrollable-table-wrap::-webkit-scrollbar { width: 5px; height: 5px; }
+        .scrollable-table-wrap::-webkit-scrollbar-track { background: rgba(34,51,92,0.04); border-radius: 999px; }
+        .scrollable-table-wrap::-webkit-scrollbar-thumb { background: rgba(34,51,92,0.22); border-radius: 999px; }
+        .scrollable-table-wrap::-webkit-scrollbar-thumb:hover { background: rgba(34,51,92,0.38); }
+
         /* ── Report row clickable ───────────────────────── */
         .report-row { cursor: pointer; }
 
@@ -1279,7 +1298,7 @@ function formatHourRangeLabel($hour)
                         $maxDel = max($maxDel, (int) ($r["total_delays"] ?? 0));
                     }
                     ?>
-                    <div style="overflow-x:auto;">
+                    <div class="scrollable-table-wrap">
                         <table class="data-table">
                             <thead>
                                 <tr>
@@ -1372,7 +1391,7 @@ function formatHourRangeLabel($hour)
                     </a>
                 </div>
             </div>
-            <div style="overflow-x:auto;">
+            <div class="scrollable-table-wrap">
                 <table class="data-table">
                     <thead>
                         <tr>
@@ -1492,7 +1511,7 @@ function formatHourRangeLabel($hour)
                     Manage Users
                 </a>
             </div>
-            <div style="overflow-x:auto;">
+            <div class="scrollable-table-wrap">
                 <table class="data-table">
                     <thead>
                         <tr>

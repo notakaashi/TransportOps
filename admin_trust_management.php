@@ -86,35 +86,42 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST["action"])) {
                 $reporterId = $report["user_id"];
                 if ($reporterId) {
                     // Get current trust score of reporter
-                    $stmt = $pdo->prepare("SELECT trust_score FROM users WHERE id = ?");
+                    $stmt = $pdo->prepare(
+                        "SELECT trust_score FROM users WHERE id = ?",
+                    );
                     $stmt->execute([$reporterId]);
                     $reporterRow = $stmt->fetch(PDO::FETCH_ASSOC);
-                    
+
                     if ($reporterRow) {
-                        $currentTrustScore = (float) $reporterRow['trust_score'];
+                        $currentTrustScore =
+                            (float) $reporterRow["trust_score"];
                         $newTrustScore = max(0, $currentTrustScore - 10); // Don't go below 0
-                        
+
                         // Update reporter's trust score with -10 penalty
-                        $stmt = $pdo->prepare("UPDATE users SET trust_score = ? WHERE id = ?");
+                        $stmt = $pdo->prepare(
+                            "UPDATE users SET trust_score = ? WHERE id = ?",
+                        );
                         $stmt->execute([$newTrustScore, $reporterId]);
-                        
+
                         // Log the trust score change
                         $stmt = $pdo->prepare("
                             INSERT INTO trust_score_logs (user_id, old_score, new_score, reason, adjusted_by)
                             VALUES (?, ?, ?, ?, ?)
                         ");
                         $stmt->execute([
-                            $reporterId, 
-                            $currentTrustScore, 
-                            $newTrustScore, 
-                            'Admin rejection (-10 penalty)', 
-                            $_SESSION['user_id']
+                            $reporterId,
+                            $currentTrustScore,
+                            $newTrustScore,
+                            "Admin rejection (-10 penalty)",
+                            $_SESSION["user_id"],
                         ]);
-                        
-                        error_log("Reporter {$reporterId} trust score reduced from {$currentTrustScore} to {$newTrustScore} due to admin rejection");
+
+                        error_log(
+                            "Reporter {$reporterId} trust score reduced from {$currentTrustScore} to {$newTrustScore} due to admin rejection",
+                        );
                     }
                 }
-                
+
                 $success =
                     "Report rejected successfully and trust score updated (-10 penalty).";
             }
@@ -134,19 +141,19 @@ try {
     $stmt = $pdo->query("
         SELECT DISTINCT r.user_id, r.id as report_id, r.timestamp as rejection_time
         FROM reports r
-        WHERE r.status = 'rejected' 
+        WHERE r.status = 'rejected'
         AND r.timestamp >= DATE_SUB(NOW(), INTERVAL 7 DAY)
         ORDER BY r.timestamp DESC
     ");
     $recentlyRejectedUsers = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    
+
     // Create a lookup array for quick access
     $rejectedUserLookup = [];
     foreach ($recentlyRejectedUsers as $rejected) {
-        if (!isset($rejectedUserLookup[$rejected['user_id']])) {
-            $rejectedUserLookup[$rejected['user_id']] = [];
+        if (!isset($rejectedUserLookup[$rejected["user_id"]])) {
+            $rejectedUserLookup[$rejected["user_id"]] = [];
         }
-        $rejectedUserLookup[$rejected['user_id']][] = $rejected;
+        $rejectedUserLookup[$rejected["user_id"]][] = $rejected;
     }
 } catch (PDOException $e) {
     error_log("Error fetching recently rejected users: " . $e->getMessage());
@@ -172,17 +179,19 @@ if ($selectedUserId > 0) {
         try {
             $pdo = getDBConnection();
             $stmt = $pdo->prepare("
-                UPDATE admin_notifications 
-                SET is_read = 1 
-                WHERE user_id = ? 
+                UPDATE admin_notifications
+                SET is_read = 1
+                WHERE user_id = ?
                 AND (type = 'report_rejection' OR type = 'admin_rejection')
                 AND is_read = 0
             ");
             $stmt->execute([$selectedUserId]);
         } catch (PDOException $e) {
-            error_log("Error marking notifications as read: " . $e->getMessage());
+            error_log(
+                "Error marking notifications as read: " . $e->getMessage(),
+            );
         }
-        
+
         $trustLogs = getTrustScoreLogs($selectedUserId);
 
         // Get user's reports for verification management
@@ -217,6 +226,25 @@ if ($selectedUserId > 0) {
     <style>
         .main-area { padding: 2rem 2rem 3rem; overflow-y: auto; }
         @media (max-width: 768px) { .main-area { padding: 5rem 1rem 2rem; } }
+
+        /* ── Scrollable table wrapper (max 5 rows visible) ── */
+        .trust-scroll-wrap {
+            max-height: 340px;
+            overflow-y: auto;
+            overflow-x: auto;
+        }
+        .trust-scroll-wrap thead th {
+            position: sticky;
+            top: 0;
+            z-index: 3;
+            background: #f1f4f8;
+            box-shadow: 0 1px 0 rgba(34,51,92,0.08);
+        }
+        .trust-scroll-wrap::-webkit-scrollbar { width: 5px; height: 5px; }
+        .trust-scroll-wrap::-webkit-scrollbar-track { background: rgba(34,51,92,0.04); border-radius: 999px; }
+        .trust-scroll-wrap::-webkit-scrollbar-thumb { background: rgba(34,51,92,0.22); border-radius: 999px; }
+        .trust-scroll-wrap::-webkit-scrollbar-thumb:hover { background: rgba(34,51,92,0.38); border-radius: 999px; }
+        .trust-scroll-7 { max-height: 415px; }
     </style>
 </head>
 <body>
@@ -252,7 +280,7 @@ if ($selectedUserId > 0) {
                         <p class="text-sm text-gray-600 mt-1">Users with low trust scores are shown first for easy identification</p>
                     </div>
 
-                    <div class="overflow-x-auto">
+                    <div class="trust-scroll-wrap trust-scroll-7">
                         <table class="min-w-full divide-y divide-gray-200">
                             <thead class="bg-white/30">
                                 <tr>
@@ -278,17 +306,23 @@ if ($selectedUserId > 0) {
                                                 <div class="flex items-center">
                                                     <?php if (
                                                         !empty(
-                                                            $user["profile_image"]
+                                                            $user[
+                                                                "profile_image"
+                                                            ]
                                                         )
                                                     ): ?>
                                                         <img class="h-8 w-8 rounded-full" src="uploads/<?php echo htmlspecialchars(
-                                                            $user["profile_image"],
+                                                            $user[
+                                                                "profile_image"
+                                                            ],
                                                         ); ?>" alt="">
                                                     <?php else: ?>
                                                         <div class="h-8 w-8 rounded-full bg-gray-300 flex items-center justify-center">
                                                             <span class="text-xs font-medium text-gray-600"><?php echo strtoupper(
                                                                 substr(
-                                                                    $user["name"],
+                                                                    $user[
+                                                                        "name"
+                                                                    ],
                                                                     0,
                                                                     1,
                                                                 ),
@@ -304,7 +338,13 @@ if ($selectedUserId > 0) {
                                                         ); ?></div>
                                                     </div>
                                                 </div>
-                                                <?php if (isset($rejectedUserLookup[$user["id"]])): ?>
+                                                <?php if (
+                                                    isset(
+                                                        $rejectedUserLookup[
+                                                            $user["id"]
+                                                        ],
+                                                    )
+                                                ): ?>
                                                     <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800" title="Recently rejected reports">
                                                         <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
                                                             <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
@@ -436,7 +476,7 @@ if ($selectedUserId > 0) {
                             <?php if (empty($trustLogs)): ?>
                                 <p class="text-gray-600">No trust score adjustments recorded for this user.</p>
                             <?php else: ?>
-                                <div class="overflow-x-auto">
+                                <div class="trust-scroll-wrap">
                                     <table class="min-w-full divide-y divide-gray-200">
                                         <thead class="bg-white/30">
                                             <tr>
@@ -512,19 +552,29 @@ if ($selectedUserId > 0) {
                         </div>
 
                         <!-- Report Verification Management -->
-                        <div id="reports">
+                        <div id="reports" style="margin-top: 3rem;">
                             <h3 class="text-lg font-medium text-gray-800 mb-4">
                                 Report Verification Management
-                                <?php if (isset($rejectedUserLookup[$selectedUser["id"]])): ?>
+                                <?php if (
+                                    isset(
+                                        $rejectedUserLookup[
+                                            $selectedUser["id"]
+                                        ],
+                                    )
+                                ): ?>
                                     <span class="ml-2 inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                                        <?php echo count($rejectedUserLookup[$selectedUser["id"]]); ?> recently rejected
+                                        <?php echo count(
+                                            $rejectedUserLookup[
+                                                $selectedUser["id"]
+                                            ],
+                                        ); ?> recently rejected
                                     </span>
                                 <?php endif; ?>
                             </h3>
                             <?php if (empty($userReports)): ?>
                                 <p class="text-gray-600">No reports found for this user.</p>
                             <?php else: ?>
-                                <div class="overflow-x-auto">
+                                <div class="trust-scroll-wrap">
                                     <table class="min-w-full divide-y divide-gray-200">
                                         <thead class="bg-white/30">
                                             <tr>
@@ -541,11 +591,26 @@ if ($selectedUserId > 0) {
                                                 $userReports
                                                 as $report
                                             ): ?>
-                                                <?php 
+                                                <?php
                                                 $isRecentlyRejected = false;
-                                                if (isset($rejectedUserLookup[$selectedUser["id"]])) {
-                                                    foreach ($rejectedUserLookup[$selectedUser["id"]] as $rejected) {
-                                                        if ($rejected['report_id'] == $report['id']) {
+                                                if (
+                                                    isset(
+                                                        $rejectedUserLookup[
+                                                            $selectedUser["id"]
+                                                        ],
+                                                    )
+                                                ) {
+                                                    foreach (
+                                                        $rejectedUserLookup[
+                                                            $selectedUser["id"]
+                                                        ]
+                                                        as $rejected
+                                                    ) {
+                                                        if (
+                                                            $rejected[
+                                                                "report_id"
+                                                            ] == $report["id"]
+                                                        ) {
                                                             $isRecentlyRejected = true;
                                                             break;
                                                         }
@@ -556,12 +621,16 @@ if ($selectedUserId > 0) {
                                                     "status"
                                                 ] === "rejected"
                                                     ? "bg-red-50"
-                                                    : ""; ?> <?php echo $isRecentlyRejected ? "border-l-4 border-red-500" : ""; ?>">
+                                                    : ""; ?> <?php echo $isRecentlyRejected
+     ? "border-l-4 border-red-500"
+     : ""; ?>">
                                                     <td class="px-4 py-3 text-sm text-gray-900">
                                                         #<?php echo $report[
                                                             "id"
                                                         ]; ?>
-                                                        <?php if ($isRecentlyRejected): ?>
+                                                        <?php if (
+                                                            $isRecentlyRejected
+                                                        ): ?>
                                                             <span class="ml-2 text-xs text-red-600 font-medium">Recently Rejected</span>
                                                         <?php endif; ?>
                                                     </td>
