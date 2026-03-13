@@ -225,7 +225,7 @@ if (!$error) {
     <script src="js/osrm-helpers.js"></script>
 </head>
 <body>
-    <?php include "admin_sidebar.php" ?>
+    <?php include "admin_sidebar.php"; ?>
     <!-- ═══ MAIN CONTENT ════════════════════════════════════ -->
     <main class="main-area">
             <div class="p-4 sm:p-6 lg:p-8">
@@ -255,13 +255,16 @@ if (!$error) {
                                 <option value="" <?= $selectedCategory === ""
                                     ? "selected"
                                     : "" ?>>All</option>
-                                <option value="tricycle" <?= $selectedCategory === "tricycle"
+                                <option value="tricycle" <?= $selectedCategory ===
+                                "tricycle"
                                     ? "selected"
                                     : "" ?>>Tricycle</option>
-                                <option value="jeepney" <?= $selectedCategory === "jeepney"
+                                <option value="jeepney" <?= $selectedCategory ===
+                                "jeepney"
                                     ? "selected"
                                     : "" ?>>Jeepney</option>
-                                <option value="rail" <?= $selectedCategory === "rail"
+                                <option value="rail" <?= $selectedCategory ===
+                                "rail"
                                     ? "selected"
                                     : "" ?>>MRT/LRT</option>
                             </select>
@@ -272,7 +275,9 @@ if (!$error) {
                         <div class="text-sm text-gray-500">
                             Showing <strong class="text-gray-800"><?php echo count(
                                 $routes_with_stops,
-                            ); ?></strong> route<?php echo count($routes_with_stops) === 1
+                            ); ?></strong> route<?php echo count(
+    $routes_with_stops,
+) === 1
     ? ""
     : "s"; ?>
                         </div>
@@ -304,18 +309,25 @@ if (!$error) {
                             <h3 class="text-lg font-semibold text-gray-800">Routes</h3>
                             <p class="text-xs text-gray-600 mt-1">Click a route to view details and map.</p>
                         </div>
-                        <div class="p-3">
+                        <div class="p-3 overflow-y-auto" style="max-height: 462px;">
                             <?php if (empty($routes_with_stops)): ?>
                                 <div class="text-sm text-gray-500 p-3">No routes yet.</div>
                             <?php else: ?>
                                 <ul class="space-y-2" id="routes-list">
-                                    <?php foreach ($routes_with_stops as $route): ?>
+                                    <?php foreach (
+                                        $routes_with_stops
+                                        as $route
+                                    ): ?>
                                         <li>
                                             <button
                                                 type="button"
                                                 class="w-full text-left px-4 py-3 rounded-xl border border-gray-200 bg-white/70 hover:bg-white transition flex items-start justify-between gap-3 route-list-btn"
-                                                data-route-id="<?php echo (int) $route["id"]; ?>"
-                                                aria-controls="route-<?php echo (int) $route["id"]; ?>"
+                                                data-route-id="<?php echo (int) $route[
+                                                    "id"
+                                                ]; ?>"
+                                                aria-controls="route-<?php echo (int) $route[
+                                                    "id"
+                                                ]; ?>"
                                             >
                                                 <span class="min-w-0">
                                                     <span class="block font-semibold text-gray-800 truncate"><?php echo htmlspecialchars(
@@ -323,9 +335,11 @@ if (!$error) {
                                                     ); ?></span>
                                                     <span class="block text-xs text-gray-500 mt-0.5"><?php echo count(
                                                         $route["stops"],
-                                                    ); ?> stop<?php echo count($route["stops"]) === 1
-    ? ""
-    : "s"; ?></span>
+                                                    ); ?> stop<?php echo count(
+     $route["stops"],
+ ) === 1
+     ? ""
+     : "s"; ?></span>
                                                 </span>
                                                 <span class="text-gray-400 text-sm mt-0.5">›</span>
                                             </button>
@@ -512,7 +526,7 @@ if (!$error) {
                 <?php endif; ?>
             </div>
         </main>
-    
+
     <script src="admin_sidebar_js.php"></script>
     <script>
         const routesData = <?php echo json_encode($routes_with_stops); ?>;
@@ -1101,4 +1115,3 @@ if (!$error) {
     <?php include "admin_sidebar_js.php"; ?>
 </body>
 </html>
-
