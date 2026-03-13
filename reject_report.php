@@ -114,9 +114,9 @@ try {
     $currentScore = (int)($stmt->fetch(PDO::FETCH_ASSOC)['peer_verifications'] ?? -3);
     $newScore = $currentScore - 1;
     
-    // Verification status: verified when score >= 0, rejected when score <= -6
+    // Verification status: verified when score >= 0, rejected when score <= -3
     $nowVerified = $newScore >= 0;
-    $nowRejected = $newScore <= -6 || $adminRejectionCount > 0;
+    $nowRejected = $newScore <= -3 || $adminRejectionCount > 0;
 
     // Update report with new counts and status
     $newStatus = $report['status'];
@@ -155,8 +155,8 @@ try {
         if ($reporterRow) {
             $currentTrustScore = (float) $reporterRow['trust_score'];
             
-            // Apply penalty: -2 for simple rejection, -10 for rejected report
-            $penalty = $nowRejected ? 10 : 2;
+            // Apply penalty: -2 for simple rejection, -10 when report reaches -3 or lower (hidden from map)
+            $penalty = $newScore <= -3 ? 10 : 2;
             
             $newTrustScore = max(0, $currentTrustScore - $penalty); // Don't go below 0
             
@@ -169,7 +169,7 @@ try {
                 INSERT INTO trust_score_logs (user_id, old_score, new_score, reason, adjusted_by)
                 VALUES (?, ?, ?, ?, ?)
             ");
-            $penaltyReason = $nowRejected ? 'Report rejected by peers (-10 penalty)' : 'Report rejection (-2 penalty)';
+            $penaltyReason = $newScore <= -3 ? 'Report reached -3 score (-10 penalty)' : 'Report rejection (-2 penalty)';
             $stmt->execute([
                 $report['user_id'], 
                 $currentTrustScore, 
