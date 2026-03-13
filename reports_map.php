@@ -70,7 +70,7 @@ try {
         $timeWhere = "";
     }
 
-    $whereClause = "WHERE r.latitude IS NOT NULL AND r.longitude IS NOT NULL" . $timeWhere;
+    $whereClause = "WHERE r.latitude IS NOT NULL AND r.longitude IS NOT NULL AND r.peer_verifications > -3 AND r.status != 'rejected'" . $timeWhere;
     $params = [];
 
     if (!empty($selectedCategory) && $hasVehicleCategory) {
