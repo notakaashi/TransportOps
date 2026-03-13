@@ -108,11 +108,15 @@ try {
     $rejectionCount = (int)($counts['rejection_count'] ?? 0);
     $adminRejectionCount = (int)($counts['admin_rejection_count'] ?? 0);
     
-    // Calculate net verification score (verifications - rejections)
-    // Admin rejections immediately reject the report regardless of count
-    $netScore = $verificationCount - $rejectionCount;
-    $nowVerified = $netScore >= 3; // Need net 3+ verifications
-    $nowRejected = $netScore <= -3 || $adminRejectionCount > 0; // Net -3 or admin rejection
+    // Get current score and decrement by 1 for rejection
+    $stmt = $pdo->prepare("SELECT peer_verifications FROM reports WHERE id = ?");
+    $stmt->execute([$reportId]);
+    $currentScore = (int)($stmt->fetch(PDO::FETCH_ASSOC)['peer_verifications'] ?? -3);
+    $newScore = $currentScore - 1;
+    
+    // Verification status: verified when score >= 0, rejected when score <= -6
+    $nowVerified = $newScore >= 0;
+    $nowRejected = $newScore <= -6 || $adminRejectionCount > 0;
 
     // Update report with new counts and status
     $newStatus = $report['status'];
@@ -131,7 +135,7 @@ try {
             status = ?
         WHERE id = ?
     ");
-    $stmt->execute([$netScore, $nowVerified ? 1 : 0, $newStatus, $reportId]);
+    $stmt->execute([$newScore, $nowVerified ? 1 : 0, $newStatus, $reportId]);
 
     $pdo->commit();
 
@@ -184,7 +188,7 @@ try {
             INSERT INTO admin_notifications (type, message, report_id, user_id, created_at)
             VALUES ('report_rejection', ?, ?, ?, NOW())
         ");
-        $notificationMessage = "Report #{$reportId} was rejected by a commuter. Current net score: {$netScore}";
+        $notificationMessage = "Report #{$reportId} was rejected by a commuter. Current score: {$newScore}";
         $stmt->execute([$notificationMessage, $reportId, $_SESSION['user_id']]);
         error_log("Admin notification created for report rejection: {$notificationMessage}");
     } catch (Exception $e) {
@@ -194,12 +198,11 @@ try {
 
     echo json_encode([
         'success' => true,
-        'peer_verifications' => $netScore,
+        'peer_verifications' => $newScore,
         'verification_count' => $verificationCount,
         'rejection_count' => $rejectionCount,
         'is_verified' => $nowVerified,
-        'status' => $newStatus,
-        'net_score' => $netScore
+        'status' => $newStatus
     ]);
 } catch (PDOException $e) {
     if ($pdo && $pdo->inTransaction()) {

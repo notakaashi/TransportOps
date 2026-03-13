@@ -104,13 +104,14 @@ try {
     ");
     $stmt->execute([$reportId, $_SESSION['user_id'], $lat, $lng, $distanceKm]);
 
-    // Recompute verifications from source-of-truth table to avoid drift
-    $stmt = $pdo->prepare("SELECT COUNT(*) AS cnt FROM report_verifications WHERE report_id = ?");
+    // Get current score and increment by 1 for verification
+    $stmt = $pdo->prepare("SELECT peer_verifications FROM reports WHERE id = ?");
     $stmt->execute([$reportId]);
-    $pvCount = (int)($stmt->fetch(PDO::FETCH_ASSOC)['cnt'] ?? 0);
-    $nowVerified = $pvCount >= 3;
+    $currentScore = (int)($stmt->fetch(PDO::FETCH_ASSOC)['peer_verifications'] ?? -3);
+    $newScore = $currentScore + 1;
+    $nowVerified = $newScore >= 0; // Verified when score reaches 0 or higher
 
-    // Persist computed count and verification state (keep status 'rejected' if already rejected)
+    // Persist new score and verification state (keep status 'rejected' if already rejected)
     $stmt = $pdo->prepare("
         UPDATE reports
         SET peer_verifications = ?,
@@ -122,7 +123,7 @@ try {
             END
         WHERE id = ?
     ");
-    $stmt->execute([$pvCount, $nowVerified ? 1 : 0, $nowVerified ? 1 : 0, $reportId]);
+    $stmt->execute([$newScore, $nowVerified ? 1 : 0, $nowVerified ? 1 : 0, $reportId]);
 
     $pdo->commit();
 
@@ -145,7 +146,7 @@ try {
         $verifierNewScore = null;
     }
     
-    // Check if this verification brought the report to 3+ verifications
+    // Check if this verification brought the report to 0 or higher score (verified status)
     $reporterBonusAwarded = false;
     if (!$wasVerified && $nowVerified) {
         // Get the original reporter's ID to give them the 10-point bonus
@@ -154,14 +155,14 @@ try {
         $report = $stmt->fetch();
         
         if ($report && $report['user_id']) {
-            updateUserTrustScore($report['user_id'], 'Trust score recalculated (report reached 3+ verifications)');
+            updateUserTrustScore($report['user_id'], 'Trust score recalculated (report reached verified status)');
             $reporterBonusAwarded = true;
         }
     }
 
     echo json_encode([
         'success' => true,
-        'peer_verifications' => $pvCount,
+        'peer_verifications' => $newScore,
         'is_verified' => $nowVerified,
         'distance_km' => round($distanceKm, 2),
         'verifier_points_awarded' => $verifierPointsAwarded,
