@@ -155,18 +155,23 @@ if (!$error) {
         } elseif ($action === "edit_route") {
             $route_id = (int) ($_POST["route_id"] ?? 0);
             $new_name = trim($_POST["route_name"] ?? "");
+            $new_category = strtolower(trim($_POST["vehicle_category"] ?? ""));
+            $allowedEditCategories = ["tricycle", "jeepney", "rail"];
+            if (!in_array($new_category, $allowedEditCategories, true)) {
+                $new_category = "jeepney";
+            }
             if ($route_id && $new_name !== "") {
                 try {
                     $stmt = $pdo->prepare(
-                        "UPDATE route_definitions SET name = ? WHERE id = ?",
+                        "UPDATE route_definitions SET name = ?, vehicle_category = ? WHERE id = ?",
                     );
-                    $stmt->execute([$new_name, $route_id]);
-                    $success = "Route name updated.";
+                    $stmt->execute([$new_name, $new_category, $route_id]);
+                    $success = "Route name and category updated.";
                 } catch (PDOException $e) {
                     if (strpos($e->getMessage(), "Duplicate") !== false) {
                         $error = "A route with this name already exists.";
                     } else {
-                        $error = "Failed to update route name.";
+                        $error = "Failed to update route.";
                     }
                 }
             } else {
@@ -364,7 +369,7 @@ if (!$error) {
                                     <h3 class="text-lg font-semibold text-gray-800"><?php echo htmlspecialchars(
                                         $route["name"],
                                     ); ?></h3>
-                                    <form method="POST" class="inline flex items-center gap-1" id="edit-name-form-<?php echo (int) $route[
+                                    <form method="POST" class="inline flex items-center gap-1 flex-wrap" id="edit-name-form-<?php echo (int) $route[
                                         "id"
                                     ]; ?>">
                                         <input type="hidden" name="action" value="edit_route">
@@ -374,7 +379,30 @@ if (!$error) {
                                         <input type="text" name="route_name" value="<?php echo htmlspecialchars(
                                             $route["name"],
                                         ); ?>" placeholder="Route name" class="px-2 py-1 border border-gray-300 rounded text-sm w-48">
-                                        <button type="submit" class="text-sm text-blue-600 hover:text-blue-800 font-medium">Update name</button>
+                                        <select name="vehicle_category" class="px-2 py-1 border border-gray-300 rounded text-sm bg-white">
+                                            <option value="jeepney"<?php echo ($route[
+                                                "vehicle_category"
+                                            ] ??
+                                                "") ===
+                                            "jeepney"
+                                                ? " selected"
+                                                : ""; ?>>Jeepney</option>
+                                            <option value="tricycle"<?php echo ($route[
+                                                "vehicle_category"
+                                            ] ??
+                                                "") ===
+                                            "tricycle"
+                                                ? " selected"
+                                                : ""; ?>>Tricycle</option>
+                                            <option value="rail"<?php echo ($route[
+                                                "vehicle_category"
+                                            ] ??
+                                                "") ===
+                                            "rail"
+                                                ? " selected"
+                                                : ""; ?>>Rail</option>
+                                        </select>
+                                        <button type="submit" class="text-sm text-blue-600 hover:text-blue-800 font-medium">Update</button>
                                     </form>
                                 </div>
                                 <div class="flex items-center gap-2">
