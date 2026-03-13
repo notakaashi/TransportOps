@@ -150,9 +150,13 @@ try {
         
         if ($reporterRow) {
             $currentTrustScore = (float) $reporterRow['trust_score'];
-            $newTrustScore = max(0, $currentTrustScore - 2); // Don't go below 0
             
-            // Update reporter's trust score with -2 penalty
+            // Apply penalty: -2 for simple rejection, -10 for rejected report
+            $penalty = $nowRejected ? 10 : 2;
+            
+            $newTrustScore = max(0, $currentTrustScore - $penalty); // Don't go below 0
+            
+            // Update reporter's trust score with penalty
             $stmt = $pdo->prepare("UPDATE users SET trust_score = ? WHERE id = ?");
             $stmt->execute([$newTrustScore, $report['user_id']]);
             
@@ -161,15 +165,16 @@ try {
                 INSERT INTO trust_score_logs (user_id, old_score, new_score, reason, adjusted_by)
                 VALUES (?, ?, ?, ?, ?)
             ");
+            $penaltyReason = $nowRejected ? 'Report rejected by peers (-10 penalty)' : 'Report rejection (-2 penalty)';
             $stmt->execute([
                 $report['user_id'], 
                 $currentTrustScore, 
                 $newTrustScore, 
-                'Report rejection penalty (-2)', 
+                $penaltyReason,
                 $_SESSION['user_id']
             ]);
             
-            error_log("Reporter {$report['user_id']} trust score reduced from {$currentTrustScore} to {$newTrustScore} due to rejection");
+            error_log("Reporter {$report['user_id']} trust score reduced from {$currentTrustScore} to {$newTrustScore} due to: {$penaltyReason}");
         }
     }
     

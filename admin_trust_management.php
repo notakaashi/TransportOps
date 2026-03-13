@@ -82,20 +82,41 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST["action"])) {
                 );
                 $stmt->execute([$reportId]);
 
-                // Apply trust score penalty
+                // Apply -10 trust score penalty for admin rejection
                 $reporterId = $report["user_id"];
-                if (
-                    updateUserTrustScore(
-                        $reporterId,
-                        "Report rejected by admin",
-                    )
-                ) {
-                    $success =
-                        "Report rejected successfully and trust score updated.";
-                } else {
-                    $error =
-                        "Report rejected but failed to update trust score.";
+                if ($reporterId) {
+                    // Get current trust score of reporter
+                    $stmt = $pdo->prepare("SELECT trust_score FROM users WHERE id = ?");
+                    $stmt->execute([$reporterId]);
+                    $reporterRow = $stmt->fetch(PDO::FETCH_ASSOC);
+                    
+                    if ($reporterRow) {
+                        $currentTrustScore = (float) $reporterRow['trust_score'];
+                        $newTrustScore = max(0, $currentTrustScore - 10); // Don't go below 0
+                        
+                        // Update reporter's trust score with -10 penalty
+                        $stmt = $pdo->prepare("UPDATE users SET trust_score = ? WHERE id = ?");
+                        $stmt->execute([$newTrustScore, $reporterId]);
+                        
+                        // Log the trust score change
+                        $stmt = $pdo->prepare("
+                            INSERT INTO trust_score_logs (user_id, old_score, new_score, reason, adjusted_by)
+                            VALUES (?, ?, ?, ?, ?)
+                        ");
+                        $stmt->execute([
+                            $reporterId, 
+                            $currentTrustScore, 
+                            $newTrustScore, 
+                            'Admin rejection (-10 penalty)', 
+                            $_SESSION['user_id']
+                        ]);
+                        
+                        error_log("Reporter {$reporterId} trust score reduced from {$currentTrustScore} to {$newTrustScore} due to admin rejection");
+                    }
                 }
+                
+                $success =
+                    "Report rejected successfully and trust score updated (-10 penalty).";
             }
         } catch (PDOException $e) {
             error_log("Error rejecting report: " . $e->getMessage());
