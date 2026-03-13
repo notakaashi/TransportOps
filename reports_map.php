@@ -1156,7 +1156,7 @@ try {
                     btn.textContent = 'Reject';
                     return;
                 }
-                showToast('success', 'Report Rejected', `You have successfully rejected the report. Rejections: ${data.rejections}/3.`, { timeoutMs: 0, onClose: () => window.location.reload() });
+                showToast('success', 'Report Rejected', `You have successfully rejected the report. Net score: ${data.net_score} (${data.verification_count} verifications, ${data.rejection_count} rejections).`, { timeoutMs: 0, onClose: () => window.location.reload() });
                 btn.textContent = 'Rejected';
             } catch (err) {
                 console.error(err);

@@ -107,6 +107,32 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST["action"])) {
 // Get all users sorted by trust score
 $users = getAllUsersByTrustScore();
 
+// Get users with recently rejected reports (last 7 days)
+try {
+    $pdo = getDBConnection();
+    $stmt = $pdo->query("
+        SELECT DISTINCT r.user_id, r.id as report_id, r.timestamp as rejection_time
+        FROM reports r
+        WHERE r.status = 'rejected' 
+        AND r.timestamp >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+        ORDER BY r.timestamp DESC
+    ");
+    $recentlyRejectedUsers = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    
+    // Create a lookup array for quick access
+    $rejectedUserLookup = [];
+    foreach ($recentlyRejectedUsers as $rejected) {
+        if (!isset($rejectedUserLookup[$rejected['user_id']])) {
+            $rejectedUserLookup[$rejected['user_id']] = [];
+        }
+        $rejectedUserLookup[$rejected['user_id']][] = $rejected;
+    }
+} catch (PDOException $e) {
+    error_log("Error fetching recently rejected users: " . $e->getMessage());
+    $recentlyRejectedUsers = [];
+    $rejectedUserLookup = [];
+}
+
 // Handle user selection for detailed view
 $selectedUserId = isset($_GET["user_id"]) ? (int) $_GET["user_id"] : 0;
 $selectedUser = null;
@@ -121,6 +147,21 @@ if ($selectedUserId > 0) {
     }
 
     if ($selectedUser) {
+        // Mark notifications as read for this user
+        try {
+            $pdo = getDBConnection();
+            $stmt = $pdo->prepare("
+                UPDATE admin_notifications 
+                SET is_read = 1 
+                WHERE user_id = ? 
+                AND (type = 'report_rejection' OR type = 'admin_rejection')
+                AND is_read = 0
+            ");
+            $stmt->execute([$selectedUserId]);
+        } catch (PDOException $e) {
+            error_log("Error marking notifications as read: " . $e->getMessage());
+        }
+        
         $trustLogs = getTrustScoreLogs($selectedUserId);
 
         // Get user's reports for verification management
@@ -212,34 +253,44 @@ if ($selectedUserId > 0) {
                                         ? "bg-red-50"
                                         : ""; ?>">
                                         <td class="px-6 py-4 whitespace-nowrap">
-                                            <div class="flex items-center">
-                                                <?php if (
-                                                    !empty(
-                                                        $user["profile_image"]
-                                                    )
-                                                ): ?>
-                                                    <img class="h-8 w-8 rounded-full" src="uploads/<?php echo htmlspecialchars(
-                                                        $user["profile_image"],
-                                                    ); ?>" alt="">
-                                                <?php else: ?>
-                                                    <div class="h-8 w-8 rounded-full bg-gray-300 flex items-center justify-center">
-                                                        <span class="text-xs font-medium text-gray-600"><?php echo strtoupper(
-                                                            substr(
-                                                                $user["name"],
-                                                                0,
-                                                                1,
-                                                            ),
-                                                        ); ?></span>
+                                            <div class="flex items-center justify-between">
+                                                <div class="flex items-center">
+                                                    <?php if (
+                                                        !empty(
+                                                            $user["profile_image"]
+                                                        )
+                                                    ): ?>
+                                                        <img class="h-8 w-8 rounded-full" src="uploads/<?php echo htmlspecialchars(
+                                                            $user["profile_image"],
+                                                        ); ?>" alt="">
+                                                    <?php else: ?>
+                                                        <div class="h-8 w-8 rounded-full bg-gray-300 flex items-center justify-center">
+                                                            <span class="text-xs font-medium text-gray-600"><?php echo strtoupper(
+                                                                substr(
+                                                                    $user["name"],
+                                                                    0,
+                                                                    1,
+                                                                ),
+                                                            ); ?></span>
+                                                        </div>
+                                                    <?php endif; ?>
+                                                    <div class="ml-3">
+                                                        <div class="text-sm font-medium text-gray-900"><?php echo htmlspecialchars(
+                                                            $user["name"],
+                                                        ); ?></div>
+                                                        <div class="text-xs text-gray-500"><?php echo htmlspecialchars(
+                                                            $user["email"],
+                                                        ); ?></div>
                                                     </div>
-                                                <?php endif; ?>
-                                                <div class="ml-3">
-                                                    <div class="text-sm font-medium text-gray-900"><?php echo htmlspecialchars(
-                                                        $user["name"],
-                                                    ); ?></div>
-                                                    <div class="text-xs text-gray-500"><?php echo htmlspecialchars(
-                                                        $user["email"],
-                                                    ); ?></div>
                                                 </div>
+                                                <?php if (isset($rejectedUserLookup[$user["id"]])): ?>
+                                                    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800" title="Recently rejected reports">
+                                                        <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                                            <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                                                        </svg>
+                                                        Rejected Reports
+                                                    </span>
+                                                <?php endif; ?>
                                             </div>
                                         </td>
                                         <td class="px-6 py-4 whitespace-nowrap">
@@ -440,8 +491,15 @@ if ($selectedUserId > 0) {
                         </div>
 
                         <!-- Report Verification Management -->
-
-                            <h3 class="text-lg font-medium text-gray-800 mb-4">Report Verification Management</h3>
+                        <div id="reports">
+                            <h3 class="text-lg font-medium text-gray-800 mb-4">
+                                Report Verification Management
+                                <?php if (isset($rejectedUserLookup[$selectedUser["id"]])): ?>
+                                    <span class="ml-2 inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                                        <?php echo count($rejectedUserLookup[$selectedUser["id"]]); ?> recently rejected
+                                    </span>
+                                <?php endif; ?>
+                            </h3>
                             <?php if (empty($userReports)): ?>
                                 <p class="text-gray-600">No reports found for this user.</p>
                             <?php else: ?>
@@ -462,14 +520,30 @@ if ($selectedUserId > 0) {
                                                 $userReports
                                                 as $report
                                             ): ?>
+                                                <?php 
+                                                $isRecentlyRejected = false;
+                                                if (isset($rejectedUserLookup[$selectedUser["id"]])) {
+                                                    foreach ($rejectedUserLookup[$selectedUser["id"]] as $rejected) {
+                                                        if ($rejected['report_id'] == $report['id']) {
+                                                            $isRecentlyRejected = true;
+                                                            break;
+                                                        }
+                                                    }
+                                                }
+                                                ?>
                                                 <tr class="<?php echo $report[
                                                     "status"
                                                 ] === "rejected"
                                                     ? "bg-red-50"
-                                                    : ""; ?>">
-                                                    <td class="px-4 py-3 text-sm text-gray-900">#<?php echo $report[
-                                                        "id"
-                                                    ]; ?></td>
+                                                    : ""; ?> <?php echo $isRecentlyRejected ? "border-l-4 border-red-500" : ""; ?>">
+                                                    <td class="px-4 py-3 text-sm text-gray-900">
+                                                        #<?php echo $report[
+                                                            "id"
+                                                        ]; ?>
+                                                        <?php if ($isRecentlyRejected): ?>
+                                                            <span class="ml-2 text-xs text-red-600 font-medium">Recently Rejected</span>
+                                                        <?php endif; ?>
+                                                    </td>
                                                     <td class="px-4 py-3 text-sm text-gray-900"><?php echo htmlspecialchars(
                                                         $report["route_name"] ?:
                                                         "N/A",

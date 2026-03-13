@@ -591,6 +591,9 @@ function formatHourRangeLabel($hour)
         .badge-role-admin    { background: #fef2f2; color: #b91c1c; border-color: #fecaca; }
         .badge-role-driver   { background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; }
         .badge-role-commuter { background: #f8fafc; color: #475569; border-color: #e2e8f0; }
+        .badge-verified { background: #dcfce7; color: #15803d; border-color: #bbf7d0; }
+        .badge-rejected { background: #fee2e2; color: #991b1b; border-color: #fca5a5; }
+        .badge-pending  { background: #f1f5f9; color: #475569; border-color: #e2e8f0; }
         .badge-new { background: #dc2626; color: #fff; border-color: #dc2626; animation: pulseBadge 1.8s ease-out infinite; }
         @keyframes pulseBadge {
             0%,100% { box-shadow: 0 0 0 0 rgba(220,38,38,0.45); }
@@ -1381,11 +1384,13 @@ function formatHourRangeLabel($hour)
                             <th>Route</th>
                             <th>Crowd Level</th>
                             <th>Delay Reason</th>
+                            <th>Status</th>
+                            <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
                         <?php if (empty($recent_reports)): ?>
-                            <tr class="empty-row"><td colspan="5">No reports found.</td></tr>
+                            <tr class="empty-row"><td colspan="7">No reports found.</td></tr>
                         <?php else: ?>
                             <?php foreach ($recent_reports as $report): ?>
                                 <tr class="report-row"
@@ -1463,6 +1468,25 @@ function formatHourRangeLabel($hour)
                                             </span>
                                         <?php else: ?>
                                             <span style="color:#cbd5e1;font-size:0.825rem;font-style:italic;">None</span>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td>
+                                        <?php 
+                                        $status = $report["status"] ?? "pending";
+                                        $statusClass = $status === "verified" ? "badge-verified" : ($status === "rejected" ? "badge-rejected" : "badge-pending");
+                                        ?>
+                                        <span class="badge <?php echo $statusClass; ?>">
+                                            <?php echo ucfirst($status); ?>
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <?php if (($report["status"] ?? "pending") !== "rejected"): ?>
+                                            <button class="admin-reject-btn" data-report-id="<?php echo $report["id"]; ?>" 
+                                                    style="padding:0.25rem 0.5rem;font-size:0.72rem;background:#fee2e2;color:#991b1b;border-radius:0.25rem;border:none;cursor:pointer;font-weight:600;">
+                                                Reject
+                                            </button>
+                                        <?php else: ?>
+                                            <span style="color:#94a3b8;font-size:0.72rem;">Rejected</span>
                                         <?php endif; ?>
                                     </td>
                                 </tr>
@@ -1843,7 +1867,7 @@ function formatHourRangeLabel($hour)
         }
         btn.addEventListener('click', openSidebar);
         overlay.addEventListener('click', closeSidebar);
-    })();
+    })();}
 
     /* ── New-report notification polling ─────────────────── */
     (function () {
@@ -1871,14 +1895,39 @@ function formatHourRangeLabel($hour)
                 if (!response.ok) return;
                 const data     = await response.json();
                 const newCount = data.new_count || 0;
+                const unreadNotifications = data.unread_notifications || 0;
+                const totalAlerts = data.total_alerts || 0;
                 const latest   = data.latest_timestamp || null;
                 const badge    = document.getElementById('report-notification-badge');
                 const countLbl = document.getElementById('report-notification-count');
-                if (newCount > 0) {
-                    if (badge)    badge.style.display = '';
-                    if (countLbl) countLbl.textContent = newCount + ' new report' + (newCount > 1 ? 's' : '');
+                
+                if (totalAlerts > 0) {
+                    if (badge) {
+                        badge.style.display = '';
+                        badge.textContent = totalAlerts;
+                    }
+                    if (countLbl) {
+                        let message = '';
+                        if (newCount > 0 && unreadNotifications > 0) {
+                            message = `${newCount} new report${newCount > 1 ? 's' : ''}, ${unreadNotifications} rejection${unreadNotifications > 1 ? 's' : ''}`;
+                        } else if (newCount > 0) {
+                            message = `${newCount} new report${newCount > 1 ? 's' : ''}`;
+                        } else if (unreadNotifications > 0) {
+                            message = `${unreadNotifications} rejection${unreadNotifications > 1 ? 's' : ''}`;
+                        }
+                        countLbl.textContent = message;
+                    }
                     playNotificationSound();
+                    
+                    // Show notification details if there are rejections
+                    if (unreadNotifications > 0 && data.notification_messages) {
+                        console.log('Rejection notifications:', data.notification_messages);
+                    }
+                } else {
+                    if (badge) badge.style.display = 'none';
+                    if (countLbl) countLbl.textContent = '';
                 }
+                
                 if (latest) lastReportTimestamp = latest;
             } catch (e) { console.error('Notification check failed', e); }
         }
@@ -1886,6 +1935,7 @@ function formatHourRangeLabel($hour)
         setInterval(checkNewReports, 15000);
     })();
 
+    
     /* ── Report detail modal ──────────────────────────────── */
     (function () {
         const modal      = document.getElementById('reportModal');
@@ -2078,6 +2128,53 @@ function formatHourRangeLabel($hour)
         });
         document.addEventListener('keydown', function (e) {
             if (e.key === 'Escape' && exportModal.classList.contains('open')) closeExportModal();
+        });
+    })();
+
+    /* ── Admin Report Rejection ───────────────────────────── */
+    (function () {
+        document.addEventListener('click', async function (e) {
+            if (e.target.classList.contains('admin-reject-btn')) {
+                const btn = e.target;
+                const reportId = btn.getAttribute('data-report-id');
+                
+                if (!confirm('Are you sure you want to reject this report? This will penalize the reporter with -2 trust score.')) {
+                    return;
+                }
+                
+                try {
+                    btn.disabled = true;
+                    btn.style.opacity = '0.85';
+                    btn.textContent = 'Rejecting…';
+                    
+                    const res = await fetch('admin_reject_report.php', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ report_id: reportId }),
+                        credentials: 'same-origin'
+                    });
+                    
+                    const data = await res.json();
+                    if (!res.ok || !data.success) {
+                        alert('Rejection failed: ' + (data && data.error ? data.error : 'Please try again.'));
+                        btn.disabled = false;
+                        btn.style.opacity = '';
+                        btn.textContent = 'Reject';
+                        return;
+                    }
+                    
+                    alert('Report rejected successfully! Reporter penalized with -2 trust score.');
+                    window.location.reload();
+                } catch (err) {
+                    console.error(err);
+                    alert('Something went wrong while rejecting. Please try again.');
+                    if (e.target) {
+                        e.target.disabled = false;
+                        e.target.style.opacity = '';
+                        e.target.textContent = 'Reject';
+                    }
+                }
+            }
         });
     })();
 
