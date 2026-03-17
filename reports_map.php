@@ -4,6 +4,7 @@ secureSessionStart();
 require_once "db.php";
 require_once "trust_helper.php";
 require_once "trust_badge_helper.php";
+require_once "privacy_helper.php";
 
 $is_logged_in = isset($_SESSION["user_id"]);
 $user_profile_data = ["profile_image" => null];
@@ -98,14 +99,19 @@ try {
     $stmt->execute($params);
     $reports = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    // Enhance reports with trust badge information
+    // Enhance reports with trust badge information and censor names
     foreach ($reports as &$report) {
         if ($report["user_id"]) {
             $report["trust_score"] = $report["trust_score"] ?? 50.0;
             $report["trust_badge"] = getTrustBadge($report["trust_score"]);
+            
+            // Censor user name for privacy (show full name only for own reports)
+            $isOwnReport = $is_logged_in && (int)$report["user_id"] === (int)$_SESSION["user_id"];
+            $report["user_name"] = $isOwnReport ? $report["user_name"] : censorUserName($report["user_name"]);
         } else {
             $report["trust_score"] = 50.0;
             $report["trust_badge"] = getTrustBadge(50.0);
+            $report["user_name"] = "Anonymous";
         }
     }
 

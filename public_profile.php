@@ -8,6 +8,7 @@ require_once "auth_helper.php";
 secureSessionStart();
 require_once "db.php";
 require_once "trust_helper.php";
+require_once "privacy_helper.php";
 
 $userId    = isset($_GET["id"]) ? (int) $_GET["id"] : 0;
 $fromAdmin = isset($_GET["admin"]) && $_GET["admin"] == "1";
@@ -24,8 +25,9 @@ $badge         = $profile["badge"];
 
 $viewerLoggedIn = isset($_SESSION["user_id"]);
 $isOwnProfile   = $viewerLoggedIn && (int)$_SESSION["user_id"] === $userId;
-$userName       = htmlspecialchars($user["name"] ?? "User");
-$userInitial    = strtoupper(substr($user["name"] ?? "U", 0, 1));
+$rawUserName    = $user["name"] ?? "User";
+$userName       = htmlspecialchars($isOwnProfile ? $rawUserName : censorUserName($rawUserName));
+$userInitial    = getCensoredInitials($rawUserName);
 $trustScore     = number_format((float)($user["trust_score"] ?? 0), 1);
 $memberSince    = date("M j, Y", strtotime($user["created_at"] ?? "now"));
 

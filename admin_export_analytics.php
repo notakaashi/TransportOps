@@ -7,6 +7,7 @@ require_once "auth_helper.php";
 secureSessionStart();
 require_once "db.php";
 require_once "lib/fpdf/fpdf.php";
+require_once "privacy_helper.php";
 
 if (!isset($_SESSION["user_id"])) {
     header("Location: admin_login.php");
@@ -554,7 +555,7 @@ class AnalyticsPDF extends FPDF
 $pdf = new AnalyticsPDF("P", "mm", "A4");
 $pdf->reportDate =
     "Period: " . $range_label . "  |  Exported: " . date("M j, Y  H:i");
-$pdf->adminName = $_SESSION["user_name"] ?? "Admin";
+$pdf->adminName = censorUserName($_SESSION["user_name"] ?? "Admin");
 $pdf->AliasNbPages();
 $pdf->SetMargins(10, 26, 10);
 $pdf->SetAutoPageBreak(true, 14);
@@ -919,7 +920,7 @@ if (empty($recent_reports)) {
     foreach ($recent_reports as $idx => $r) {
         $ts = strtotime($r["timestamp"] ?? "now");
         $dt = date("M d", $ts) . "  " . date("H:i", $ts);
-        $user = clip($r["user_name"] ?? "N/A", 22);
+        $user = clip(censorUserName($r["user_name"] ?? "N/A"), 22);
         $role = $r["user_role"] ?? "";
         $route = clip($r["route_name"] ?? "N/A", 24);
         $crowd = $r["crowd_level"] ?? "-";
