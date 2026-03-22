@@ -9,43 +9,28 @@
  * Shows first and last letters with asterisks in between
  * 
  * @param string $fullName The full name to censor
- * @param bool $showFirst Whether to show first name fully (default: true)
+ * @param bool $showFirst Whether to show first name fully (default: false)
  * @return string The censored name
  */
-function censorUserName($fullName, $showFirst = true) {
+function censorUserName($fullName, $showFirst = false) {
     if (empty($fullName)) {
         return "Anonymous";
     }
     
     // Trim and clean the name
     $fullName = trim($fullName);
-    $nameParts = explode(' ', $fullName);
+    $nameParts = preg_split('/\s+/', $fullName, -1, PREG_SPLIT_NO_EMPTY);
     
     // If only one name, censor it elegantly
     if (count($nameParts) === 1) {
-        $name = $nameParts[0];
-        if (strlen($name) <= 2) {
-            return str_repeat('*', strlen($name));
-        }
-        if (strlen($name) === 3) {
-            return substr($name, 0, 1) . '*' . substr($name, 2, 1);
-        }
-        // Show first and last letter with asterisks in between
-        return substr($name, 0, 1) . str_repeat('*', strlen($name) - 2) . substr($name, -1);
+        return maskNamePart($nameParts[0]);
     }
     
     // Multiple names: apply elegant censoring to each part
     $censoredParts = [];
     
-    foreach ($nameParts as $index => $part) {
-        if (strlen($part) <= 2) {
-            $censoredParts[] = str_repeat('*', strlen($part));
-        } elseif (strlen($part) === 3) {
-            $censoredParts[] = substr($part, 0, 1) . '*' . substr($part, 2, 1);
-        } else {
-            // Show first and last letter with asterisks in between
-            $censoredParts[] = substr($part, 0, 1) . str_repeat('*', strlen($part) - 2) . substr($part, -1);
-        }
+    foreach ($nameParts as $part) {
+        $censoredParts[] = maskNamePart($part);
     }
     
     if ($showFirst && count($censoredParts) > 0) {
@@ -57,6 +42,30 @@ function censorUserName($fullName, $showFirst = true) {
         // Censor all parts elegantly
         return implode(' ', $censoredParts);
     }
+}
+
+function maskNamePart($namePart) {
+    $length = function_exists('mb_strlen') ? mb_strlen($namePart) : strlen($namePart);
+
+    if ($length <= 2) {
+        return str_repeat('*', $length);
+    }
+
+    if ($length === 3) {
+        return getNameChar($namePart, 0) . '*' . getNameChar($namePart, 2);
+    }
+
+    return getNameChar($namePart, 0)
+        . str_repeat('*', $length - 2)
+        . getNameChar($namePart, $length - 1);
+}
+
+function getNameChar($value, $index) {
+    if (function_exists('mb_substr')) {
+        return mb_substr($value, $index, 1);
+    }
+
+    return substr($value, $index, 1);
 }
 
 /**
